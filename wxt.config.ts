@@ -16,4 +16,9 @@ export default defineConfig({
   },
   srcDir: 'src',
   modules: ['@wxt-dev/module-react'],
+  imports: {
+    'bowser': [
+        'default'
+    ]
+  }
 });

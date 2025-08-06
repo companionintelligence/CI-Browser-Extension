@@ -47,11 +47,18 @@ export function useAuth(): Value {
   const [error, setError] = useState<Error | null>(null);
   const [accessToken, setAccessToken] = useState<string>(null)
   const [sessionToken, setSessionToken] = useState<string>(null)
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  chrome.cookies.getAll({ url: 'https://dev.companionintelligence.com' }).then(result => {
+  window.chrome.cookies.getAll({ url: 'https://dev.companionintelligence.com' }).then(async result => {
     console.log('found cookies', result)
-    setAccessToken(result.find(cookie => cookie.name === 'CI_accessToken').value)
-    setSessionToken(result.find(cookie => cookie.name === 'CI_sessionToken').value)
+    const accessTokenCookie = result.find(cookie => cookie.name === 'CI_accessToken')
+    const sessionTokenCookie = result.find(cookie => cookie.name === 'CI_sessionToken')
+    if (accessTokenCookie) setAccessToken(accessTokenCookie.value);
+    if (sessionTokenCookie) setSessionToken(sessionTokenCookie.value);
+    if (!accessTokenCookie && sessionTokenCookie && !refreshing) {
+      console.log('refreshing because only session cookie is present')
+      await refresh()
+    }
   })
 
   const decoded = useMemo(() => (accessToken ? jwtDecode<JwtPayload>(accessToken) : null), [accessToken]);
@@ -91,7 +98,7 @@ export function useAuth(): Value {
       setError(null);
 
       try {
-        const data: AuthResponse = await fetchJson('/api/authenticate', {
+        const data: AuthResponse = await fetchJson('https://dev.companionintelligence.com/api/authenticate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -158,8 +165,11 @@ export function useAuth(): Value {
     [setUser, setError, setLoading],
   );
 
-  const refresh = useCallback(async () => {
-    const data: AuthResponse = await fetchJson('/api/authenticate/refresh', {
+  const refresh = async () => {
+    if (!sessionToken) return
+    setRefreshing(true)
+    console.log('refreshing with sessionToken', sessionToken)
+    const data: AuthResponse = await fetchJson('https://dev.companionintelligence.com/api/authenticate/refresh', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -167,16 +177,28 @@ export function useAuth(): Value {
       },
     });
 
-    localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
-    localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
-    setUser(data.user);
-  }, [setUser]);
+    console.log('refresh response data', data)
 
-  useAutoRefreshToken(accessToken, sessionToken, refresh);
+    setAccessToken(data.accessToken);
+    setAccessToken(data.sessionToken);
+    const decoded = jwtDecode(accessToken)
+    console.log('decoded accessToken', decoded)
+    window.chrome.cookies.set({
+        url: 'https://dev.companionintelligence.com',
+        expirationDate: decoded.exp,
+        name: `CI_${ACCESS_TOKEN_KEY}`,
+        value: data.accessToken,
+        sameSite: 'no_restriction',
+        secure: true
+    })
+    console.log('finished refreshing', document.cookie)
+    setRefreshing(false)
+  }
+  // useAutoRefreshToken(accessToken, sessionToken, refresh);
 
-  useEffect(() => {
-    getSelfProfile();
-  }, [decoded]);
+  // useEffect(() => {
+  //   getSelfProfile();
+  // }, [decoded]);
 
   return [
     {

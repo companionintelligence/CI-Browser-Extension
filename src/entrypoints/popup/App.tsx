@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-import { useAuth } from '../../hooks';
+import { useAuth } from '@/hooks';
 
 const API_BASE = '/api';
 
@@ -20,6 +20,7 @@ export default function App() {
                     { authStatus.expired ? 'Log in to continue' : 'Logged in to Companion Intelligence' }
                 </a>
             </div>
+            <div>{ authStatus.authToken }</div>
             {/*<div className="flexbox flex-column">*/}
                 {/*<button v-if="domainWhitelisted === true" className="danger" v-on:click="deleteDomainWhitelistEntry"*/}
                 {/*        style="margin-bottom: 0.5em">Stop tracking this Site*/}

@@ -27,6 +27,7 @@ type Value = [
 ];
 
 function useModel(): Value {
+  console.log('useModel hook initialized');
   const [{ authToken }] = useAuth();
 
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
