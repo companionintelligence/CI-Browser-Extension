@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { fetchJson } from "@/hooks/fetchJson.ts";
 
 import { useAuth } from '@/hooks';
 

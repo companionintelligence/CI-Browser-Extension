@@ -1,6 +1,21 @@
+import { fetchJson } from '../hooks/fetchJson';
+import { jwtDecode } from 'jwt-decode';
+
 export default defineBackground({
   type: 'module',
   main() {
+    const ACCESS_TOKEN_KEY = 'accessToken';
+    const storageDefaults = {
+      whitelist: [],
+      whitelistPending: {},
+      whitelistHistory: [],
+      url: null,
+      domain: null,
+      lastUrl: null,
+      accessToken: null,
+      sessionToken: null,
+      refreshing: false
+    }
     // async function triggerHistoryCrawl(connection) {
       // await store.dispatch({
       //   type: 'loadUserSettings'
@@ -8,33 +23,33 @@ export default defineBackground({
       //
       // //Check to see if any whitelisted domains didn't finish their initial data crawl, and run it if they didn't (as long as they're not on Edge).
       // if (bowser.name !== 'Microsoft Edge') {
-      //   _.each(chrome.storage.sync.whitelist, async function(whitelistItem) {
+      //   _.each(browser.storage.local.whitelist, async function(whitelistItem) {
       //     //If the whitelistPending entry for a whitelist item is more than 5 minutes old, or is not a date, then clear it.
       //     //In the former case, the user likely closed the browser before the history crawl was completed.
       //     //The latter case sometimes happens for reasons I can't really deduce, but trying again should work.
-      //     if ((chrome.storage.sync.whitelistPending[whitelistItem] && moment().utc().subtract(5, 'minutes').toDate() > chrome.storage.sync.whitelistPending[whitelistItem]) || (chrome.storage.sync.whitelistPending[whitelistItem] instanceof Date === false)) {
-      //       delete chrome.storage.sync.whitelistPending[whitelistItem];
+      //     if ((browser.storage.local.whitelistPending[whitelistItem] && moment().utc().subtract(5, 'minutes').toDate() > browser.storage.local.whitelistPending[whitelistItem]) || (browser.storage.local.whitelistPending[whitelistItem] instanceof Date === false)) {
+      //       delete browser.storage.local.whitelistPending[whitelistItem];
       //
       //       await store.dispatch({
       //         type: 'saveUserSettings'
       //       });
       //     }
       //
-      //     if (Object.keys(chrome.storage.sync.whitelistPending).indexOf(whitelistItem) === -1 && chrome.storage.sync.whitelistHistory.indexOf(whitelistItem) === -1) {
+      //     if (Object.keys(browser.storage.local.whitelistPending).indexOf(whitelistItem) === -1 && browser.storage.local.whitelistHistory.indexOf(whitelistItem) === -1) {
       //       let regexp = new RegExp(whitelistItem);
       //
-      //       chrome.storage.sync.whitelistPending[whitelistItem] = moment().utc().toDate();
+      //       browser.storage.local.whitelistPending[whitelistItem] = moment().utc().toDate();
       //
       //       store.dispatch({
       //         type: 'saveUserSettings'
       //       });
       //
-      //       chrome.runtime.sendMessage({
+      //       browser.runtime.sendMessage({
       //         data: 'userSettingsSaved'
       //       });
       //
       //       let baseResults = await new Promise(function(resolve, reject) {
-      //         chrome.history.search({
+      //         browser.history.search({
       //           text: '',
       //           startTime: 0,
       //           maxResults: 1000000
@@ -58,7 +73,7 @@ export default defineBackground({
       //         match.visits = [];
       //
       //         let hydratedResults = await new Promise(function(resolve, reject) {
-      //           chrome.history.getVisits({
+      //           browser.history.getVisits({
       //             url: match.url
       //           }, function(results) {
       //             resolve(results);
@@ -197,7 +212,7 @@ export default defineBackground({
       //       let startIndex = 0;
       //
       //       let csrfResponse = await axios.get('https://api.lifescope.io/csrf');
-      //       chrome.storage.sync.csrf_token = csrfResponse.data ? csrfResponse.data.csrf_token: null;
+      //       browser.storage.local.csrf_token = csrfResponse.data ? csrfResponse.data.csrf_token: null;
       //
       //       while (!finished) {
       //         let slice = events.slice(startIndex, startIndex + sliceSize);
@@ -230,20 +245,20 @@ export default defineBackground({
       //       }
       //
       //       if (failed === false) {
-      //         delete chrome.storage.sync.whitelistPending[whitelistItem];
-      //         chrome.storage.sync.whitelistHistory.push(whitelistItem);
+      //         delete browser.storage.local.whitelistPending[whitelistItem];
+      //         browser.storage.local.whitelistHistory.push(whitelistItem);
       //
-      //         chrome.storage.sync.whitelistHistory = _.uniq(chrome.storage.sync.whitelistHistory);
+      //         browser.storage.local.whitelistHistory = _.uniq(browser.storage.local.whitelistHistory);
       //
       //         await store.dispatch({
       //           type: 'saveUserSettings'
       //         });
       //
-      //         chrome.runtime.sendMessage({
+      //         browser.runtime.sendMessage({
       //           data: 'userSettingsSaved'
       //         });
       //
-      //         chrome.runtime.sendMessage({
+      //         browser.runtime.sendMessage({
       //           data: 'runComplete'
       //         });
       //       }
@@ -252,16 +267,76 @@ export default defineBackground({
       // }
     // }
 
+    const refreshAccessToken = async () => {
+      if (browser.storage.local.refreshing) return
+      browser.storage.local.set({ 'refreshing': true })
+      const sessionToken = (await browser.storage.local.get('sessionToken')).sessionToken
+      console.log('refreshing with sessionToken', sessionToken)
+      try {
+        const data: AuthResponse = await fetchJson('https://dev.companionintelligence.com/api/authenticate/refresh', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${sessionToken}`,
+          },
+        });
 
+        console.log('refresh response data', data)
+
+        browser.storage.local.set({ 'accessToken':  data.accessToken });
+        browser.storage.local.set({ 'sessionToken': data.sessionToken });
+        const decoded = jwtDecode(data.accessToken)
+        console.log('decoded accessToken', decoded)
+        browser.cookies.set({
+          url: 'https://dev.companionintelligence.com',
+          expirationDate: decoded.exp,
+          name: `CI_${ACCESS_TOKEN_KEY}`,
+          value: data.accessToken,
+          sameSite: 'no_restriction',
+          secure: true
+        })
+        console.log('finished refreshing', document.cookie)
+        browser.storage.local.set('refreshing', false)
+      } catch(err) {
+        console.error('Error refreshing token', err)
+        browser.storage.local.set({ 'refreshing': false })
+      }
+    }
     console.log('Background script loaded');
-    chrome.runtime.onInstalled.addListener(function() {
+    browser.runtime.onInstalled.addListener(async function() {
       console.log('Extension installed');
 
-      chrome.webNavigation.onCompleted.addListener(async function() {
+      const existingKeys = await browser.storage.local.getKeys()
+      console.log('Existing keys:', existingKeys);
 
+      const toSet = Object.keys(storageDefaults).filter(key => existingKeys.indexOf(key) < 0).reduce((obj, key) => { obj[key] = storageDefaults[key]; return obj }, {});
+      console.log('toSet', toSet)
+
+      browser.storage.local.set(toSet, function() {
+        console.log('Default settings saved');
+      });
+
+      const syncFromCookieInterval = setInterval(async () => {
+        browser.cookies.getAll({ url: 'https://dev.companionintelligence.com' }).then(async result => {
+          console.log('found cookies', result)
+          const accessTokenCookie = result.find(cookie => cookie.name === 'CI_accessToken')
+          const sessionTokenCookie = result.find(cookie => cookie.name === 'CI_sessionToken')
+          console.log('accessTokenCookie', accessTokenCookie)
+          console.log('sessionTokenCookie', sessionTokenCookie)
+          if (accessTokenCookie) browser.storage.local.set({ 'accessToken': accessTokenCookie.value });
+          if (sessionTokenCookie) browser.storage.local.set({ 'sessionToken': sessionTokenCookie.value });
+          const accessDecoded = accessTokenCookie ? jwtDecode(accessTokenCookie.value) : null
+          const isAuthExpired = accessDecoded ? Date.now() >= accessDecoded.exp * 1000: true;
+          const sessionDecoded = sessionTokenCookie ? jwtDecode(sessionTokenCookie.value) : null
+          const isSessionExpired = sessionDecoded ? Date.now() >= sessionDecoded.exp * 1000: true
+          if ((!accessTokenCookie && sessionTokenCookie) || (isAuthExpired && !isSessionExpired)) await refreshAccessToken(sessionTokenCookie.value)
+        })
+      }, 1000)
+
+      browser.webNavigation.onCompleted.addListener(async function() {
         console.log('Web Navigation completed')
         let accessTokenFromCookie = await new Promise(function(resolve, reject) {
-          chrome.cookies.get({
+          browser.cookies.get({
             url: 'https://dev.companionintelligence.com',
             name: 'CI_accessToken'
           }, function(results) {
@@ -269,16 +344,13 @@ export default defineBackground({
           });
         });
         console.log('background.ts access token', accessTokenFromCookie);
-        const [accessToken, refreshToken] = await syncStorage.get(['CI_accessToken', 'CI_refreshToken']);
-        console.log('accessToken', accessToken);
-        console.log('refreshToken', refreshToken);
 
-        if (!accessToken || !refreshToken) {
+        if (!authToken || !sessionToken) {
           return;
         }
 
         await new Promise(function(resolve, reject) {
-          chrome.tabs.query({
+          browser.tabs.query({
             active: true
           }, function(tab) {
             console.log('tab', tab)
@@ -286,29 +358,29 @@ export default defineBackground({
 
             let parsed = new URL(active.url);
 
-            chrome.storage.sync.domain = parsed.hostname;
-            chrome.storage.sync.url = active.url;
+            browser.storage.local.domain = parsed.hostname;
+            browser.storage.local.url = active.url;
 
             resolve();
           });
         });
 
-        chrome.browserAction.setPopup({
+        browser.browserAction.setPopup({
           popup: 'popup/popup.html'
         });
 
         let whitelistHit = false;
 
-        _.each(chrome.storage.sync.whitelist, function(item) {
+        _.each(browser.storage.local.whitelist, function(item) {
           let domainRegex = new RegExp(item);
 
-          if (domainRegex.test(chrome.storage.sync.domain)) {
+          if (domainRegex.test(browser.storage.local.domain)) {
             whitelistHit = true;
 
             return;
           }
 
-          let parsedUrl = url.parse(chrome.storage.sync.url);
+          let parsedUrl = url.parse(browser.storage.local.url);
 
           let condensedUrl = parsedUrl.protocol + '//' + parsedUrl.host + parsedUrl.pathname;
 
@@ -319,8 +391,8 @@ export default defineBackground({
           }
         });
 
-        if (whitelistHit && chrome.storage.sync.lastUrl !== chrome.storage.sync.url) {
-          chrome.storage.sync.lastUrl = chrome.storage.sync.url;
+        if (whitelistHit && browser.storage.local.lastUrl !== browser.storage.local.url) {
+          browser.storage.local.lastUrl = browser.storage.local.url;
 
           store.dispatch({
             type: 'saveUserSettings'
@@ -330,14 +402,14 @@ export default defineBackground({
 
           await new Promise(async function (resolve, reject) {
             try {
-              let result = await axios.get('https://embed.lifescope.io/iframely?url=' + chrome.storage.sync.url);
+              let result = await axios.get('https://embed.lifescope.io/iframely?url=' + browser.storage.local.url);
 
               let data = result.data;
 
               newContent = {
-                connection_id_string: chrome.storage.sync.connection.id,
-                provider_id_string: chrome.storage.sync.connection.provider_id_string,
-                identifier: chrome.storage.sync.connection.id + ':::' + bowser.name + ':::' + data.meta.canonical,
+                connection_id_string: browser.storage.local.connection.id,
+                provider_id_string: browser.storage.local.connection.provider_id_string,
+                identifier: browser.storage.local.connection.id + ':::' + bowser.name + ':::' + data.meta.canonical,
                 tagMasks: {
                   source: []
                 },
@@ -392,23 +464,23 @@ export default defineBackground({
               }
             } catch (error) {
               newContent = {
-                connection_id_string: chrome.storage.sync.connection.id,
-                provider_id_string: chrome.storage.sync.connection.provider_id_string,
-                identifier: chrome.storage.sync.connection.id + ':::' + bowser.name + ':::' + chrome.storage.sync.url,
+                connection_id_string: browser.storage.local.connection.id,
+                provider_id_string: browser.storage.local.connection.provider_id_string,
+                identifier: browser.storage.local.connection.id + ':::' + bowser.name + ':::' + browser.storage.local.url,
                 tagMasks: {
                   source: []
                 },
                 type: 'web-page',
-                url: chrome.storage.sync.url
+                url: browser.storage.local.url
               };
             }
 
             let visit = moment();
 
             newEvent = {
-              connection_id_string: chrome.storage.sync.connection.id,
-              provider_id_string: chrome.storage.sync.connection.provider_id_string,
-              identifier: chrome.storage.sync.connection.id + ':::' + bowser.name + ':::visited:::' + chrome.storage.sync.url + ':::' + visit.utc().toJSON(),
+              connection_id_string: browser.storage.local.connection.id,
+              provider_id_string: browser.storage.local.connection.provider_id_string,
+              identifier: browser.storage.local.connection.id + ':::' + bowser.name + ':::visited:::' + browser.storage.local.url + ':::' + visit.utc().toJSON(),
               content: [newContent],
               context: 'Visited web page',
               datetime: visit.utc().toDate(),
@@ -422,9 +494,9 @@ export default defineBackground({
             resolve();
           });
 
-          chrome.storage.sync.lastUrl = chrome.storage.sync.url;
+          browser.storage.local.lastUrl = browser.storage.local.url;
 
-          triggerHistoryCrawl(chrome.storage.sync.connection);
+          triggerHistoryCrawl(browser.storage.local.connection);
         }
       });
     });

@@ -49,20 +49,17 @@ export function useAuth(): Value {
   const [sessionToken, setSessionToken] = useState<string>(null)
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  window.chrome.cookies.getAll({ url: 'https://dev.companionintelligence.com' }).then(async result => {
-    console.log('found cookies', result)
-    const accessTokenCookie = result.find(cookie => cookie.name === 'CI_accessToken')
-    const sessionTokenCookie = result.find(cookie => cookie.name === 'CI_sessionToken')
-    if (accessTokenCookie) setAccessToken(accessTokenCookie.value);
-    if (sessionTokenCookie) setSessionToken(sessionTokenCookie.value);
-    if (!accessTokenCookie && sessionTokenCookie && !refreshing) {
-      console.log('refreshing because only session cookie is present')
-      await refresh()
-    }
-  })
-
   const decoded = useMemo(() => (accessToken ? jwtDecode<JwtPayload>(accessToken) : null), [accessToken]);
   const isExpired = useCallback(() => (decoded ? Date.now() >= decoded.exp * 1000 : true), [decoded]);
+  const sessionDecoded = useMemo(() => (sessionToken ? jwtDecode<JwtPayload>(accessToken) : null), [sessionToken]);
+  console.log('sessionDecoded', sessionDecoded)
+  const isSessionExpired = useCallback(() => (sessionDecoded ? Date.now() >= sessionDecoded.exp * 1000 : true), [sessionDecoded]);
+  console.log('isSessionExpired', isSessionExpired())
+
+  browser.storage.local.get().then(storage => {
+    setAccessToken(storage.accessToken)
+    setSessionToken(storage.sessionToken)
+  })
 
   const getSelfProfile = useCallback(async () => {
     if (accessToken == null || isExpired() || (decoded && decoded.sub === user?.id)) {
@@ -165,35 +162,6 @@ export function useAuth(): Value {
     [setUser, setError, setLoading],
   );
 
-  const refresh = async () => {
-    if (!sessionToken) return
-    setRefreshing(true)
-    console.log('refreshing with sessionToken', sessionToken)
-    const data: AuthResponse = await fetchJson('https://dev.companionintelligence.com/api/authenticate/refresh', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionToken}`,
-      },
-    });
-
-    console.log('refresh response data', data)
-
-    setAccessToken(data.accessToken);
-    setAccessToken(data.sessionToken);
-    const decoded = jwtDecode(accessToken)
-    console.log('decoded accessToken', decoded)
-    window.chrome.cookies.set({
-        url: 'https://dev.companionintelligence.com',
-        expirationDate: decoded.exp,
-        name: `CI_${ACCESS_TOKEN_KEY}`,
-        value: data.accessToken,
-        sameSite: 'no_restriction',
-        secure: true
-    })
-    console.log('finished refreshing', document.cookie)
-    setRefreshing(false)
-  }
   // useAutoRefreshToken(accessToken, sessionToken, refresh);
 
   // useEffect(() => {
@@ -204,6 +172,7 @@ export function useAuth(): Value {
     {
       expired: isExpired(),
       authToken: accessToken,
+      sessionToken: sessionToken,
       user,
       loading,
       error,
