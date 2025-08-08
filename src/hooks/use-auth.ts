@@ -41,7 +41,7 @@ type Value = [
 ];
 
 export function useAuth(): Value {
-
+  console.log('useAuth')
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
@@ -51,10 +51,8 @@ export function useAuth(): Value {
 
   const decoded = useMemo(() => (accessToken ? jwtDecode<JwtPayload>(accessToken) : null), [accessToken]);
   const isExpired = useCallback(() => (decoded ? Date.now() >= decoded.exp * 1000 : true), [decoded]);
-  const sessionDecoded = useMemo(() => (sessionToken ? jwtDecode<JwtPayload>(accessToken) : null), [sessionToken]);
-  console.log('sessionDecoded', sessionDecoded)
+  const sessionDecoded = useMemo(() => (sessionToken ? jwtDecode<JwtPayload>(sessionToken) : null), [sessionToken]);
   const isSessionExpired = useCallback(() => (sessionDecoded ? Date.now() >= sessionDecoded.exp * 1000 : true), [sessionDecoded]);
-  console.log('isSessionExpired', isSessionExpired())
 
   browser.storage.local.get().then(storage => {
     setAccessToken(storage.accessToken)

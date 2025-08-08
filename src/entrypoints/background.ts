@@ -2,8 +2,8 @@ import { fetchJson } from '../hooks/fetchJson';
 import { jwtDecode } from 'jwt-decode';
 
 export default defineBackground({
-  type: 'module',
   main() {
+    console.log('BACKGROUND')
     const ACCESS_TOKEN_KEY = 'accessToken';
     const storageDefaults = {
       whitelist: [],
@@ -268,6 +268,7 @@ export default defineBackground({
     // }
 
     const refreshAccessToken = async () => {
+      console.log('refreshAccessToken')
       if (browser.storage.local.refreshing) return
       browser.storage.local.set({ 'refreshing': true })
       const sessionToken = (await browser.storage.local.get('sessionToken')).sessionToken
@@ -296,7 +297,7 @@ export default defineBackground({
           secure: true
         })
         console.log('finished refreshing', document.cookie)
-        browser.storage.local.set('refreshing', false)
+        browser.storage.local.set({ 'refreshing': false })
       } catch(err) {
         console.error('Error refreshing token', err)
         browser.storage.local.set({ 'refreshing': false })
@@ -329,12 +330,23 @@ export default defineBackground({
           const isAuthExpired = accessDecoded ? Date.now() >= accessDecoded.exp * 1000: true;
           const sessionDecoded = sessionTokenCookie ? jwtDecode(sessionTokenCookie.value) : null
           const isSessionExpired = sessionDecoded ? Date.now() >= sessionDecoded.exp * 1000: true
-          if ((!accessTokenCookie && sessionTokenCookie) || (isAuthExpired && !isSessionExpired)) await refreshAccessToken(sessionTokenCookie.value)
+          if ((!accessTokenCookie && sessionTokenCookie) || (isAuthExpired && !isSessionExpired)) await refreshAccessToken()
         })
       }, 1000)
 
       browser.webNavigation.onCompleted.addListener(async function() {
         console.log('Web Navigation completed')
+        const tabInfo = await browser.tabs.query({
+          active: true
+        })
+        console.log('got active tabs', tabInfo)
+        let active = tabInfo[0];
+
+        let parsed = new URL(active.url);
+
+        browser.storage.local.set({ 'domain': parsed.hostname })
+        browser.storage.local.set({ 'url': active.url })
+        console.log('set domain and url on storage')
         let accessTokenFromCookie = await new Promise(function(resolve, reject) {
           browser.cookies.get({
             url: 'https://dev.companionintelligence.com',
@@ -344,10 +356,6 @@ export default defineBackground({
           });
         });
         console.log('background.ts access token', accessTokenFromCookie);
-
-        if (!authToken || !sessionToken) {
-          return;
-        }
 
         await new Promise(function(resolve, reject) {
           browser.tabs.query({
