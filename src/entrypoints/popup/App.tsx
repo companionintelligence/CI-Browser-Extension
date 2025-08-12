@@ -15,10 +15,8 @@ import {
 const API_BASE = '/api';
 
 export default function App() {
-  console.log('render app')
   const dispatch = useDispatch()
   const ciState = useSelector(state => state.ciState)
-  console.log('ciState', ciState)
   const {
     accessToken,
     sessionToken,
@@ -186,11 +184,11 @@ export default function App() {
             </div>
 
             {/*<div v-if="domainPending" className="crawl-pending">*/}
-            {/*    Your site history is being parsed. You may be tag when process is complete.*/}
+            {/*    Your site history is being parsed. You may tag when the process is complete.*/}
             {/*</div>*/}
 
             {/*<div v-if="sitePending" className="crawl-pending">*/}
-            {/*    Your page history is being parsed. You may be tag when process is complete.*/}
+            {/*    Your page history is being parsed. You may tag when the process is complete.*/}
             {/*</div>*/}
 
             {/*<div id="tagging" className="flexbox flex-column flex-x-center content actions"*/}

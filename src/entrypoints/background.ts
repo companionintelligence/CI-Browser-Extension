@@ -1,8 +1,9 @@
+import axios from 'axios'
 import { fetchJson } from '../hooks/fetchJson';
 import { jwtDecode } from 'jwt-decode';
 import { createWrapStore } from 'webext-redux'
 import { store } from '@/store';
-import { setState } from '@/store/ciStateSlice';
+import { setState, loadUserSettings, saveUserSettings } from '@/store/ciStateSlice';
 
 export default defineBackground({
   main() {
@@ -307,7 +308,6 @@ export default defineBackground({
           sameSite: 'no_restriction',
           secure: true
         })
-        console.log('finished refreshing', document.cookie)
         store.dispatch(setState({ refreshing: false }))
       } catch (err) {
         console.error('Error refreshing token', err)
@@ -315,10 +315,41 @@ export default defineBackground({
       }
     }
     console.log('Background script loaded');
+    const syncFromCookieInterval = setInterval(async () => {
+      browser.cookies.getAll({url: 'https://dev.companionintelligence.com'}).then(async result => {
+        const accessTokenCookie = result.find(cookie => cookie.name === 'CI_accessToken')
+        const sessionTokenCookie = result.find(cookie => cookie.name === 'CI_sessionToken')
+        let { accessToken, sessionToken } = store.getState().ciState
+        if (accessTokenCookie && accessTokenCookie !== accessToken) {
+          store.dispatch(setState({ accessToken: accessTokenCookie.value }));
+        }
+        if (sessionTokenCookie && sessionTokenCookie !== sessionToken) {
+          const cookieDecoded = jwtDecode(sessionTokenCookie.value)
+          const cookieExpires = new Date(cookieDecoded.exp * 1000)
+          const stateDecoded = sessionToken ? jwtDecode(sessionToken) : null
+          const stateExpired = stateDecoded ? new Date(stateDecoded.exp * 1000) : null
+          if (!stateExpired || (cookieExpires.getTime() > stateExpired.getTime()))
+            store.dispatch(setState({ sessionToken: sessionTokenCookie.value }));
+        }
+        console.log('Getting new tokens from state');
+        ({ accessToken, sessionToken } = store.getState().ciState)
+        const accessDecoded = accessToken ? jwtDecode(accessToken) : null
+        const isAuthExpired = accessDecoded ? Date.now() >= accessDecoded.exp * 1000 : true;
+        const sessionDecoded = sessionToken ? jwtDecode(sessionToken) : null
+        const isSessionExpired = sessionDecoded ? Date.now() >= sessionDecoded.exp * 1000 : true
+        console.log(accessToken, sessionToken)
+        console.log(isAuthExpired, isSessionExpired)
+        if ((!accessTokenCookie && sessionTokenCookie) || (isAuthExpired && !isSessionExpired)) await refreshAccessToken()
+
+
+        store.dispatch(saveUserSettings());
+      })
+    }, 1000)
     browser.runtime.onInstalled.addListener(async function () {
       console.log('Extension installed');
 
-      const state = store.getState()
+      store.dispatch(loadUserSettings());
+
       const existingKeys = Object.keys(store.getState().ciState)
       const toSet = Object.keys(storageDefaults).filter(key => existingKeys.indexOf(key) < 0).reduce((obj, key) => {
         obj[key] = storageDefaults[key];
@@ -327,30 +358,8 @@ export default defineBackground({
 
       store.dispatch(setState(toSet))
 
-      const syncFromCookieInterval = setInterval(async () => {
-        browser.cookies.getAll({url: 'https://dev.companionintelligence.com'}).then(async result => {
-          console.log('syncing tokens from cookies')
-          const accessTokenCookie = result.find(cookie => cookie.name === 'CI_accessToken')
-          const sessionTokenCookie = result.find(cookie => cookie.name === 'CI_sessionToken')
-          const {accessToken, sessionToken} = store.getState()
-          console.log('accessTokenCookie', accessTokenCookie, 'accessToken from store', accessToken)
-          console.log('sessionTokenCookie', sessionTokenCookie, 'sessionToken from store', sessionToken)
-          if (accessTokenCookie !== accessToken) {
-            console.log('setting accessToken from cookie', accessTokenCookie)
-            store.dispatch(setState({ accessToken: accessTokenCookie.value }));
-          }
-          if (sessionTokenCookie !== sessionToken) {
-            console.log('setting sessionToken from cookie', sessionTokenCookie)
-            store.dispatch(setState({ sessionToken: sessionTokenCookie.value }));
-          }
-          const accessDecoded = accessTokenCookie ? jwtDecode(accessTokenCookie.value) : null
-          const isAuthExpired = accessDecoded ? Date.now() >= accessDecoded.exp * 1000 : true;
-          const sessionDecoded = sessionTokenCookie ? jwtDecode(sessionTokenCookie.value) : null
-          const isSessionExpired = sessionDecoded ? Date.now() >= sessionDecoded.exp * 1000 : true
-          if ((!accessTokenCookie && sessionTokenCookie) || (isAuthExpired && !isSessionExpired)) await refreshAccessToken()
-        })
-      }, 1000)
       browser.tabs.onActivated.addListener(async tab => {
+        console.log('Tab activated', tab)
         const tabInfo = await browser.tabs.query({
           active: true
         })
@@ -362,7 +371,10 @@ export default defineBackground({
         store.dispatch(setState({ url: active.url }))
       })
 
-        browser.webNavigation.onCompleted.addListener(async function () {
+      // Use onHistoryStateUpdated over onCompleted in order to support single-page apps
+      // onCompleted will not fire when an SPA updates the URL without a full page reload
+        browser.webNavigation.onHistoryStateUpdated.addListener(async function (e) {
+          if (e.frameId !== 0) return; // Only handle main frame navigation
           const tabInfo = await browser.tabs.query({
             active: true
           })
@@ -372,21 +384,11 @@ export default defineBackground({
 
           store.dispatch(setState({ domain: parsed.hostname }))
           store.dispatch(setState({ url: active.url }))
-          let accessTokenFromCookie = await new Promise(function (resolve, reject) {
-            browser.cookies.get({
-              url: 'https://dev.companionintelligence.com',
-              name: 'CI_accessToken'
-            }, function (results) {
-              resolve(results);
-            });
-          });
-          console.log('background.ts access token', accessTokenFromCookie);
 
           await new Promise(function (resolve, reject) {
             browser.tabs.query({
               active: true
             }, function (tab) {
-              console.log('tab', tab)
               let active = tab[0];
 
               let parsed = new URL(active.url);
@@ -397,14 +399,11 @@ export default defineBackground({
             });
           });
 
-          browser.browserAction.setPopup({
-            popup: 'popup/popup.html'
-          });
-
           let domainWhitelistHit = false;
-          const state = store.getState()
+          const state = store.getState().ciState
+          console.log('state', state, state.domainWhitelist)
 
-          _.each(state.domainWhitelist, function (item) {
+          state.domainWhitelist.forEach(item => {
             let domainRegex = new RegExp(item);
 
             if (domainRegex.test(state.domain)) {
@@ -424,112 +423,123 @@ export default defineBackground({
             }
           });
 
+          console.log('domainWhitelistHit', domainWhitelistHit, state.lastUrl, state.url)
           if (domainWhitelistHit && state.lastUrl !== state.url) {
             store.dispatch(setState({ lastUrl: store.url }))
 
-            // store.dispatch({
-            //   type: 'saveUserSettings'
-            // });
+            store.dispatch(saveUserSettings());
 
             let newEvent, newContent;
 
             await new Promise(async function (resolve, reject) {
-              try {
-                let result = await axios.get('https://embed.lifescope.io/iframely?url=' + store.url);
-
-                let data = result.data;
-
-                newContent = {
-                  connection_id_string: store.connection.id,
-                  provider_id_string: store.connection.provider_id_string,
-                  identifier: store.connection.id + ':::' + bowser.name + ':::' + data.meta.canonical,
-                  tagMasks: {
-                    source: []
-                  },
-                  url: data.meta.canonical
-                };
-
-                if (data.rel.indexOf('player') >= 0) {
-                  newContent.type = audioSites.indexOf(data.meta.site) >= 0 ? 'audio' : 'video';
-                } else if (data.rel.indexOf('image') >= 0) {
-                  newContent.type = 'image';
-                } else {
-                  newContent.type = 'web-page';
-                }
-
-                if (data.meta.description) {
-                  newContent.text = data.meta.description;
-
-                  let tags = newContent.text.match(tagRegex);
-
-                  if (tags != null) {
-                    for (let j = 0; j < tags.length; j++) {
-                      newContent.tagMasks.source.push(tags[j].slice(1));
-                    }
-                  }
-                }
-
-                if (data.meta.title) {
-                  newContent.title = data.meta.title;
-
-                  let tags = newContent.title.match(tagRegex);
-
-                  if (tags != null) {
-                    for (let j = 0; j < tags.length; j++) {
-                      newContent.tagMasks.source.push(tags[j].slice(1));
-                    }
-                  }
-                }
-
-                newContent.tagMasks.source = _.uniq(newContent.tagMasks.source);
-
-                let thumbnailLink = _.find(data.links, function (link) {
-                  return link.rel.indexOf('thumbnail') >= 0;
-                });
-
-                if (thumbnailLink != null) {
-                  newContent.embed_thumbnail = thumbnailLink.href;
-                }
-
-                if (data.html) {
-                  newContent.embed_content = data.html;
-                  newContent.embed_format = 'iframe';
-                }
-              } catch (error) {
-                newContent = {
-                  connection_id_string: store.connection.id,
-                  provider_id_string: store.connection.provider_id_string,
-                  identifier: store.connection.id + ':::' + bowser.name + ':::' + store.url,
-                  tagMasks: {
-                    source: []
-                  },
-                  type: 'web-page',
-                  url: store.url
-                };
-              }
-
-              let visit = moment();
+              // try {
+              //
+              //
+              //   newContent = {
+              //     identifier: store.connection.id + ':::' + bowser.name + ':::' + data.meta.canonical,
+              //     tagMasks: {
+              //       source: []
+              //     },
+              //     type: 'Web Page',
+              //     url: data.meta.canonical
+              //   };
+              //
+              //   if (data.meta.description) {
+              //     newContent.text = data.meta.description;
+              //
+              //     let tags = newContent.text.match(tagRegex);
+              //
+              //     if (tags != null) {
+              //       for (let j = 0; j < tags.length; j++) {
+              //         newContent.tagMasks.source.push(tags[j].slice(1));
+              //       }
+              //     }
+              //   }
+              //
+              //   if (data.meta.title) {
+              //     newContent.title = data.meta.title;
+              //
+              //     let tags = newContent.title.match(tagRegex);
+              //
+              //     if (tags != null) {
+              //       for (let j = 0; j < tags.length; j++) {
+              //         newContent.tagMasks.source.push(tags[j].slice(1));
+              //       }
+              //     }
+              //   }
+              //
+              //   newContent.tagMasks.source = _.uniq(newContent.tagMasks.source);
+              //
+              //   let thumbnailLink = _.find(data.links, function (link) {
+              //     return link.rel.indexOf('thumbnail') >= 0;
+              //   });
+              //
+              //   if (thumbnailLink != null) {
+              //     newContent.embed_thumbnail = thumbnailLink.href;
+              //   }
+              //
+              //   if (data.html) {
+              //     newContent.embed_content = data.html;
+              //     newContent.embed_format = 'iframe';
+              //   }
+              // } catch (error) {
+              //   console.log('error', error)
+              //   newContent = {
+              //     connection_id_string: store.connection.id,
+              //     provider_id_string: store.connection.provider_id_string,
+              //     identifier: store.connection.id + ':::' + bowser.name + ':::' + store.url,
+              //     tagMasks: {
+              //       source: []
+              //     },
+              //     type: 'web-page',
+              //     url: store.url
+              //   };
+              // }
 
               newEvent = {
-                connection_id_string: store.connection.id,
-                provider_id_string: store.connection.provider_id_string,
-                identifier: store.connection.id + ':::' + bowser.name + ':::visited:::' + store.url + ':::' + visit.utc().toJSON(),
-                content: [newContent],
-                context: 'Visited web page',
-                datetime: visit.utc().toDate(),
-                provider_name: bowser.name + ' Extension',
-                tagMasks: {
-                  source: []
-                },
-                type: 'viewed'
+                name: 'Visited ' + state.url,
+                start_time: new Date().toJSON(),
+                type: 'View'
               };
 
               resolve();
             });
 
-            store.dispatch(setState('lastUrl', store.url))
+            try {
+              await axios.post(
+                  // TODO: update to use env var
+                  'https://dev.companionintelligence.com/api/contents',
+                  newContent,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${store.getState().ciState.accessToken}`,
+                      'Content-Type': 'application/json'
+                    }
+                  }
+              )
+            } catch (err) {
+              console.log('error posting content', err)
+            }
 
-            triggerHistoryCrawl(store.connection);
+            try {
+              await axios.post(
+                  // TODO: update to use env var
+                  'https://dev.companionintelligence.com/api/events',
+                  newEvent,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${store.getState().ciState.accessToken}`,
+                      'Content-Type': 'application/json'
+                    }
+                  }
+              )
+            } catch (err) {
+              console.log('error posting event', err)
+            }
+
+            store.dispatch(setState({ lastUrl: store.url }))
+
+            // triggerHistoryCrawl(store.connection);
           }
         });
     });

@@ -1,7 +1,21 @@
 
-import { createSlice } from '@reduxjs/toolkit'
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 
+export const loadUserSettings = createAsyncThunk('ciState/loadUserSettings', async () => {
+    const localData = await browser.storage.local.get([
+        'accessToken',
+        'sessionToken',
+        'domainWhitelist',
+        'domainWhitelistPending',
+        'domainWhitelistHistory',
+        'pageWhitelist',
+        'pageWhitelistPending',
+        'pageWhitelistHistory'
+    ])
 
+    console.log('localData', localData)
+    return localData
+})
 
 export const ciStateSlice = createSlice({
     name: 'ciState',
@@ -51,7 +65,33 @@ export const ciStateSlice = createSlice({
         removePageWhitelistEntry(state, action) {
             let newPageWhitelist = state.pageWhitelist.filter(entry => entry !== action.payload)
             return { ...state, pageWhitelist: newPageWhitelist }
+        },
+        saveUserSettings(state) {
+            const parsed = JSON.parse(JSON.stringify({
+                accessToken: state.accessToken,
+                sessionToken: state.sessionToken,
+                domainWhitelist: state.domainWhitelist,
+                domainWhitelistPending: state.domainWhitelistPending,
+                domainWhitelistHistory: state.domainWhitelistHistory,
+                pageWhitelist: state.pageWhitelist,
+                pageWhitelistPending: state.pageWhitelistPending,
+                pageWhitelistHistory: state.pageWhitelistHistory
+            }))
+            console.log ('saveUserSettings', parsed)
+            browser.storage.local.set(parsed);
+
+            return state
         }
+    },
+    extraReducers: builder => {
+        builder
+            .addCase(loadUserSettings.fulfilled, (state, action) => {
+                console.log('loadUserSettings fulfilled', action.payload)
+                for (const [key, value] of Object.entries(action.payload)) {
+                    console.log('set', key, value)
+                    state[key] = value
+                }
+            })
     }
 })
 
@@ -61,7 +101,8 @@ export const {
     removeDomainWhitelistEntry,
     addPageWhitelistEntry,
     removePageWhitelistEntry,
-    setState
+    setState,
+    saveUserSettings
 } = ciStateSlice.actions
 
 export default ciStateSlice.reducer
