@@ -1,9 +1,9 @@
 import { configureStore } from '@reduxjs/toolkit'
-import sliceReducer from './slice'
+import ciStateReducer from './ciStateSlice'
 
 export const store = configureStore({
     reducer: {
-        slice: sliceReducer
+        ciState: ciStateReducer
     }
 })
 
