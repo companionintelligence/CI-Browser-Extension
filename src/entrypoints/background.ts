@@ -371,9 +371,11 @@ export default defineBackground({
         store.dispatch(setState({ url: active.url }))
       })
 
+      console.log('adding history state listener')
       // Use onHistoryStateUpdated over onCompleted in order to support single-page apps
       // onCompleted will not fire when an SPA updates the URL without a full page reload
         browser.webNavigation.onHistoryStateUpdated.addListener(async function (e) {
+          console.log('onHistoryStateUpdated', e)
           if (e.frameId !== 0) return; // Only handle main frame navigation
           const tabInfo = await browser.tabs.query({
             active: true
@@ -382,22 +384,7 @@ export default defineBackground({
 
           let parsed = new URL(active.url);
 
-          store.dispatch(setState({ domain: parsed.hostname }))
-          store.dispatch(setState({ url: active.url }))
-
-          await new Promise(function (resolve, reject) {
-            browser.tabs.query({
-              active: true
-            }, function (tab) {
-              let active = tab[0];
-
-              let parsed = new URL(active.url);
-
-              store.dispatch(setState({ domain: parsed.hostname, url: active.url }))
-
-              resolve();
-            });
-          });
+          store.dispatch(setState({ domain: parsed.hostname, url: active.url  }))
 
           let domainWhitelistHit = false;
           const state = store.getState().ciState
@@ -425,7 +412,7 @@ export default defineBackground({
 
           console.log('domainWhitelistHit', domainWhitelistHit, state.lastUrl, state.url)
           if (domainWhitelistHit && state.lastUrl !== state.url) {
-            store.dispatch(setState({ lastUrl: store.url }))
+            store.dispatch(setState({ lastUrl: state.url }))
 
             store.dispatch(saveUserSettings());
 
@@ -536,8 +523,6 @@ export default defineBackground({
             } catch (err) {
               console.log('error posting event', err)
             }
-
-            store.dispatch(setState({ lastUrl: store.url }))
 
             // triggerHistoryCrawl(store.connection);
           }
