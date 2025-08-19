@@ -1,7 +1,4 @@
-import { useState, useEffect } from 'react';
-import { fetchJson } from "@/hooks/fetchJson.ts";
 
-import { useAuth } from '@/hooks';
 import { useMemo } from 'react'
 import { jwtDecode } from 'jwt-decode'
 import { useSelector, useDispatch } from 'react-redux'
@@ -11,6 +8,7 @@ import {
   addPageWhitelistEntry,
   removePageWhitelistEntry
 } from '@/store/ciStateSlice'
+import { domainRegex, siteRegex } from "@/utils.ts";
 
 const API_BASE = '/api';
 
@@ -28,8 +26,6 @@ export default function App() {
     url
   } = ciState
 
-  const domainRegex = /([a-zA-Z0-9]+).[a-zA-Z0-9]+/;
-  const siteRegex = /^(http(s)?:\/\/)([a-zA-Z0-9]+\.)+[a-zA-Z0-9]+(\/([.a-zA-Z0-9_-~!$&'()*+,;=:@])+)*\/?/;
   const domainWhitelisted = useMemo(() => {
     let domainWhitelistHit = false;
 

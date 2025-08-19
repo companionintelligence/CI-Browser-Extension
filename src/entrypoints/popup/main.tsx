@@ -7,9 +7,7 @@ import { Store } from 'webext-redux'
 
 const store = new Store()
 
-store.ready().then((result) => {
-    console.log('store ready result', result);
-    console.log('store', store, store.getState());
+store.ready().then(() => {
     return ReactDOM.createRoot(document.getElementById('root')!).render(
         <React.StrictMode>
             <Provider store={store}>

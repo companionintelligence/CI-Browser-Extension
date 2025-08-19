@@ -8,6 +8,8 @@ import { setState, loadUserSettings, saveUserSettings } from '@/store/ciStateSli
 export default defineBackground({
   main() {
 
+    let tagRegex = /#[^#\s]+/g;
+
     const wrapStore = createWrapStore()
     wrapStore(store)
     console.log('STORE', store)
@@ -411,77 +413,101 @@ export default defineBackground({
           });
 
           console.log('domainWhitelistHit', domainWhitelistHit, state.lastUrl, state.url)
+          console.log('Should do things', domainWhitelistHit && state.lastUrl !== state.url)
           if (domainWhitelistHit && state.lastUrl !== state.url) {
             store.dispatch(setState({ lastUrl: state.url }))
 
             store.dispatch(saveUserSettings());
 
-            let newEvent, newContent;
+            let newEvent, newThumbnailContent, newPageContent, newMediaContent, newEmbedContent
+            let newContent = []
 
+            console.log('Starting to fetch embeds')
             await new Promise(async function (resolve, reject) {
-              // try {
-              //
-              //
-              //   newContent = {
-              //     identifier: store.connection.id + ':::' + bowser.name + ':::' + data.meta.canonical,
-              //     tagMasks: {
-              //       source: []
-              //     },
-              //     type: 'Web Page',
-              //     url: data.meta.canonical
-              //   };
-              //
-              //   if (data.meta.description) {
-              //     newContent.text = data.meta.description;
-              //
-              //     let tags = newContent.text.match(tagRegex);
-              //
-              //     if (tags != null) {
-              //       for (let j = 0; j < tags.length; j++) {
-              //         newContent.tagMasks.source.push(tags[j].slice(1));
-              //       }
-              //     }
-              //   }
-              //
-              //   if (data.meta.title) {
-              //     newContent.title = data.meta.title;
-              //
-              //     let tags = newContent.title.match(tagRegex);
-              //
-              //     if (tags != null) {
-              //       for (let j = 0; j < tags.length; j++) {
-              //         newContent.tagMasks.source.push(tags[j].slice(1));
-              //       }
-              //     }
-              //   }
-              //
-              //   newContent.tagMasks.source = _.uniq(newContent.tagMasks.source);
-              //
-              //   let thumbnailLink = _.find(data.links, function (link) {
-              //     return link.rel.indexOf('thumbnail') >= 0;
-              //   });
-              //
-              //   if (thumbnailLink != null) {
-              //     newContent.embed_thumbnail = thumbnailLink.href;
-              //   }
-              //
-              //   if (data.html) {
-              //     newContent.embed_content = data.html;
-              //     newContent.embed_format = 'iframe';
-              //   }
-              // } catch (error) {
-              //   console.log('error', error)
-              //   newContent = {
-              //     connection_id_string: store.connection.id,
-              //     provider_id_string: store.connection.provider_id_string,
-              //     identifier: store.connection.id + ':::' + bowser.name + ':::' + store.url,
-              //     tagMasks: {
-              //       source: []
-              //     },
-              //     type: 'web-page',
-              //     url: store.url
-              //   };
-              // }
+              try {
+                let result = await axios.get('https://dev.companionintelligence.com/embed/iframely?url=' + state.url);
+
+                console.log('iframely result', result)
+                let data = result.data;
+                console.log('iframely data', data)
+
+                newPageContent = {
+                  type: 'Web Page',
+                  mimetype: 'text/html',
+                  url: data.meta.canonical
+                };
+
+                if (data.meta.description) {
+                  newPageContent.text = data.meta.description;
+
+                  // let tags = newContent.text.match(tagRegex);
+
+                  // if (tags != null) {
+                  //   for (let j = 0; j < tags.length; j++) {
+                      // newContent.tagMasks.source.push(tags[j].slice(1));
+                    // }
+                  // }
+                }
+
+                if (data.meta.title) {
+                  newPageContent.title = data.meta.title;
+
+                  // let tags = newContent.title.match(tagRegex);
+                  //
+                  // if (tags != null) {
+                  //   for (let j = 0; j < tags.length; j++) {
+                  //     newContent.tagMasks.source.push(tags[j].slice(1));
+                  //   }
+                  // }
+                }
+
+                const links = data.links || [];
+
+                // newContent.tagMasks.source = _.uniq(newContent.tagMasks.source);
+
+                let thumbnailLink = links.thumbnail.find(link => {
+                  return link.rel.indexOf('thumbnail') >= 0;
+                });
+
+                if (thumbnailLink != null) {
+                  newThumbnailContent = {
+                    type: 'Image',
+                    mimetype: thumbnailLink.type,
+                    title: data.meta.title || 'Thumbnail for ' + data.meta.canonical,
+                    text: data.meta.description,
+                    url: thumbnailLink.href
+                  }
+                }
+
+                if (links.player) {
+                  const playerLink = links.player[0];
+                  newMediaContent = {
+                    type: playerLink.rel.indexOf('audio') >= 0 ? 'Audio' : 'Video',
+                    mimetype: playerLink.type,
+                    title: data.meta.title,
+                    text: data.meta.description,
+                    url: playerLink.href
+                  }
+                }
+
+                // if (data.html) {
+                //   newEmbedContent = {
+                //     type: 'Embed',
+                //   }
+                //   newEmbedContent.embed_content = data.html;
+                //   newContent.embed_format = 'iframe';
+                // }
+                newContent.push(newPageContent)
+                if (newThumbnailContent) newContent.push(newThumbnailContent)
+                if (newMediaContent) newContent.push(newMediaContent)
+              } catch (error) {
+                console.log('error hitting iframely', error)
+                newPageContent = {
+                  type: 'web-page',
+                  url: state.url
+                };
+                newContent.push(newPageContent)
+              }
 
               newEvent = {
                 name: 'Visited ' + state.url,
@@ -492,37 +518,44 @@ export default defineBackground({
               resolve();
             });
 
+            let newEventResult
             try {
-              await axios.post(
-                  // TODO: update to use env var
-                  'https://dev.companionintelligence.com/api/contents',
-                  newContent,
-                  {
-                    headers: {
-                      Authorization: `Bearer ${store.getState().ciState.accessToken}`,
-                      'Content-Type': 'application/json'
-                    }
-                  }
-              )
-            } catch (err) {
-              console.log('error posting content', err)
-            }
-
-            try {
-              await axios.post(
+              newEventResult = await axios.post(
                   // TODO: update to use env var
                   'https://dev.companionintelligence.com/api/events',
                   newEvent,
                   {
                     headers: {
-                      Authorization: `Bearer ${store.getState().ciState.accessToken}`,
+                      Authorization: `Bearer ${state.accessToken}`,
                       'Content-Type': 'application/json'
                     }
                   }
               )
+              console.log('newEventResult', newEventResult)
             } catch (err) {
               console.log('error posting event', err)
             }
+
+            if (newEventResult)
+              try {
+                console.log('posting content', newContent)
+                for (let content of newContent) {
+                  content.event_id = newEventResult.data.id
+                  await axios.post(
+                      // TODO: update to use env var
+                      'https://dev.companionintelligence.com/api/contents',
+                      content,
+                      {
+                        headers: {
+                          Authorization: `Bearer ${state.accessToken}`,
+                          'Content-Type': 'application/json'
+                        }
+                      }
+                  )
+                }
+              } catch (err) {
+                console.log('error posting content', err)
+              }
 
             // triggerHistoryCrawl(store.connection);
           }
