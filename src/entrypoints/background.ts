@@ -1,21 +1,231 @@
-import axios from 'axios'
-import { fetchJson } from '../hooks/fetchJson';
-import { jwtDecode } from 'jwt-decode';
-import { createWrapStore } from 'webext-redux'
-import { store } from '@/store';
-import { setState, loadUserSettings, saveUserSettings } from '@/store/ciStateSlice';
+import axios from "axios";
+import { fetchJson } from "../hooks/fetchJson";
+import { jwtDecode } from "jwt-decode";
+import { createWrapStore } from "webext-redux";
+import { store } from "@/store";
+import {
+  setState,
+  loadUserSettings,
+  saveUserSettings,
+} from "@/store/ciStateSlice";
+import { siteRegex } from "@/utils.ts";
+
+const recordHit = async function (e) {
+  const { accessToken } = store.getState().ciState;
+  const accessDecoded = accessToken ? jwtDecode(accessToken) : null;
+  const isAuthExpired = accessDecoded
+    ? Date.now() >= accessDecoded.exp * 1000
+    : true;
+  if (e.frameId !== 0) {
+    return;
+  } // Only handle main frame navigation
+
+  const tabInfo = await browser.tabs.query({
+    active: true,
+  });
+  const active = tabInfo[0];
+
+  const parsed = URL.parse(active.url);
+  if (!parsed) {
+    return;
+  }
+
+  store.dispatch(setState({ domain: parsed.hostname, url: active.url }));
+
+  let domainWhitelistHit,
+    pageWhitelistHit = false;
+  const state = store.getState().ciState;
+
+  state.domainWhitelist.forEach((item) => {
+    const domainRegex = new RegExp(item);
+
+    if (domainRegex.test(state.domain)) {
+      domainWhitelistHit = true;
+
+      return;
+    }
+  });
+
+  state.pageWhitelist.forEach((item) => {
+    const siteRegex = new RegExp(item);
+
+    const parsedUrl = URL.parse(state.url);
+
+    const condensedUrl =
+      parsedUrl.protocol + "//" + parsedUrl.host + parsedUrl.pathname;
+
+    if (siteRegex.test(condensedUrl)) {
+      pageWhitelistHit = true;
+
+      return;
+    }
+  });
+
+  if (
+    !isAuthExpired &&
+    (domainWhitelistHit || pageWhitelistHit) &&
+    state.lastUrl !== state.url
+  ) {
+    store.dispatch(setState({ lastUrl: state.url }));
+
+    store.dispatch(saveUserSettings());
+
+    let newEvent, newThumbnailContent, newPageContent, newMediaContent;
+    const newContent = [];
+
+    await new Promise(function (resolve) {
+      try {
+        axios
+          .get(
+            "https://dev.companionintelligence.com/embed/iframely?url=" +
+              state.url,
+          )
+          .then((result) => {
+            const data = result.data;
+
+            newPageContent = {
+              type: "Web Page",
+              mimetype: "text/html",
+              url: data.meta.canonical,
+            };
+
+            if (data.meta.description) {
+              newPageContent.text = data.meta.description;
+
+              // let tags = newContent.text.match(tagRegex);
+
+              // if (tags != null) {
+              //   for (let j = 0; j < tags.length; j++) {
+              // newContent.tagMasks.source.push(tags[j].slice(1));
+              // }
+              // }
+            }
+
+            if (data.meta.title) {
+              newPageContent.title = data.meta.title;
+
+              // let tags = newContent.title.match(tagRegex);
+              //
+              // if (tags != null) {
+              //   for (let j = 0; j < tags.length; j++) {
+              //     newContent.tagMasks.source.push(tags[j].slice(1));
+              //   }
+              // }
+            }
+
+            const links = data.links || [];
+
+            // newContent.tagMasks.source = _.uniq(newContent.tagMasks.source);
+
+            const thumbnailLink = links.thumbnail.find((link) => {
+              return link.rel.indexOf("thumbnail") >= 0;
+            });
+
+            if (thumbnailLink != null) {
+              newThumbnailContent = {
+                type: "Image",
+                mimetype: thumbnailLink.type,
+                title:
+                  data.meta.title || "Thumbnail for " + data.meta.canonical,
+                text: data.meta.description,
+                url: thumbnailLink.href,
+              };
+            }
+
+            if (links.player) {
+              const playerLink = links.player[0];
+              newMediaContent = {
+                type: playerLink.rel.indexOf("audio") >= 0 ? "Audio" : "Video",
+                mimetype: playerLink.type,
+                title: data.meta.title,
+                text: data.meta.description,
+                url: playerLink.href,
+              };
+            }
+
+            // if (data.html) {
+            //   newEmbedContent = {
+            //     type: 'Embed',
+            //   }
+            //   newEmbedContent.embed_content = data.html;
+            //   newContent.embed_format = 'iframe';
+            // }
+            newContent.push(newPageContent);
+            if (newThumbnailContent) {
+              newContent.push(newThumbnailContent);
+            }
+
+            if (newMediaContent) {
+              newContent.push(newMediaContent);
+            }
+          });
+      } catch (error) {
+        console.log("error hitting iframely", error);
+        newPageContent = {
+          type: "web-page",
+          url: state.url,
+        };
+        newContent.push(newPageContent);
+      }
+
+      newEvent = {
+        name: "Visited " + state.url,
+        start_time: new Date().toJSON(),
+        type: "View",
+      };
+
+      resolve();
+    });
+
+    let newEventResult;
+    try {
+      newEventResult = await axios.post(
+        // TODO: update to use env var
+        "https://dev.companionintelligence.com/api/events",
+        newEvent,
+        {
+          headers: {
+            Authorization: `Bearer ${state.accessToken}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    } catch (err) {
+      console.log("error posting event", err);
+    }
+
+    if (newEventResult) {
+      try {
+        for (const content of newContent) {
+          content.event_id = newEventResult.data.id;
+          await axios.post(
+            // TODO: update to use env var
+            "https://dev.companionintelligence.com/api/contents",
+            content,
+            {
+              headers: {
+                Authorization: `Bearer ${state.accessToken}`,
+                "Content-Type": "application/json",
+              },
+            },
+          );
+        }
+      } catch (err) {
+        console.log("error posting content", err);
+      }
+    }
+
+    // triggerHistoryCrawl(store.connection);
+  }
+};
 
 export default defineBackground({
   main() {
+    // const tagRegex = /#[^#\s]+/g;
 
-    let tagRegex = /#[^#\s]+/g;
-
-    const wrapStore = createWrapStore()
-    wrapStore(store)
-    console.log('STORE', store)
-    console.log('store state', store.getState())
-    console.log('BACKGROUND')
-    const ACCESS_TOKEN_KEY = 'accessToken';
+    const wrapStore = createWrapStore();
+    wrapStore(store);
+    const ACCESS_TOKEN_KEY = "accessToken";
     const storageDefaults = {
       domainWhitelist: [],
       domainWhitelistPending: {},
@@ -28,8 +238,8 @@ export default defineBackground({
       lastUrl: null,
       accessToken: null,
       sessionToken: null,
-      refreshing: false
-    }
+      refreshing: false,
+    };
     // async function triggerHistoryCrawl(connection) {
     // await store.dispatch({
     //   type: 'loadUserSettings'
@@ -282,284 +492,130 @@ export default defineBackground({
     // }
 
     const refreshAccessToken = async () => {
-      console.log('refreshAccessToken')
-      if (store.getState().refreshing) return
-      store.dispatch(setState({ refreshing: true }))
-      const sessionToken = (await browser.storage.local.get('sessionToken')).sessionToken
-      console.log('refreshing with sessionToken', sessionToken)
-      try {
-        const data: AuthResponse = await fetchJson('https://dev.companionintelligence.com/api/authenticate/refresh', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${sessionToken}`,
-          },
-        });
+      if (store.getState().refreshing) {
+        return;
+      }
 
-        console.log('refresh response data', data)
+      store.dispatch(setState({ refreshing: true }));
+      const sessionToken = (await browser.storage.local.get("sessionToken"))
+        .sessionToken;
+      try {
+        const data: AuthResponse = await fetchJson(
+          "https://dev.companionintelligence.com/api/authenticate/refresh",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${sessionToken}`,
+            },
+          },
+        );
 
         store.dispatch(setState({ accessToken: data.accessToken }));
         store.dispatch(setState({ sessionToken: data.sessionToken }));
-        const decoded = jwtDecode(data.accessToken)
-        console.log('decoded accessToken', decoded)
+        const decoded = jwtDecode(data.accessToken);
         browser.cookies.set({
-          url: 'https://dev.companionintelligence.com',
+          url: "https://dev.companionintelligence.com",
           expirationDate: decoded.exp,
           name: `CI_${ACCESS_TOKEN_KEY}`,
           value: data.accessToken,
-          sameSite: 'no_restriction',
-          secure: true
-        })
-        store.dispatch(setState({ refreshing: false }))
+          sameSite: "no_restriction",
+          secure: true,
+        });
+        store.dispatch(setState({ refreshing: false }));
       } catch (err) {
-        console.error('Error refreshing token', err)
-        store.dispatch(setState({ refreshing: false }))
+        console.error("Error refreshing token", err);
+        store.dispatch(setState({ refreshing: false }));
       }
-    }
-    console.log('Background script loaded');
-    const syncFromCookieInterval = setInterval(async () => {
-      browser.cookies.getAll({url: 'https://dev.companionintelligence.com'}).then(async result => {
-        const accessTokenCookie = result.find(cookie => cookie.name === 'CI_accessToken')
-        const sessionTokenCookie = result.find(cookie => cookie.name === 'CI_sessionToken')
-        let { accessToken, sessionToken } = store.getState().ciState
-        if (accessTokenCookie && accessTokenCookie !== accessToken) {
-          store.dispatch(setState({ accessToken: accessTokenCookie.value }));
-        }
-        if (sessionTokenCookie && sessionTokenCookie !== sessionToken) {
-          const cookieDecoded = jwtDecode(sessionTokenCookie.value)
-          const cookieExpires = new Date(cookieDecoded.exp * 1000)
-          const stateDecoded = sessionToken ? jwtDecode(sessionToken) : null
-          const stateExpired = stateDecoded ? new Date(stateDecoded.exp * 1000) : null
-          if (!stateExpired || (cookieExpires.getTime() > stateExpired.getTime()))
-            store.dispatch(setState({ sessionToken: sessionTokenCookie.value }));
-        }
-        console.log('Getting new tokens from state');
-        ({ accessToken, sessionToken } = store.getState().ciState)
-        const accessDecoded = accessToken ? jwtDecode(accessToken) : null
-        const isAuthExpired = accessDecoded ? Date.now() >= accessDecoded.exp * 1000 : true;
-        const sessionDecoded = sessionToken ? jwtDecode(sessionToken) : null
-        const isSessionExpired = sessionDecoded ? Date.now() >= sessionDecoded.exp * 1000 : true
-        console.log(accessToken, sessionToken)
-        console.log(isAuthExpired, isSessionExpired)
-        if ((!accessTokenCookie && sessionTokenCookie) || (isAuthExpired && !isSessionExpired)) await refreshAccessToken()
+    };
 
+    setInterval(async () => {
+      browser.cookies
+        .getAll({ url: "https://dev.companionintelligence.com" })
+        .then(async (result) => {
+          const accessTokenCookie = result.find(
+            (cookie) => cookie.name === "CI_accessToken",
+          );
+          const sessionTokenCookie = result.find(
+            (cookie) => cookie.name === "CI_sessionToken",
+          );
+          let { accessToken, sessionToken } = store.getState().ciState;
+          if (accessTokenCookie && accessTokenCookie !== accessToken) {
+            store.dispatch(setState({ accessToken: accessTokenCookie.value }));
+          }
 
-        store.dispatch(saveUserSettings());
-      })
-    }, 1000)
+          if (sessionTokenCookie && sessionTokenCookie !== sessionToken) {
+            const cookieDecoded = jwtDecode(sessionTokenCookie.value);
+            const cookieExpires = new Date(cookieDecoded.exp * 1000);
+            const stateDecoded = sessionToken ? jwtDecode(sessionToken) : null;
+            const stateExpired = stateDecoded
+              ? new Date(stateDecoded.exp * 1000)
+              : null;
+            if (
+              !stateExpired ||
+              cookieExpires.getTime() > stateExpired.getTime()
+            ) {
+              store.dispatch(
+                setState({ sessionToken: sessionTokenCookie.value }),
+              );
+            }
+          }
+
+          ({ accessToken, sessionToken } = store.getState().ciState);
+          const accessDecoded = accessToken ? jwtDecode(accessToken) : null;
+          const isAuthExpired = accessDecoded
+            ? Date.now() >= accessDecoded.exp * 1000
+            : true;
+          const sessionDecoded = sessionToken ? jwtDecode(sessionToken) : null;
+          const isSessionExpired = sessionDecoded
+            ? Date.now() >= sessionDecoded.exp * 1000
+            : true;
+          if (
+            (!accessTokenCookie && sessionTokenCookie) ||
+            (isAuthExpired && !isSessionExpired)
+          ) {
+            await refreshAccessToken();
+          }
+
+          store.dispatch(saveUserSettings());
+        });
+    }, 1000);
     browser.runtime.onInstalled.addListener(async function () {
-      console.log('Extension installed');
-
       store.dispatch(loadUserSettings());
 
-      const existingKeys = Object.keys(store.getState().ciState)
-      const toSet = Object.keys(storageDefaults).filter(key => existingKeys.indexOf(key) < 0).reduce((obj, key) => {
-        obj[key] = storageDefaults[key];
-        return obj
-      }, {});
+      const existingKeys = Object.keys(store.getState().ciState);
+      const toSet = Object.keys(storageDefaults)
+        .filter((key) => existingKeys.indexOf(key) < 0)
+        .reduce((obj, key) => {
+          obj[key] = storageDefaults[key];
 
-      store.dispatch(setState(toSet))
+          return obj;
+        }, {});
 
-      browser.tabs.onActivated.addListener(async tab => {
-        console.log('Tab activated', tab)
+      store.dispatch(setState(toSet));
+
+      browser.tabs.onActivated.addListener(async () => {
         const tabInfo = await browser.tabs.query({
-          active: true
-        })
-        let active = tabInfo[0];
-
-        let parsed = new URL(active.url);
-
-        store.dispatch(setState({ domain: parsed.hostname }))
-        store.dispatch(setState({ url: active.url }))
-      })
-
-      console.log('adding history state listener')
-      // Use onHistoryStateUpdated over onCompleted in order to support single-page apps
-      // onCompleted will not fire when an SPA updates the URL without a full page reload
-        browser.webNavigation.onHistoryStateUpdated.addListener(async function (e) {
-          console.log('onHistoryStateUpdated', e)
-          if (e.frameId !== 0) return; // Only handle main frame navigation
-          const tabInfo = await browser.tabs.query({
-            active: true
-          })
-          let active = tabInfo[0];
-
-          let parsed = new URL(active.url);
-
-          store.dispatch(setState({ domain: parsed.hostname, url: active.url  }))
-
-          let domainWhitelistHit = false;
-          const state = store.getState().ciState
-          console.log('state', state, state.domainWhitelist)
-
-          state.domainWhitelist.forEach(item => {
-            let domainRegex = new RegExp(item);
-
-            if (domainRegex.test(state.domain)) {
-              domainWhitelistHit = true;
-
-              return;
-            }
-
-            let parsedUrl = new URL(state.url);
-
-            let condensedUrl = parsedUrl.protocol + '//' + parsedUrl.host + parsedUrl.pathname;
-
-            if (domainRegex.test(condensedUrl)) {
-              domainWhitelistHit = true;
-
-              return;
-            }
-          });
-
-          console.log('domainWhitelistHit', domainWhitelistHit, state.lastUrl, state.url)
-          console.log('Should do things', domainWhitelistHit && state.lastUrl !== state.url)
-          if (domainWhitelistHit && state.lastUrl !== state.url) {
-            store.dispatch(setState({ lastUrl: state.url }))
-
-            store.dispatch(saveUserSettings());
-
-            let newEvent, newThumbnailContent, newPageContent, newMediaContent, newEmbedContent
-            let newContent = []
-
-            console.log('Starting to fetch embeds')
-            await new Promise(async function (resolve, reject) {
-              try {
-                let result = await axios.get('https://dev.companionintelligence.com/embed/iframely?url=' + state.url);
-
-                console.log('iframely result', result)
-                let data = result.data;
-                console.log('iframely data', data)
-
-                newPageContent = {
-                  type: 'Web Page',
-                  mimetype: 'text/html',
-                  url: data.meta.canonical
-                };
-
-                if (data.meta.description) {
-                  newPageContent.text = data.meta.description;
-
-                  // let tags = newContent.text.match(tagRegex);
-
-                  // if (tags != null) {
-                  //   for (let j = 0; j < tags.length; j++) {
-                      // newContent.tagMasks.source.push(tags[j].slice(1));
-                    // }
-                  // }
-                }
-
-                if (data.meta.title) {
-                  newPageContent.title = data.meta.title;
-
-                  // let tags = newContent.title.match(tagRegex);
-                  //
-                  // if (tags != null) {
-                  //   for (let j = 0; j < tags.length; j++) {
-                  //     newContent.tagMasks.source.push(tags[j].slice(1));
-                  //   }
-                  // }
-                }
-
-                const links = data.links || [];
-
-                // newContent.tagMasks.source = _.uniq(newContent.tagMasks.source);
-
-                let thumbnailLink = links.thumbnail.find(link => {
-                  return link.rel.indexOf('thumbnail') >= 0;
-                });
-
-                if (thumbnailLink != null) {
-                  newThumbnailContent = {
-                    type: 'Image',
-                    mimetype: thumbnailLink.type,
-                    title: data.meta.title || 'Thumbnail for ' + data.meta.canonical,
-                    text: data.meta.description,
-                    url: thumbnailLink.href
-                  }
-                }
-
-                if (links.player) {
-                  const playerLink = links.player[0];
-                  newMediaContent = {
-                    type: playerLink.rel.indexOf('audio') >= 0 ? 'Audio' : 'Video',
-                    mimetype: playerLink.type,
-                    title: data.meta.title,
-                    text: data.meta.description,
-                    url: playerLink.href
-                  }
-                }
-
-                // if (data.html) {
-                //   newEmbedContent = {
-                //     type: 'Embed',
-                //   }
-                //   newEmbedContent.embed_content = data.html;
-                //   newContent.embed_format = 'iframe';
-                // }
-                newContent.push(newPageContent)
-                if (newThumbnailContent) newContent.push(newThumbnailContent)
-                if (newMediaContent) newContent.push(newMediaContent)
-              } catch (error) {
-                console.log('error hitting iframely', error)
-                newPageContent = {
-                  type: 'web-page',
-                  url: state.url
-                };
-                newContent.push(newPageContent)
-              }
-
-              newEvent = {
-                name: 'Visited ' + state.url,
-                start_time: new Date().toJSON(),
-                type: 'View'
-              };
-
-              resolve();
-            });
-
-            let newEventResult
-            try {
-              newEventResult = await axios.post(
-                  // TODO: update to use env var
-                  'https://dev.companionintelligence.com/api/events',
-                  newEvent,
-                  {
-                    headers: {
-                      Authorization: `Bearer ${state.accessToken}`,
-                      'Content-Type': 'application/json'
-                    }
-                  }
-              )
-              console.log('newEventResult', newEventResult)
-            } catch (err) {
-              console.log('error posting event', err)
-            }
-
-            if (newEventResult)
-              try {
-                console.log('posting content', newContent)
-                for (let content of newContent) {
-                  content.event_id = newEventResult.data.id
-                  await axios.post(
-                      // TODO: update to use env var
-                      'https://dev.companionintelligence.com/api/contents',
-                      content,
-                      {
-                        headers: {
-                          Authorization: `Bearer ${state.accessToken}`,
-                          'Content-Type': 'application/json'
-                        }
-                      }
-                  )
-                }
-              } catch (err) {
-                console.log('error posting content', err)
-              }
-
-            // triggerHistoryCrawl(store.connection);
-          }
+          active: true,
         });
+        const active = tabInfo[0];
+
+        const parsed = URL.parse(active.url);
+
+        store.dispatch(setState({ domain: parsed.hostname }));
+        store.dispatch(setState({ url: active.url }));
+      });
+
+      // Use onCompleted for non-SPA pages, but make sure the URL is valid
+      // Some SPAs may trigger onCompleted with an invalid URL, and we don't want to record those hits
+      browser.webNavigation.onCompleted.addListener((e) => {
+        if (siteRegex.test(e.url)) {
+          recordHit(e);
+        }
+      });
+      // Use onHistoryStateUpdated in order to support single-page apps
+      // onCompleted will not fire when an SPA updates the URL without a full page reload
+      browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
     });
-  }
-})
+  },
+});

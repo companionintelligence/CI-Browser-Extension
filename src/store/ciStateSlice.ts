@@ -1,108 +1,120 @@
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
-
-export const loadUserSettings = createAsyncThunk('ciState/loadUserSettings', async () => {
+export const loadUserSettings = createAsyncThunk(
+  "ciState/loadUserSettings",
+  async () => {
     const localData = await browser.storage.local.get([
-        'accessToken',
-        'sessionToken',
-        'domainWhitelist',
-        'domainWhitelistPending',
-        'domainWhitelistHistory',
-        'pageWhitelist',
-        'pageWhitelistPending',
-        'pageWhitelistHistory'
-    ])
+      "accessToken",
+      "sessionToken",
+      "domainWhitelist",
+      "domainWhitelistPending",
+      "domainWhitelistHistory",
+      "pageWhitelist",
+      "pageWhitelistPending",
+      "pageWhitelistHistory",
+    ]);
 
-    console.log('localData', localData)
-    return localData
-})
+    return localData;
+  },
+);
 
 export const ciStateSlice = createSlice({
-    name: 'ciState',
-    initialState: {
-        accessToken: null,
-        sessionToken: null,
-        domainWhitelist: [],
-        domainWhitelistPending: {},
-        domainWhitelistHistory: [],
-        pageWhitelist: [],
-        pageWhitelistPending: {},
-        pageWhitelistHistory: [],
-        url: null,
-        domain: null,
-        lastUrl: null
+  name: "ciState",
+  initialState: {
+    accessToken: null,
+    sessionToken: null,
+    domainWhitelist: [],
+    domainWhitelistPending: {},
+    domainWhitelistHistory: [],
+    pageWhitelist: [],
+    pageWhitelistPending: {},
+    pageWhitelistHistory: [],
+    url: null,
+    domain: null,
+    lastUrl: null,
+  },
+  reducers: {
+    setState: (state = ciStateSlice.initialState, action) => {
+      return { ...state, ...action.payload };
     },
-    reducers: {
-        setState: (state = ciStateSlice.initialState, action) => {
-            console.log('setState called', state, action)
-            // return {}
-            return { ...state, ...action.payload }
-            // const update = {}
-            // for (const [key, value] of Object.entries(action.payload)) {
-            //     console.log('set', key, value)
-            //     update[key] = value
-            // }
-            // console.log('update', update)
-            // const returned = state
-            // console.log('returned', returned)
-            // return returned
-        },
-        addDomainWhitelistEntry(state, action) {
-            let newDomainWhitelist = state.domainWhitelist
-            if (newDomainWhitelist.indexOf(action.payload) === -1) newDomainWhitelist = newDomainWhitelist.concat(action.payload)
-            return { ...state, domainWhitelist: newDomainWhitelist }
-        },
-        removeDomainWhitelistEntry(state, action) {
-            let newDomainWhitelist = state.domainWhitelist.filter(entry => entry !== action.payload)
-            return { ...state, domainWhitelist: newDomainWhitelist }
-        },
-        addPageWhitelistEntry(state, action) {
-            let newPageWhitelist = state.pageWhitelist
-            if (newPageWhitelist.indexOf(action.payload) === -1) newPageWhitelist = newPageWhitelist.concat(action.payload)
-            console.log('newPageWhitelist', newPageWhitelist)
-            return { ...state, pageWhitelist: newPageWhitelist }
-        },
-        removePageWhitelistEntry(state, action) {
-            let newPageWhitelist = state.pageWhitelist.filter(entry => entry !== action.payload)
-            return { ...state, pageWhitelist: newPageWhitelist }
-        },
-        saveUserSettings(state) {
-            const parsed = JSON.parse(JSON.stringify({
-                accessToken: state.accessToken,
-                sessionToken: state.sessionToken,
-                domainWhitelist: state.domainWhitelist,
-                domainWhitelistPending: state.domainWhitelistPending,
-                domainWhitelistHistory: state.domainWhitelistHistory,
-                pageWhitelist: state.pageWhitelist,
-                pageWhitelistPending: state.pageWhitelistPending,
-                pageWhitelistHistory: state.pageWhitelistHistory
-            }))
-            console.log ('saveUserSettings', parsed)
-            browser.storage.local.set(parsed);
+    addDomainWhitelistEntry(state, action) {
+      let newDomainWhitelist = state.domainWhitelist;
+      if (newDomainWhitelist.indexOf(action.payload) === -1) {
+        newDomainWhitelist = newDomainWhitelist.concat(action.payload);
+      }
 
-            return state
-        }
+      return { ...state, domainWhitelist: newDomainWhitelist };
     },
-    extraReducers: builder => {
-        builder
-            .addCase(loadUserSettings.fulfilled, (state, action) => {
-                console.log('loadUserSettings fulfilled', action.payload)
-                for (const [key, value] of Object.entries(action.payload)) {
-                    console.log('set', key, value)
-                    state[key] = value
-                }
-            })
-    }
-})
+    removeDomainWhitelistEntry(state, action) {
+      const newDomainWhitelist = state.domainWhitelist.filter(
+        (entry) => entry != null && entry !== action.payload,
+      );
+
+      return { ...state, domainWhitelist: newDomainWhitelist };
+    },
+    addPageWhitelistEntry(state, action) {
+      let newPageWhitelist = state.pageWhitelist;
+      let parsed = URL.parse(action.payload);
+      if (!parsed) {
+        parsed = URL.parse(`https://${action.payload}`);
+        action.paylaod = `https://${action.payload}`;
+      }
+
+      if (!parsed) {
+        return;
+      }
+
+      parsed.hash = "";
+      parsed.search = "";
+      const parsedToString = parsed.toString();
+      if (newPageWhitelist.indexOf(parsedToString) === -1) {
+        newPageWhitelist = newPageWhitelist.concat(parsedToString);
+      }
+
+      return { ...state, pageWhitelist: newPageWhitelist };
+    },
+    removePageWhitelistEntry(state, action) {
+      const newPageWhitelist = state.pageWhitelist.filter(
+        (entry) => entry != null && entry !== action.payload,
+      );
+
+      return { ...state, pageWhitelist: newPageWhitelist };
+    },
+    saveUserSettings(state) {
+      const parsed = JSON.parse(
+        JSON.stringify({
+          accessToken: state.accessToken,
+          sessionToken: state.sessionToken,
+          domainWhitelist: state.domainWhitelist,
+          domainWhitelistPending: state.domainWhitelistPending,
+          domainWhitelistHistory: state.domainWhitelistHistory,
+          pageWhitelist: state.pageWhitelist,
+          pageWhitelistPending: state.pageWhitelistPending,
+          pageWhitelistHistory: state.pageWhitelistHistory,
+        }),
+      );
+      browser.storage.local.set(parsed);
+
+      return state;
+    },
+  },
+  extraReducers: (builder) => {
+    builder.addCase(loadUserSettings.fulfilled, (state, action) => {
+      for (const [key, value] of Object.entries(action.payload)) {
+        state[key] = value;
+      }
+    });
+  },
+});
 
 // Action creators are generated for each case reducer function
 export const {
-    addDomainWhitelistEntry,
-    removeDomainWhitelistEntry,
-    addPageWhitelistEntry,
-    removePageWhitelistEntry,
-    setState,
-    saveUserSettings
-} = ciStateSlice.actions
+  addDomainWhitelistEntry,
+  removeDomainWhitelistEntry,
+  addPageWhitelistEntry,
+  removePageWhitelistEntry,
+  setState,
+  saveUserSettings,
+} = ciStateSlice.actions;
 
-export default ciStateSlice.reducer
+export default ciStateSlice.reducer;

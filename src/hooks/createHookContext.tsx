@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from "react";
 
 // We need the `any` here, we're knowingly setting this and ignoring the
 // ESLint rule. Please do not accept this as a more broadly applicable pattern.
@@ -9,7 +9,13 @@ export function createHookContext<HookArgs extends any[], HookResult>(
 ) {
   const Context = createContext<HookResult | undefined>(undefined);
 
-  function Provider({ children, args }: { children: ReactNode; args: HookArgs }) {
+  function Provider({
+    children,
+    args,
+  }: {
+    children: ReactNode;
+    args: HookArgs;
+  }) {
     const value = hook(...args);
 
     return <Context.Provider value={value}>{children}</Context.Provider>;
