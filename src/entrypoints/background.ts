@@ -70,7 +70,7 @@ const recordHit = async function (e) {
 
     store.dispatch(saveUserSettings());
 
-    let newEvent, newThumbnailContent, newPageContent, newMediaContent;
+    let newThumbnailContent, newPageContent, newMediaContent;
     const newContent = [];
 
     await new Promise(function (resolve) {
@@ -158,6 +158,8 @@ const recordHit = async function (e) {
             if (newMediaContent) {
               newContent.push(newMediaContent);
             }
+
+            resolve();
           });
       } catch (error) {
         console.log("error hitting iframely", error);
@@ -166,16 +168,15 @@ const recordHit = async function (e) {
           url: state.url,
         };
         newContent.push(newPageContent);
+        resolve();
       }
-
-      newEvent = {
-        name: "Visited " + state.url,
-        start_time: new Date().toJSON(),
-        type: "View",
-      };
-
-      resolve();
     });
+
+    const newEvent = {
+      name: "Visited " + state.url,
+      start_time: new Date().toJSON(),
+      type: "View",
+    };
 
     let newEventResult;
     try {
@@ -196,22 +197,58 @@ const recordHit = async function (e) {
 
     if (newEventResult) {
       try {
-        for (const content of newContent) {
-          content.event_id = newEventResult.data.id;
-          await axios.post(
-            // TODO: update to use env var
-            "https://dev.companionintelligence.com/api/contents",
-            content,
-            {
-              headers: {
-                Authorization: `Bearer ${state.accessToken}`,
-                "Content-Type": "application/json",
-              },
-            },
-          );
-        }
+        await Promise.all(
+          newContent.map((content) => {
+            return new Promise((resolve, reject) => {
+              content.event_id = newEventResult.data.id;
+              try {
+                axios
+                  .post(
+                    // TODO: update to use env var
+                    "https://dev.companionintelligence.com/api/contents",
+                    content,
+                    {
+                      headers: {
+                        Authorization: `Bearer ${state.accessToken}`,
+                        "Content-Type": "application/json",
+                      },
+                    },
+                  )
+                  .then((result) => {
+                    content.id = result.data.id;
+                    resolve();
+                  });
+              } catch (err) {
+                reject(err);
+              }
+            });
+          }),
+        );
       } catch (err) {
         console.log("error posting content", err);
+      }
+
+      const eventSourceData = newContent.map(
+        (content) => `content_${content.id}`,
+      );
+
+      try {
+        await axios.patch(
+          `https://dev.companionintelligence.com/api/events/${newEventResult.data.id}`,
+          {
+            source_data: {
+              related_objects: eventSourceData,
+            },
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${state.accessToken}`,
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      } catch (err) {
+        console.log("error patching event with source data", err);
       }
     }
 
