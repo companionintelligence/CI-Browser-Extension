@@ -159,29 +159,29 @@ export default function App() {
   };
 
   return (
-    <div class="body">
-      <div class="login-status">
+    <div className="body">
+      <div className="login-status">
         <a href="https://dev.companionintelligence.com" target="_blank">
           {sessionTokenExpired
             ? "Log in to continue"
             : "Logged in to Companion Intelligence"}
         </a>
       </div>
-      <div class="button-container">
-        <div class="horizontal-container">
+      <div className="button-container">
+        <div className="horizontal-container">
           {domainWhitelisted && (
-            <button class="danger" onClick={deleteDomainWhitelistEntryCall}>
+            <button className="danger" onClick={deleteDomainWhitelistEntryCall}>
               Stop tracking this Site
             </button>
           )}
           {!domainWhitelisted && (
-            <button class="primary" onClick={addDomainWhitelistEntryCall}>
+            <button className="primary" onClick={addDomainWhitelistEntryCall}>
               Start tracking this Site
             </button>
           )}
           {pageWhitelisted && (
             <button
-              class="danger margin-bottom-1em"
+              className="danger margin-bottom-1em"
               onClick={deletePageWhitelistEntryCall}
             >
               Stop tracking this Page
@@ -189,7 +189,7 @@ export default function App() {
           )}
           {!pageWhitelisted && (
             <button
-              class="primary margin-bottom-1em"
+              className="primary margin-bottom-1em"
               onClick={addPageWhitelistEntryCall}
             >
               Start tracking this Page
@@ -199,33 +199,33 @@ export default function App() {
         <button onClick={openOptionsPage}>Open Extension Options</button>
       </div>
 
-      {/*<div v-if="domainPending" class="crawl-pending">*/}
+      {/*<div v-if="domainPending" className="crawl-pending">*/}
       {/*    Your site history is being parsed. You may tag when the process is complete.*/}
       {/*</div>*/}
 
-      {/*<div v-if="sitePending" class="crawl-pending">*/}
+      {/*<div v-if="sitePending" className="crawl-pending">*/}
       {/*    Your page history is being parsed. You may tag when the process is complete.*/}
       {/*</div>*/}
 
-      {/*<div id="tagging" class="flexbox flex-column flex-x-center content actions"*/}
+      {/*<div id="tagging" className="flexbox flex-column flex-x-center content actions"*/}
       {/*     v-if="(domainWhitelisted === true || siteWhitelisted === true) && $data.loggedIn === true && $data.item.id != null">*/}
-      {/*    <div class="flexbox flex-x-center">*/}
-      {/*        <div class="title">Tag this page</div>*/}
-      {/*        <a class="how-to" href="https://lifescope.io/how-to" target="_blank"><i*/}
-      {/*            class="fa fa-question-circle"></i></a>*/}
+      {/*    <div className="flexbox flex-x-center">*/}
+      {/*        <div className="title">Tag this page</div>*/}
+      {/*        <a className="how-to" href="https://lifescope.io/how-to" target="_blank"><i*/}
+      {/*            className="fa fa-question-circle"></i></a>*/}
       {/*    </div>*/}
 
-      {/*    <div class="tagging">*/}
+      {/*    <div className="tagging">*/}
       {/*      <form v-on:submit.prevent="addTag">*/}
-      {/*        <div class="add-tag">*/}
+      {/*        <div className="add-tag">*/}
       {/*          <span>#</span>*/}
       {/*          <input type="text" placeholder="Add a tag" v-model="tagName"/>*/}
-      {/*          <i class="fa fa-plus" onClick="addTag"></i>*/}
+      {/*          <i className="fa fa-plus" onClick="addTag"></i>*/}
       {/*        </div>*/}
-      {/*        <div class="tags">*/}
+      {/*        <div className="tags">*/}
       {/*          <div v-if="$data.item && $data.item.tags" v-for="tag in $data.item.tags">*/}
       {/*            <span onClick="searchTag(tag)">#{{tag}}</span>*/}
-      {/*            <i class="delete fa fa-times" onClick="removeTag(tag)"></i>*/}
+      {/*            <i className="delete fa fa-times" onClick="removeTag(tag)"></i>*/}
       {/*          </div>*/}
       {/*        </div>*/}
       {/*      </form>*/}

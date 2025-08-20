@@ -46,13 +46,13 @@ function App() {
 
   return (
     <>
-      <div class="page">
-        <div class="boxed-group">
-          <div class="title">
+      <div className="page">
+        <div className="boxed-group">
+          <div className="title">
             Companion Intelligence Browser Extension Options
           </div>
 
-          <div class="padded paragraphed mobile-margin">
+          <div className="padded paragraphed mobile-margin">
             <p>
               CI can help you organize and search your time on the web. This can
               be done by navigating to a site, clicking the CI extension icon in
@@ -79,40 +79,43 @@ function App() {
               gathered using this extension, but you can delete all indexed web
               visits from that browser in the CI app.
             </p>
-            <div class="domainWhitelist">
+            <div className="domainWhitelist">
               <h3>Tracked Domain List</h3>
               <div>
                 <p>Enter domains for CI to track, such as 'wikipedia.org'</p>
               </div>
               <form onSubmit={addDomainEntry}>
-                <div class="add-entry">
-                  <div class="adder">
-                    <div class="text-box">
+                <div className="add-entry">
+                  <div className="adder">
+                    <div className="text-box">
                       <input
                         type="text"
                         name="newDomain"
                         placeholder="google.com"
                       />
                     </div>
-                    <i class="plus" onClick={addDomainEntry}>
+                    <i className="plus" onClick={addDomainEntry}>
                       +
                     </i>
                   </div>
                   {invalidDomain && <span>That is not a valid domain.</span>}
                 </div>
               </form>
-              <div class="entries">
+              <div className="entries">
                 {domainWhitelist.map((domain) => (
-                  <div class="entry">
+                  <div className="entry">
                     <span>{domain}</span>
-                    <i class="delete" onClick={() => deleteDomainEntry(domain)}>
+                    <i
+                      className="delete"
+                      onClick={() => deleteDomainEntry(domain)}
+                    >
                       X
                     </i>
                   </div>
                 ))}
               </div>
             </div>
-            <div class="pageWhitelist">
+            <div className="pageWhitelist">
               <h3>Tracked Page List</h3>
               <div>
                 <p>
@@ -121,27 +124,27 @@ function App() {
                 </p>
               </div>
               <form onSubmit={addPageEntry}>
-                <div class="add-entry">
-                  <div class="adder">
-                    <div class="text-box">
+                <div className="add-entry">
+                  <div className="adder">
+                    <div className="text-box">
                       <input
                         type="text"
                         name="newPage"
                         placeholder="https://google.com/search?q=roses"
                       />
                     </div>
-                    <i class="plus" onClick={addPageEntry}>
+                    <i className="plus" onClick={addPageEntry}>
                       +
                     </i>
                   </div>
                   {invalidPage && <span>That is not a valid page URL.</span>}
                 </div>
               </form>
-              <div class="entries">
+              <div className="entries">
                 {pageWhitelist.map((page) => (
-                  <div class="entry">
+                  <div className="entry">
                     <span title={page}>{page.slice(0, 40) + "..."}</span>
-                    <i class="delete" onClick={() => deletePageEntry(page)}>
+                    <i className="delete" onClick={() => deletePageEntry(page)}>
                       X
                     </i>
                   </div>
