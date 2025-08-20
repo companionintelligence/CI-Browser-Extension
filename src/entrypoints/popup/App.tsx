@@ -114,7 +114,7 @@ export default function App() {
   // }, [pageWhitelistPending]);
 
   const addDomainWhitelistEntryCall = async function () {
-    if (domain.match(domainRegex) == null) {
+    if (!domainRegex.test(domain)) {
       return;
     }
 
