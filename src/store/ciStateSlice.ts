@@ -43,7 +43,16 @@ export const ciStateSlice = createSlice({
         newDomainWhitelist = newDomainWhitelist.concat(action.payload);
       }
 
-      return { ...state, domainWhitelist: newDomainWhitelist };
+      const returned = { ...state, domainWhitelist: newDomainWhitelist };
+
+      if (state.domainWhitelistHistory.indexOf(action.payload) === -1) {
+        returned.domainWhitelistPending = {
+          ...state.domainWhitelistPending,
+          [action.payload]: new Date().getTime(),
+        };
+      }
+
+      return returned;
     },
     removeDomainWhitelistEntry(state, action) {
       const newDomainWhitelist = state.domainWhitelist.filter(
