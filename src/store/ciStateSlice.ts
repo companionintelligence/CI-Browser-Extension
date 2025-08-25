@@ -59,14 +59,21 @@ export const ciStateSlice = createSlice({
         (entry) => entry != null && entry !== action.payload,
       );
 
-      return { ...state, domainWhitelist: newDomainWhitelist };
+      const domainWhitelistPendingCopy = { ...state.domainWhitelistPending };
+      delete domainWhitelistPendingCopy[action.payload];
+
+      return {
+        ...state,
+        domainWhitelist: newDomainWhitelist,
+        domainWhitelistPending: domainWhitelistPendingCopy,
+      };
     },
     addPageWhitelistEntry(state, action) {
       let newPageWhitelist = state.pageWhitelist;
       let parsed = URL.parse(action.payload);
       if (!parsed) {
         parsed = URL.parse(`https://${action.payload}`);
-        action.paylaod = `https://${action.payload}`;
+        action.payload = `https://${action.payload}`;
       }
 
       if (!parsed) {
@@ -74,20 +81,44 @@ export const ciStateSlice = createSlice({
       }
 
       parsed.hash = "";
-      parsed.search = "";
       const parsedToString = parsed.toString();
       if (newPageWhitelist.indexOf(parsedToString) === -1) {
         newPageWhitelist = newPageWhitelist.concat(parsedToString);
       }
 
-      return { ...state, pageWhitelist: newPageWhitelist };
+      const returned = { ...state, pageWhitelist: newPageWhitelist };
+
+      if (state.pageWhitelistHistory.indexOf(parsedToString) === -1) {
+        returned.pageWhitelistPending = {
+          ...state.pageWhitelistPending,
+          [parsedToString]: new Date().getTime(),
+        };
+      }
+
+      return returned;
     },
     removePageWhitelistEntry(state, action) {
+      let parsed = URL.parse(action.payload);
+      if (!parsed) {
+        parsed = URL.parse(`https://${action.payload}`);
+        action.payload = `https://${action.payload}`;
+      }
+
+      parsed.hash = "";
+      const strippedUrl = parsed.toString();
+
       const newPageWhitelist = state.pageWhitelist.filter(
-        (entry) => entry != null && entry !== action.payload,
+        (entry) => entry != null && entry !== strippedUrl,
       );
 
-      return { ...state, pageWhitelist: newPageWhitelist };
+      const pageWhitelistPendingCopy = { ...state.pageWhitelistPending };
+      delete pageWhitelistPendingCopy[strippedUrl];
+
+      return {
+        ...state,
+        pageWhitelist: newPageWhitelist,
+        pageWhitelistPending: pageWhitelistPendingCopy,
+      };
     },
     saveUserSettings(state) {
       const parsed = JSON.parse(

@@ -51,20 +51,15 @@ export default function App() {
     pageWhitelist.forEach((item) => {
       const parsedUrl = URL.parse(item);
 
-      if (parsedUrl.protocol && parsedUrl.host && parsedUrl.pathname) {
-        let condensedUrl = parsedUrl.protocol + "//" + parsedUrl.host;
+      parsedUrl.hash = "";
 
-        if (parsedUrl.pathname !== "/") {
-          condensedUrl += parsedUrl.pathname;
-        }
+      if (
+        siteRegex.test(item) &&
+        new RegExp(parsedUrl.toString().replace("?", "\\?")).test(url)
+      ) {
+        pageWhitelistHit = true;
 
-        const tempRegex = new RegExp(condensedUrl);
-
-        if (siteRegex.test(item) && tempRegex.test(url)) {
-          pageWhitelistHit = true;
-
-          return;
-        }
+        return;
       }
     });
 
@@ -132,22 +127,17 @@ export default function App() {
 
     const parsedUrl = URL.parse(url);
 
-    let condensedUrl = parsedUrl.protocol + "//" + parsedUrl.host;
+    parsedUrl.hash = "";
 
-    if (parsedUrl.pathname !== "/") {
-      condensedUrl += parsedUrl.pathname;
-    }
-
-    dispatch(addPageWhitelistEntry(condensedUrl));
+    dispatch(addPageWhitelistEntry(parsedUrl.toString()));
   };
 
   const deletePageWhitelistEntryCall = function () {
     const parsedUrl = URL.parse(url);
 
-    const condensedUrl =
-      parsedUrl.protocol + "//" + parsedUrl.host + parsedUrl.pathname;
+    parsedUrl.hash = "";
 
-    dispatch(removePageWhitelistEntry(condensedUrl));
+    dispatch(removePageWhitelistEntry(parsedUrl.toString()));
   };
 
   const openOptionsPage = async function () {

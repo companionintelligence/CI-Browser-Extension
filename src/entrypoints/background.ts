@@ -49,14 +49,13 @@ const recordHit = async function (e) {
   });
 
   state.pageWhitelist.forEach((item) => {
-    const siteRegex = new RegExp(item);
+    const siteRegex = new RegExp(item.replace("?", "\\?"));
 
     const parsedUrl = URL.parse(state.url);
 
-    const condensedUrl =
-      parsedUrl.protocol + "//" + parsedUrl.host + parsedUrl.pathname;
+    parsedUrl.hash = "";
 
-    if (siteRegex.test(condensedUrl)) {
+    if (siteRegex.test(parsedUrl.toString())) {
       pageWhitelistHit = true;
 
       return;
@@ -227,6 +226,142 @@ async function triggerHistoryCrawl() {
               domainWhitelistPending: omitted,
               domainWhitelistHistory: state.domainWhitelistHistory.concat([
                 domainWhitelistItemKey,
+              ]),
+            }),
+          );
+
+          store.dispatch(saveUserSettings());
+        }
+      }
+    },
+  );
+
+  Object.entries(state.pageWhitelistPending).forEach(
+    async ([pageWhitelistItemKey, pageWhitelistItemValue]) => {
+      //If the whitelistPending entry for a whitelist item is more than 5 minutes old, or is not a date, then clear it.
+      //In the former case, the user likely closed the browser before the history crawl was completed.
+      //The latter case sometimes happens for reasons I can't really deduce, but trying again should work.
+      if (
+        state.pageWhitelist.indexOf(pageWhitelistItemKey) &&
+        new Date(new Date().getTime() - 300000).getTime() >
+          pageWhitelistItemValue
+      ) {
+        const omitted = { ...state.pageWhitelistPending };
+        delete omitted[pageWhitelistItemKey];
+        store.dispatch(
+          setState({
+            pageWhitelistPending: omitted,
+          }),
+        );
+
+        store.dispatch(saveUserSettings());
+      }
+
+      if (
+        state.pageWhitelist.indexOf(pageWhitelistItemKey) > -1 &&
+        state.pageWhitelistHistory.indexOf(pageWhitelistItemKey) === -1
+      ) {
+        store.dispatch(
+          setState({
+            pageWhitelistPending: {
+              ...state.pageWhitelistPending,
+              [pageWhitelistItemKey]: new Date().getTime(),
+            },
+          }),
+        );
+
+        store.dispatch(saveUserSettings());
+
+        const baseResults = await browser.history.search({
+          text: pageWhitelistItemKey,
+          startTime: 0,
+          maxResults: 1000000,
+        });
+
+        const hydratedAndFilteredResults = [];
+        const regex = new RegExp(pageWhitelistItemKey);
+        await Promise.all(
+          baseResults.map((item) => {
+            return new Promise((resolve, reject) => {
+              if (regex.test(item.url)) {
+                try {
+                  browser.history
+                    .getVisits({
+                      url: item.url,
+                    })
+                    .then((hydratedResults) => {
+                      for (const hydratedResult of hydratedResults) {
+                        hydratedAndFilteredResults.push({
+                          ...hydratedResult,
+                          url: item.url,
+                        });
+                      }
+
+                      resolve(true);
+                    });
+                } catch (err) {
+                  console.log("error", err);
+                  reject(err);
+                }
+              } else {
+                resolve();
+              }
+            });
+          }),
+        );
+
+        const events = await Promise.all(
+          hydratedAndFilteredResults.map(async (result) => {
+            return assembleContentAndEvents(
+              result.url,
+              new Date(result.visitTime).toJSON(),
+            );
+          }),
+        );
+
+        let finished = false;
+        let failed = false;
+        let startIndex = 0;
+
+        while (!finished) {
+          const slice = events.slice(startIndex, startIndex + SLICE_SIZE);
+          if (slice.length > 0) {
+            try {
+              await axios.post(
+                // TODO: update to use env var
+                "https://dev.companionintelligence.com/api/events",
+                slice,
+                {
+                  headers: {
+                    Authorization: `Bearer ${state.accessToken}`,
+                    "Content-Type": "application/json",
+                  },
+                },
+              );
+            } catch (err) {
+              console.log("error posting events", err);
+              failed = true;
+
+              break;
+            }
+          }
+
+          startIndex += SLICE_SIZE;
+
+          if (slice.length < SLICE_SIZE) {
+            finished = true;
+          }
+        }
+
+        if (!failed) {
+          const omitted = { ...state.pageWhitelistPending };
+          delete omitted[pageWhitelistItemKey];
+
+          store.dispatch(
+            setState({
+              pageWhitelistPending: omitted,
+              pageWhitelistHistory: state.pageWhitelistHistory.concat([
+                pageWhitelistItemKey,
               ]),
             }),
           );
