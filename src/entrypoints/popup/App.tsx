@@ -6,6 +6,7 @@ import {
   removeDomainWhitelistEntry,
   addPageWhitelistEntry,
   removePageWhitelistEntry,
+  setState,
 } from "@/store/ciStateSlice";
 import "./App.css";
 import { domainRegex, siteRegex } from "@/utils.ts";
@@ -109,35 +110,61 @@ export default function App() {
   // }, [pageWhitelistPending]);
 
   const addDomainWhitelistEntryCall = async function () {
+    const tabInfo = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    const active = tabInfo[0]!.url;
+    const domain = new URL(active).hostname;
     if (!domainRegex.test(domain)) {
       return;
     }
 
     dispatch(addDomainWhitelistEntry(domain));
+    dispatch(setState({ domain: domain, url: active }));
   };
 
   const deleteDomainWhitelistEntryCall = async function () {
+    const tabInfo = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    const active = tabInfo[0]!.url;
+    const domain = new URL(active).hostname;
     dispatch(removeDomainWhitelistEntry(domain));
+    dispatch(setState({ domain: domain, url: active }));
   };
 
   const addPageWhitelistEntryCall = async function () {
-    if (url.match(siteRegex) == null) {
+    const tabInfo = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    const active = tabInfo[0]!.url;
+    if (active.match(siteRegex) == null) {
       return;
     }
 
-    const parsedUrl = URL.parse(url);
+    const parsedUrl = URL.parse(active);
 
     parsedUrl.hash = "";
 
     dispatch(addPageWhitelistEntry(parsedUrl.toString()));
+    dispatch(setState({ domain: parsedUrl.hostname, url: active }));
   };
 
-  const deletePageWhitelistEntryCall = function () {
-    const parsedUrl = URL.parse(url);
+  const deletePageWhitelistEntryCall = async function () {
+    const tabInfo = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    const active = tabInfo[0]!.url;
+    const parsedUrl = URL.parse(active);
 
     parsedUrl.hash = "";
 
     dispatch(removePageWhitelistEntry(parsedUrl.toString()));
+    dispatch(setState({ domain: parsedUrl.hostname, url: active }));
   };
 
   const openOptionsPage = async function () {

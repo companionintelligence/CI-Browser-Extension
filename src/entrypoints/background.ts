@@ -10,7 +10,7 @@ import {
 } from "@/store/ciStateSlice";
 import { siteRegex } from "@/utils.ts";
 
-const SLICE_SIZE = 100;
+const SLICE_SIZE = 50;
 
 const recordHit = async function (e) {
   const { accessToken } = store.getState().ciState;
@@ -24,6 +24,7 @@ const recordHit = async function (e) {
 
   const tabInfo = await browser.tabs.query({
     active: true,
+    currentWindow: true,
   });
   const active = tabInfo[0];
 
@@ -174,46 +175,38 @@ async function triggerHistoryCrawl() {
           }),
         );
 
-        const events = await Promise.all(
-          hydratedAndFilteredResults.map(async (result) => {
-            return assembleContentAndEvents(
-              result.url,
-              new Date(result.visitTime).toJSON(),
-            );
-          }),
-        );
-
-        let finished = false;
         let failed = false;
-        let startIndex = 0;
-
-        while (!finished) {
-          const slice = events.slice(startIndex, startIndex + SLICE_SIZE);
-          if (slice.length > 0) {
-            try {
-              await axios.post(
-                // TODO: update to use env var
-                "https://dev.companionintelligence.com/api/events",
-                slice,
-                {
-                  headers: {
-                    Authorization: `Bearer ${state.accessToken}`,
-                    "Content-Type": "application/json",
-                  },
-                },
+        for (
+          let i = 0;
+          i < hydratedAndFilteredResults.length;
+          i = i + SLICE_SIZE
+        ) {
+          const slice = hydratedAndFilteredResults.slice(i, i + SLICE_SIZE);
+          const sliceEvents = await Promise.all(
+            slice.map(async (result) => {
+              return assembleContentAndEvents(
+                result.url,
+                new Date(result.visitTime).toJSON(),
               );
-            } catch (err) {
-              console.log("error posting events", err);
-              failed = true;
+            }),
+          );
+          try {
+            await axios.post(
+              // TODO: update to use env var
+              "https://dev.companionintelligence.com/api/events",
+              sliceEvents,
+              {
+                headers: {
+                  Authorization: `Bearer ${state.accessToken}`,
+                  "Content-Type": "application/json",
+                },
+              },
+            );
+          } catch (err) {
+            console.log("error posting events", err);
+            failed = true;
 
-              break;
-            }
-          }
-
-          startIndex += SLICE_SIZE;
-
-          if (slice.length < SLICE_SIZE) {
-            finished = true;
+            break;
           }
         }
 
@@ -380,7 +373,10 @@ async function assembleContentAndEvents(url: string, time?: string) {
   await new Promise(function (resolve) {
     try {
       axios
-        .get("https://dev.companionintelligence.com/embed/iframely?url=" + url)
+        .get(
+          "https://dev.companionintelligence.com/embed/iframely?url=" +
+            encodeURIComponent(url),
+        )
         .then((result) => {
           const data = result.data;
 
