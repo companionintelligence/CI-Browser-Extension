@@ -1,3 +1,9 @@
-# WXT + React
+# PRIVATE AND CONFIDENTIAL
+# PROPERTY OF LIFESCOPE INC
+# CI Browser Extension
 
-This template should help get you started developing with React in WXT.
+Record and extract your history from your web use
+
+Based on WXT + React
+
+ 
