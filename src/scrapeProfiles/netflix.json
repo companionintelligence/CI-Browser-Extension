@@ -1,0 +1,53 @@
+{
+  "domain": "netflix.com",
+  "name": "Netflix Viewing History",
+  "description": "Scrapes Netflix viewing history from the settings page",
+  "targetUrl": "https://www.netflix.com/settings/viewed/*",
+  "dataSelectors": {
+    "viewingHistory": {
+      "container": ".retableRow, [data-uia='retableRow'], tr",
+      "fields": {
+        "date": {
+          "selector": "td:first-child, .date, [data-uia='date']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "title": {
+          "selector": "td:nth-child(2) a, .title a, [data-uia='title'] a, a[href*='/title/']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "td:nth-child(2) a, .title a, [data-uia='title'] a, a[href*='/title/']",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "watchedDateTime": {
+          "selector": "td:first-child, .date, [data-uia='date']",
+          "type": "text",
+          "transform": "parseDate"
+        },
+        "reportProblemUrl": {
+          "selector": "a[href*='/reportproblem/']",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "removeUrl": {
+          "selector": "a[href*='#']:last-child, .remove-link",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "viewing_history",
+      "description": "Netflix viewing history entries with watch dates and titles",
+      "personalDataType": "entertainment_preferences"
+    }
+  ]
+}

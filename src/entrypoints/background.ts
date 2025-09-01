@@ -9,6 +9,7 @@ import {
   saveUserSettings,
 } from "@/store/ciStateSlice";
 import { siteRegex } from "@/utils.ts";
+import { ScrapeResult } from "@/domainScraper";
 
 const SLICE_SIZE = 50;
 
@@ -366,6 +367,62 @@ async function triggerHistoryCrawl() {
   );
 }
 
+// Handle scraped data from domain scraper content scripts
+async function handleScrapedData(scrapeResult: ScrapeResult) {
+  const state = store.getState().ciState;
+  const { accessToken } = state;
+  
+  if (!accessToken) {
+    console.log('No access token, skipping scraped data upload');
+    return;
+  }
+
+  // Convert scraped data to events format
+  const events = [];
+  
+  for (const [dataType, items] of Object.entries(scrapeResult.data)) {
+    for (const item of items) {
+      const event = {
+        name: `Scraped ${scrapeResult.profileName} - ${item.title || 'Data'}`,
+        start_time: scrapeResult.timestamp,
+        type: 'Scraped Data',
+        content: [{
+          type: 'Personal Data',
+          mimetype: 'application/json',
+          url: scrapeResult.url,
+          title: item.title || `${scrapeResult.profileName} Data`,
+          text: JSON.stringify(item),
+          scrapeProfile: scrapeResult.profileName,
+          domain: scrapeResult.domain,
+          dataType: dataType
+        }]
+      };
+      events.push(event);
+    }
+  }
+
+  if (events.length === 0) {
+    console.log('No events generated from scraped data');
+    return;
+  }
+
+  try {
+    await axios.post(
+      "https://dev.companionintelligence.com/api/events",
+      events,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+    console.log(`Successfully uploaded ${events.length} scraped data events`);
+  } catch (error) {
+    console.error('Error uploading scraped data:', error);
+  }
+}
+
 async function assembleContentAndEvents(url: string, time?: string) {
   let newThumbnailContent, newPageContent, newMediaContent;
   const newContent = [];
@@ -624,6 +681,19 @@ export default defineBackground({
       // Use onHistoryStateUpdated in order to support single-page apps
       // onCompleted will not fire when an SPA updates the URL without a full page reload
       browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
+    });
+
+    // Listen for scraped data from content scripts
+    browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'DOMAIN_SCRAPE_DATA') {
+        handleScrapedData(message.data).then(() => {
+          sendResponse({ success: true });
+        }).catch((error) => {
+          console.error('Error handling scraped data:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+        return true; // Will respond asynchronously
+      }
     });
   },
 });
