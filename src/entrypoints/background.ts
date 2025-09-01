@@ -476,6 +476,86 @@ async function assembleContentAndEvents(url: string, time?: string) {
   };
 }
 
+async function handleHighlightedContent(data: {
+  selectedText: string;
+  contextText: string;
+  url: string;
+  title: string;
+  timestamp: string;
+}) {
+  const state = store.getState().ciState;
+  const { accessToken } = state;
+
+  if (!accessToken) {
+    throw new Error("No access token available");
+  }
+
+  // Check if the URL is in whitelist (similar to how recordHit works)
+  const parsed = URL.parse(data.url);
+  if (!parsed) {
+    throw new Error("Invalid URL");
+  }
+
+  let domainWhitelistHit = false;
+  let pageWhitelistHit = false;
+
+  state.domainWhitelist.forEach((item) => {
+    const domainRegex = new RegExp(item);
+    if (domainRegex.test(parsed.hostname)) {
+      domainWhitelistHit = true;
+    }
+  });
+
+  state.pageWhitelist.forEach((item) => {
+    const siteRegex = new RegExp(item.replace("?", "\\?"));
+    const parsedUrl = URL.parse(data.url);
+    parsedUrl.hash = "";
+    if (siteRegex.test(parsedUrl.toString())) {
+      pageWhitelistHit = true;
+    }
+  });
+
+  if (!domainWhitelistHit && !pageWhitelistHit) {
+    throw new Error("URL not in whitelist");
+  }
+
+  // Create event structure for highlighted content
+  const highlightEvent = {
+    name: `Highlighted text from ${data.title}`,
+    start_time: data.timestamp,
+    type: "Highlight",
+    content: [
+      {
+        type: "Highlighted Text",
+        mimetype: "text/plain",
+        title: data.title,
+        text: data.selectedText,
+        url: data.url,
+        context:
+          data.contextText !== data.selectedText ? data.contextText : undefined,
+      },
+    ],
+  };
+
+  try {
+    await axios.post(
+      // TODO: update to use env var
+      "https://dev.companionintelligence.com/api/events",
+      highlightEvent,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+    console.log("Highlighted content saved successfully");
+  } catch (error) {
+    console.error("Error posting highlighted content event:", error);
+    throw error;
+  }
+}
+
 export default defineBackground({
   main() {
     // const tagRegex = /#[^#\s]+/g;
@@ -624,6 +704,20 @@ export default defineBackground({
       // Use onHistoryStateUpdated in order to support single-page apps
       // onCompleted will not fire when an SPA updates the URL without a full page reload
       browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
+    });
+
+    // Handle messages from content script
+    browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === "SAVE_HIGHLIGHTED_CONTENT") {
+        handleHighlightedContent(message.data)
+          .then(() => sendResponse({ success: true }))
+          .catch((error) => {
+            console.error("Error handling highlighted content:", error);
+            sendResponse({ success: false, error: error.message });
+          });
+
+        return true; // Required for async response
+      }
     });
   },
 });
