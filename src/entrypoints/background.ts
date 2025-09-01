@@ -366,9 +366,277 @@ async function triggerHistoryCrawl() {
   );
 }
 
-async function captureScreenshotAndSendToCI() {
+// OAuth configuration
+const OAUTH_CONFIG = {
+  clientId: "ci-browser-extension",
+  authUrl: "https://dev.companionintelligence.com/oauth/authorize",
+  tokenUrl: "https://dev.companionintelligence.com/oauth/token",
+  redirectUrl: browser.identity.getRedirectURL(),
+  scope: "read write capture",
+};
+
+// OAuth helper functions
+async function initiateOAuthFlow() {
   try {
-    // Get the current active tab
+    const authUrl = `${OAUTH_CONFIG.authUrl}?client_id=${OAUTH_CONFIG.clientId}&redirect_uri=${encodeURIComponent(OAUTH_CONFIG.redirectUrl)}&response_type=code&scope=${encodeURIComponent(OAUTH_CONFIG.scope)}`;
+
+    const redirectUrl = await browser.identity.launchWebAuthFlow({
+      url: authUrl,
+      interactive: true,
+    });
+
+    const url = new URL(redirectUrl);
+    const code = url.searchParams.get("code");
+
+    if (code) {
+      const tokenResponse = await axios.post(OAUTH_CONFIG.tokenUrl, {
+        grant_type: "authorization_code",
+        client_id: OAUTH_CONFIG.clientId,
+        code: code,
+        redirect_uri: OAUTH_CONFIG.redirectUrl,
+      });
+
+      const { access_token, refresh_token, expires_in } = tokenResponse.data;
+      const expiryTime = Date.now() + expires_in * 1000;
+
+      store.dispatch(
+        setState({
+          oauthAccessToken: access_token,
+          oauthRefreshToken: refresh_token,
+          oauthTokenExpiry: expiryTime,
+        }),
+      );
+
+      store.dispatch(saveUserSettings());
+
+      return { success: true };
+    } else {
+      throw new Error("No authorization code received");
+    }
+  } catch (error) {
+    console.error("OAuth flow failed:", error);
+
+    return { success: false, error: error.message };
+  }
+}
+
+async function refreshOAuthToken() {
+  try {
+    const state = store.getState().ciState;
+    const { oauthRefreshToken } = state;
+
+    if (!oauthRefreshToken) {
+      throw new Error("No refresh token available");
+    }
+
+    const tokenResponse = await axios.post(OAUTH_CONFIG.tokenUrl, {
+      grant_type: "refresh_token",
+      client_id: OAUTH_CONFIG.clientId,
+      refresh_token: oauthRefreshToken,
+    });
+
+    const { access_token, refresh_token, expires_in } = tokenResponse.data;
+    const expiryTime = Date.now() + expires_in * 1000;
+
+    store.dispatch(
+      setState({
+        oauthAccessToken: access_token,
+        oauthRefreshToken: refresh_token || oauthRefreshToken,
+        oauthTokenExpiry: expiryTime,
+      }),
+    );
+
+    store.dispatch(saveUserSettings());
+
+    return access_token;
+  } catch (error) {
+    console.error("Failed to refresh OAuth token:", error);
+    // Clear OAuth tokens on failure
+    store.dispatch(
+      setState({
+        oauthAccessToken: null,
+        oauthRefreshToken: null,
+        oauthTokenExpiry: null,
+      }),
+    );
+
+    return null;
+  }
+}
+
+async function getValidOAuthToken() {
+  const state = store.getState().ciState;
+  const { oauthAccessToken, oauthTokenExpiry } = state;
+
+  if (!oauthAccessToken || !oauthTokenExpiry) {
+    return null;
+  }
+
+  // Check if token expires within 5 minutes, refresh if so
+  if (Date.now() > oauthTokenExpiry - 300000) {
+    return await refreshOAuthToken();
+  }
+
+  return oauthAccessToken;
+}
+
+// Enhanced capture functions
+async function captureWebcam() {
+  return new Promise((resolve, reject) => {
+    // Inject content script to access webcam
+    browser.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
+      if (tabs.length === 0) {
+        reject(new Error("No active tab found"));
+
+        return;
+      }
+
+      const tabId = tabs[0].id;
+
+      // Execute script in content context to access webcam
+      browser.scripting
+        .executeScript({
+          target: { tabId },
+          func: async () => {
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 1280, height: 720 },
+                audio: false,
+              });
+
+              const video = document.createElement("video");
+              video.srcObject = stream;
+              video.play();
+
+              return new Promise((resolve) => {
+                video.addEventListener("loadedmetadata", () => {
+                  const canvas = document.createElement("canvas");
+                  canvas.width = video.videoWidth;
+                  canvas.height = video.videoHeight;
+
+                  const ctx = canvas.getContext("2d");
+                  ctx.drawImage(video, 0, 0);
+
+                  // Stop the stream
+                  stream.getTracks().forEach((track) => track.stop());
+
+                  const dataUrl = canvas.toDataURL("image/png");
+                  resolve(dataUrl);
+                });
+              });
+            } catch (error) {
+              throw new Error(`Webcam access failed: ${error.message}`);
+            }
+          },
+        })
+        .then((results) => {
+          if (results && results[0] && results[0].result) {
+            resolve(results[0].result);
+          } else {
+            reject(new Error("Failed to capture webcam"));
+          }
+        })
+        .catch(reject);
+    });
+  });
+}
+
+async function captureDesktop() {
+  try {
+    // Request desktop capture
+    const streamId = await new Promise((resolve, reject) => {
+      browser.desktopCapture.chooseDesktopMedia(
+        ["screen", "window"],
+        (streamId) => {
+          if (streamId) {
+            resolve(streamId);
+          } else {
+            reject(new Error("Desktop capture cancelled by user"));
+          }
+        },
+      );
+    });
+
+    // Capture screenshot using the stream
+    return new Promise((resolve, reject) => {
+      browser.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
+        if (tabs.length === 0) {
+          reject(new Error("No active tab found"));
+
+          return;
+        }
+
+        const tabId = tabs[0].id;
+
+        browser.scripting
+          .executeScript({
+            target: { tabId },
+            func: async (streamId) => {
+              try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                  audio: false,
+                  video: {
+                    mandatory: {
+                      chromeMediaSource: "desktop",
+                      chromeMediaSourceId: streamId,
+                    },
+                  },
+                });
+
+                const video = document.createElement("video");
+                video.srcObject = stream;
+                video.play();
+
+                return new Promise((resolve) => {
+                  video.addEventListener("loadedmetadata", () => {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(video, 0, 0);
+
+                    // Stop the stream
+                    stream.getTracks().forEach((track) => track.stop());
+
+                    const dataUrl = canvas.toDataURL("image/png");
+                    resolve(dataUrl);
+                  });
+                });
+              } catch (error) {
+                throw new Error(`Desktop capture failed: ${error.message}`);
+              }
+            },
+            args: [streamId],
+          })
+          .then((results) => {
+            if (results && results[0] && results[0].result) {
+              resolve(results[0].result);
+            } else {
+              reject(new Error("Failed to capture desktop"));
+            }
+          })
+          .catch(reject);
+      });
+    });
+  } catch (error) {
+    console.error("Desktop capture error:", error);
+    throw error;
+  }
+}
+
+async function captureAndSendToCI(captureType = "auto") {
+  try {
+    const state = store.getState().ciState;
+    const { captureSettings } = state;
+
+    // Get valid OAuth token
+    const accessToken = await getValidOAuthToken();
+    if (!accessToken) {
+      throw new Error("OAuth authentication required");
+    }
+
+    // Get the current active tab for context
     const tabs = await browser.tabs.query({
       active: true,
       currentWindow: true,
@@ -379,41 +647,62 @@ async function captureScreenshotAndSendToCI() {
       throw new Error("No active tab found");
     }
 
-    // Capture screenshot of the visible tab
-    const screenshotDataUrl = await browser.tabs.captureVisibleTab(
-      currentTab.windowId,
-      { format: "png", quality: 90 },
-    );
+    let captureData = null;
+    let captureMethod = "";
 
-    // Get current state for authentication
-    const state = store.getState().ciState;
-    const { accessToken } = state;
-
-    if (!accessToken) {
-      throw new Error("User not authenticated");
+    // Determine what to capture based on settings and type
+    if (
+      captureType === "webcam" ||
+      (captureType === "auto" && captureSettings.enableWebcam)
+    ) {
+      try {
+        captureData = await captureWebcam();
+        captureMethod = "webcam";
+      } catch (error) {
+        console.warn("Webcam capture failed, trying desktop:", error.message);
+        if (captureSettings.enableDesktop) {
+          captureData = await captureDesktop();
+          captureMethod = "desktop";
+        } else {
+          throw error;
+        }
+      }
+    } else if (
+      captureType === "desktop" ||
+      (captureType === "auto" && captureSettings.enableDesktop)
+    ) {
+      captureData = await captureDesktop();
+      captureMethod = "desktop";
+    } else {
+      throw new Error("No capture method enabled");
     }
 
-    // Create screenshot event for CI-Server
-    const screenshotEvent = {
-      name: `Screenshot captured from ${currentTab.title || currentTab.url}`,
+    if (!captureData) {
+      throw new Error("Failed to capture image data");
+    }
+
+    // Create capture event for CI-Server
+    const captureEvent = {
+      name: `${captureMethod === "webcam" ? "Webcam" : "Desktop"} capture from ${currentTab.title || currentTab.url}`,
       start_time: new Date().toJSON(),
       type: "Capture",
       content: [
         {
           type: "Image",
           mimetype: "image/png",
-          title: `Screenshot - ${currentTab.title || "Untitled"}`,
-          text: `Screenshot captured from: ${currentTab.url}`,
+          title: `${captureMethod === "webcam" ? "Webcam" : "Desktop"} Capture - ${currentTab.title || "Untitled"}`,
+          text: `${captureMethod === "webcam" ? "Webcam" : "Desktop"} capture taken from: ${currentTab.url}`,
           url: currentTab.url,
-          data: screenshotDataUrl, // Base64 encoded image data
+          data: captureData, // Base64 encoded image data
+          capture_method: captureMethod,
         },
       ],
     };
 
-    // Send to CI-Server
+    // Send to CI-Server using OAuth token
     await axios.post(
       "https://dev.companionintelligence.com/api/events",
-      screenshotEvent,
+      captureEvent,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -422,11 +711,46 @@ async function captureScreenshotAndSendToCI() {
       },
     );
 
-    return { success: true };
+    return { success: true, method: captureMethod };
   } catch (error) {
-    console.error("Error capturing screenshot:", error);
+    console.error("Error capturing and sending:", error);
 
     return { success: false, error: error.message };
+  }
+}
+
+// Scheduled capture functionality
+let captureInterval = null;
+
+function startScheduledCapture() {
+  const state = store.getState().ciState;
+  const { captureSettings } = state;
+
+  if (captureInterval) {
+    clearInterval(captureInterval);
+  }
+
+  if (captureSettings.autoCapture && captureSettings.captureInterval > 0) {
+    captureInterval = setInterval(async () => {
+      try {
+        const result = await captureAndSendToCI("auto");
+        console.log("Scheduled capture completed:", result);
+      } catch (error) {
+        console.error("Scheduled capture failed:", error);
+      }
+    }, captureSettings.captureInterval);
+
+    console.log(
+      `Started scheduled capture every ${captureSettings.captureInterval}ms`,
+    );
+  }
+}
+
+function stopScheduledCapture() {
+  if (captureInterval) {
+    clearInterval(captureInterval);
+    captureInterval = null;
+    console.log("Stopped scheduled capture");
   }
 }
 
@@ -559,7 +883,16 @@ export default defineBackground({
       lastUrl: null,
       accessToken: null,
       sessionToken: null,
+      oauthAccessToken: null,
+      oauthRefreshToken: null,
+      oauthTokenExpiry: null,
       refreshing: false,
+      captureSettings: {
+        enableWebcam: true,
+        enableDesktop: true,
+        autoCapture: false,
+        captureInterval: 300000, // 5 minutes default
+      },
     };
 
     const refreshAccessToken = async () => {
@@ -666,6 +999,14 @@ export default defineBackground({
 
       store.dispatch(setState(toSet));
 
+      // Initialize scheduled capture if enabled
+      setTimeout(() => {
+        const state = store.getState().ciState;
+        if (state.captureSettings?.autoCapture) {
+          startScheduledCapture();
+        }
+      }, 2000);
+
       browser.tabs.onActivated.addListener(async () => {
         const tabInfo = await browser.tabs.query({
           active: true,
@@ -693,16 +1034,37 @@ export default defineBackground({
     // Handle messages from popup and other parts of the extension
     browser.runtime.onMessage.addListener(async (request) => {
       if (request.action === "captureScreenshot") {
-        const result = await captureScreenshotAndSendToCI();
+        // Legacy support - now captures webcam/desktop
+        const result = await captureAndSendToCI();
 
         return result;
+      } else if (request.action === "captureWebcam") {
+        const result = await captureAndSendToCI("webcam");
+
+        return result;
+      } else if (request.action === "captureDesktop") {
+        const result = await captureAndSendToCI("desktop");
+
+        return result;
+      } else if (request.action === "startOAuth") {
+        const result = await initiateOAuthFlow();
+
+        return result;
+      } else if (request.action === "startScheduledCapture") {
+        startScheduledCapture();
+
+        return { success: true };
+      } else if (request.action === "stopScheduledCapture") {
+        stopScheduledCapture();
+
+        return { success: true };
       }
     });
 
     // Handle keyboard shortcuts
     browser.commands.onCommand.addListener(async (command) => {
       if (command === "capture-screenshot") {
-        await captureScreenshotAndSendToCI();
+        await captureAndSendToCI();
       }
     });
   },

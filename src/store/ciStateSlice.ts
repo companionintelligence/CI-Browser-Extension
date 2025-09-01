@@ -6,12 +6,16 @@ export const loadUserSettings = createAsyncThunk(
     const localData = await browser.storage.local.get([
       "accessToken",
       "sessionToken",
+      "oauthAccessToken",
+      "oauthRefreshToken",
+      "oauthTokenExpiry",
       "domainWhitelist",
       "domainWhitelistPending",
       "domainWhitelistHistory",
       "pageWhitelist",
       "pageWhitelistPending",
       "pageWhitelistHistory",
+      "captureSettings",
     ]);
 
     return localData;
@@ -23,6 +27,9 @@ export const ciStateSlice = createSlice({
   initialState: {
     accessToken: null,
     sessionToken: null,
+    oauthAccessToken: null,
+    oauthRefreshToken: null,
+    oauthTokenExpiry: null,
     domainWhitelist: [],
     domainWhitelistPending: {},
     domainWhitelistHistory: [],
@@ -32,6 +39,12 @@ export const ciStateSlice = createSlice({
     url: null,
     domain: null,
     lastUrl: null,
+    captureSettings: {
+      enableWebcam: true,
+      enableDesktop: true,
+      autoCapture: false,
+      captureInterval: 300000, // 5 minutes default
+    },
   },
   reducers: {
     setState: (state = ciStateSlice.initialState, action) => {
@@ -125,17 +138,30 @@ export const ciStateSlice = createSlice({
         JSON.stringify({
           accessToken: state.accessToken,
           sessionToken: state.sessionToken,
+          oauthAccessToken: state.oauthAccessToken,
+          oauthRefreshToken: state.oauthRefreshToken,
+          oauthTokenExpiry: state.oauthTokenExpiry,
           domainWhitelist: state.domainWhitelist,
           domainWhitelistPending: state.domainWhitelistPending,
           domainWhitelistHistory: state.domainWhitelistHistory,
           pageWhitelist: state.pageWhitelist,
           pageWhitelistPending: state.pageWhitelistPending,
           pageWhitelistHistory: state.pageWhitelistHistory,
+          captureSettings: state.captureSettings,
         }),
       );
       browser.storage.local.set(parsed);
 
       return state;
+    },
+    updateCaptureSettings(state, action) {
+      return {
+        ...state,
+        captureSettings: {
+          ...state.captureSettings,
+          ...action.payload,
+        },
+      };
     },
   },
   extraReducers: (builder) => {
@@ -155,6 +181,7 @@ export const {
   removePageWhitelistEntry,
   setState,
   saveUserSettings,
+  updateCaptureSettings,
 } = ciStateSlice.actions;
 
 export default ciStateSlice.reducer;

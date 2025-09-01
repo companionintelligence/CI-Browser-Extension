@@ -11,6 +11,10 @@ export default defineConfig({
       "tabs",
       "webNavigation",
       "activeTab",
+      "desktopCapture",
+      "alarms",
+      "scripting",
+      "identity",
     ],
     host_permissions: ["*://*.companionintelligence.com/"],
     commands: {

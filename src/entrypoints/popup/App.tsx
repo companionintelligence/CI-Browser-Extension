@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { jwtDecode } from "jwt-decode";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -7,6 +7,7 @@ import {
   addPageWhitelistEntry,
   removePageWhitelistEntry,
   setState,
+  updateCaptureSettings,
 } from "@/store/ciStateSlice";
 import "./App.css";
 import { domainRegex, siteRegex } from "@/utils.ts";
@@ -16,13 +17,18 @@ export default function App() {
   const ciState = useSelector((state) => state.ciState);
   const {
     sessionToken,
+    oauthAccessToken,
+    oauthTokenExpiry,
     domain,
     domainWhitelist,
     // domainWhitelistPending,
     pageWhitelist,
     // pageWhitelistPending,
     url,
+    captureSettings,
   } = ciState;
+
+  const [showCaptureSettings, setShowCaptureSettings] = useState(false);
 
   const domainWhitelisted = useMemo(() => {
     let domainWhitelistHit = false;
@@ -45,6 +51,14 @@ export default function App() {
       ? Date.now() >= jwtDecode<JwtPayload>(sessionToken).exp * 1000
       : true;
   }, [sessionToken]);
+
+  const oauthTokenValid = useMemo(() => {
+    if (!oauthAccessToken || !oauthTokenExpiry) {
+      return false;
+    }
+
+    return Date.now() < oauthTokenExpiry - 300000; // Valid if not expiring within 5 minutes
+  }, [oauthAccessToken, oauthTokenExpiry]);
 
   const pageWhitelisted = useMemo(() => {
     let pageWhitelistHit = false;
@@ -169,20 +183,101 @@ export default function App() {
 
   const captureScreenshot = async function () {
     try {
-      // Send message to background script to capture screenshot
+      // Send message to background script to capture screenshot (now webcam/desktop)
       const result = await browser.runtime.sendMessage({
         action: "captureScreenshot",
       });
 
       if (result.success) {
-        console.log("Screenshot captured successfully");
+        console.log("Capture successful:", result.method);
         // Could show a toast notification here
       } else {
-        console.error("Failed to capture screenshot:", result.error);
+        console.error("Failed to capture:", result.error);
       }
     } catch (error) {
-      console.error("Error capturing screenshot:", error);
+      console.error("Error capturing:", error);
     }
+  };
+
+  const captureWebcam = async function () {
+    try {
+      const result = await browser.runtime.sendMessage({
+        action: "captureWebcam",
+      });
+
+      if (result.success) {
+        console.log("Webcam capture successful");
+      } else {
+        console.error("Failed to capture webcam:", result.error);
+      }
+    } catch (error) {
+      console.error("Error capturing webcam:", error);
+    }
+  };
+
+  const captureDesktop = async function () {
+    try {
+      const result = await browser.runtime.sendMessage({
+        action: "captureDesktop",
+      });
+
+      if (result.success) {
+        console.log("Desktop capture successful");
+      } else {
+        console.error("Failed to capture desktop:", result.error);
+      }
+    } catch (error) {
+      console.error("Error capturing desktop:", error);
+    }
+  };
+
+  const initiateOAuth = async function () {
+    try {
+      const result = await browser.runtime.sendMessage({
+        action: "startOAuth",
+      });
+
+      if (result.success) {
+        console.log("OAuth authentication successful");
+        // Reload the popup to show updated auth status
+        window.location.reload();
+      } else {
+        console.error("OAuth authentication failed:", result.error);
+      }
+    } catch (error) {
+      console.error("Error during OAuth:", error);
+    }
+  };
+
+  const toggleScheduledCapture = async function () {
+    try {
+      const newAutoCapture = !captureSettings.autoCapture;
+
+      // Update local state
+      dispatch(updateCaptureSettings({ autoCapture: newAutoCapture }));
+
+      // Send message to background script
+      const result = await browser.runtime.sendMessage({
+        action: newAutoCapture
+          ? "startScheduledCapture"
+          : "stopScheduledCapture",
+      });
+
+      if (result.success) {
+        console.log(
+          `Scheduled capture ${newAutoCapture ? "started" : "stopped"}`,
+        );
+      } else {
+        console.error("Failed to toggle scheduled capture:", result.error);
+      }
+    } catch (error) {
+      console.error("Error toggling scheduled capture:", error);
+    }
+  };
+
+  const updateCaptureInterval = function (minutes) {
+    const milliseconds = minutes * 60 * 1000;
+    dispatch(updateCaptureSettings({ captureInterval: milliseconds }));
   };
 
   const openOptionsPage = async function () {
@@ -202,6 +297,21 @@ export default function App() {
             : "Logged in to Companion Intelligence"}
         </a>
       </div>
+
+      {/* OAuth Authentication Status */}
+      <div className="oauth-status">
+        {oauthTokenValid ? (
+          <div className="oauth-valid">🔒 OAuth Active - Capture Enabled</div>
+        ) : (
+          <div className="oauth-invalid">
+            <div>🔑 OAuth Required for Capture</div>
+            <button className="oauth-button" onClick={initiateOAuth}>
+              Authorize Camera & Desktop Access
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="button-container">
         <div className="horizontal-container">
           {domainWhitelisted && (
@@ -231,14 +341,105 @@ export default function App() {
             </button>
           )}
         </div>
-        <div className="horizontal-container">
+
+        {/* Capture Controls */}
+        <div className="capture-section">
+          <h3>📸 Capture Controls</h3>
+          <div className="capture-buttons">
+            <button
+              className="primary camera-capture"
+              onClick={captureScreenshot}
+              disabled={!oauthTokenValid}
+            >
+              📸 Smart Capture
+            </button>
+            <button
+              className="secondary"
+              onClick={captureWebcam}
+              disabled={!oauthTokenValid}
+            >
+              📹 Webcam
+            </button>
+            <button
+              className="secondary"
+              onClick={captureDesktop}
+              disabled={!oauthTokenValid}
+            >
+              🖥️ Desktop
+            </button>
+          </div>
+
+          {/* Scheduled Capture */}
+          <div className="scheduled-capture">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={captureSettings?.autoCapture || false}
+                onChange={toggleScheduledCapture}
+                disabled={!oauthTokenValid}
+              />
+              🕒 Automatic Capture
+            </label>
+
+            {captureSettings?.autoCapture && (
+              <div className="capture-interval">
+                <label>Interval:</label>
+                <select
+                  value={(captureSettings.captureInterval || 300000) / 60000}
+                  onChange={(e) =>
+                    updateCaptureInterval(parseInt(e.target.value))
+                  }
+                >
+                  <option value={1}>1 minute</option>
+                  <option value={5}>5 minutes</option>
+                  <option value={10}>10 minutes</option>
+                  <option value={30}>30 minutes</option>
+                  <option value={60}>1 hour</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Capture Settings Toggle */}
           <button
-            className="primary camera-capture"
-            onClick={captureScreenshot}
+            className="settings-toggle"
+            onClick={() => setShowCaptureSettings(!showCaptureSettings)}
           >
-            📸 Capture Screenshot
+            ⚙️ Settings
           </button>
+
+          {showCaptureSettings && (
+            <div className="capture-settings">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={captureSettings?.enableWebcam ?? true}
+                  onChange={(e) =>
+                    dispatch(
+                      updateCaptureSettings({ enableWebcam: e.target.checked }),
+                    )
+                  }
+                />
+                Enable Webcam Capture
+              </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={captureSettings?.enableDesktop ?? true}
+                  onChange={(e) =>
+                    dispatch(
+                      updateCaptureSettings({
+                        enableDesktop: e.target.checked,
+                      }),
+                    )
+                  }
+                />
+                Enable Desktop Capture
+              </label>
+            </div>
+          )}
         </div>
+
         <button onClick={openOptionsPage}>Open Extension Options</button>
       </div>
 
