@@ -209,6 +209,16 @@ The extension supports all major browsers through WXT's cross-browser compilatio
 - **Brave** - Manifest V3 (Chromium-based)
 - **DuckDuckGo Browser** - Manifest V3 (Chromium-based)
 - **Safari** - Manifest V3 (iOS compatibility)
+- **Kiwi Browser** - Chromium-based mobile browser with extension support  
+- **Samsung Internet** (limited) - Some versions support extensions
+- **Microsoft Edge Mobile** (limited) - Limited extension support
+
+### Installation on Mobile
+1. Install a compatible browser (Firefox for Android or Kiwi Browser recommended)
+2. Enable extension/add-on support in browser settings
+3. Load the extension via developer mode or install from browser store
+4. Extension popup and options will automatically adapt to mobile interface
+
 
 All Chromium-based browsers use identical manifests and functionality, while Firefox uses a slightly adapted Manifest V2 version for optimal compatibility.
 
