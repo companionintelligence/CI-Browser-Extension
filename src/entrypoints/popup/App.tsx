@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { jwtDecode } from "jwt-decode";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/store/ciStateSlice";
 import "./App.css";
 import { domainRegex, siteRegex } from "@/utils.ts";
+import { domainScraper } from "@/domainScraper";
 
 export default function App() {
   const dispatch = useDispatch();
@@ -23,6 +24,35 @@ export default function App() {
     // pageWhitelistPending,
     url,
   } = ciState;
+
+  const [scraperData, setScraperData] = useState(null);
+
+  // Check if current URL can be scraped
+  const canScrapeCurrentUrl = useMemo(() => {
+    return url ? domainScraper.canScrape(url) : false;
+  }, [url]);
+
+  // Get scraper profile for current domain
+  const scraperProfile = useMemo(() => {
+    if (!domain) return null;
+    return domainScraper.getProfile(domain.replace('www.', ''));
+  }, [domain]);
+
+  // Load recent scraper data
+  useEffect(() => {
+    if (domain) {
+      browser.storage.local.get(null).then(allData => {
+        const scraperKeys = Object.keys(allData).filter(key => 
+          key.startsWith('scrapeData_') && key.includes(domain)
+        );
+        if (scraperKeys.length > 0) {
+          // Get the most recent entry
+          const latestKey = scraperKeys.sort().pop();
+          setScraperData(allData[latestKey]);
+        }
+      });
+    }
+  }, [domain]);
 
   const domainWhitelisted = useMemo(() => {
     let domainWhitelistHit = false;
@@ -234,6 +264,53 @@ export default function App() {
           )}
         </div>
         <button onClick={openOptionsPage}>Open Extension Options</button>
+        
+        {/* Domain Scraper Status */}
+        <div className="domain-scraper-status margin-top-1em">
+          <h3>Domain Scraper</h3>
+          {scraperProfile && (
+            <div className="scraper-profile">
+              <p><strong>Profile:</strong> {scraperProfile.name}</p>
+              <p><strong>Description:</strong> {scraperProfile.description}</p>
+              <p><strong>Data Types:</strong> {scraperProfile.dataTypes.map(dt => dt.name).join(', ')}</p>
+              {canScrapeCurrentUrl && (
+                <p style={{color: 'green'}}>✓ This page can be scraped for personal data</p>
+              )}
+              {!canScrapeCurrentUrl && url && (
+                <div>
+                  <p style={{color: 'orange'}}>⚠ Navigate to supported pages to scrape data:</p>
+                  <ul style={{fontSize: '12px', marginLeft: '20px'}}>
+                    {(Array.isArray(scraperProfile.targetUrl) ? scraperProfile.targetUrl : [scraperProfile.targetUrl])
+                      .map((targetUrl, idx) => (
+                        <li key={idx}>{targetUrl.replace(/https?:\/\/[^\/]+/, '').replace('*', 'any-path')}</li>
+                      ))
+                    }
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+          {!scraperProfile && domain && (
+            <div>
+              <p>No scrape profile available for {domain}</p>
+              <p style={{fontSize: '12px'}}>Supported domains: netflix.com, hulu.com, disneyplus.com</p>
+            </div>
+          )}
+          {scraperData && (
+            <div className="recent-scrape">
+              <p><strong>Last scraped:</strong> {new Date(scraperData.timestamp).toLocaleString()}</p>
+              <p><strong>Items found:</strong> {
+                Object.values(scraperData.data).reduce((total, items) => total + (Array.isArray(items) ? items.length : 0), 0)
+              }</p>
+              <details style={{fontSize: '12px', marginTop: '8px'}}>
+                <summary>View data breakdown</summary>
+                {Object.entries(scraperData.data).map(([key, items]) => (
+                  <p key={key}>{key}: {Array.isArray(items) ? items.length : 0} items</p>
+                ))}
+              </details>
+            </div>
+          )}
+        </div>
       </div>
 
       {/*<div v-if="domainPending" className="crawl-pending">*/}

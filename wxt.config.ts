@@ -4,6 +4,13 @@ import { defineConfig } from "wxt";
 export default defineConfig({
   manifest: {
     name: "Companion Intelligence",
+    host_permissions: [
+      "*://*.companionintelligence.com/",
+      "*://*.netflix.com/*",
+      "*://*.hulu.com/*",
+      "*://secure.hulu.com/*",
+      "*://*.disneyplus.com/*"
+    ],
     permissions: [
       "bookmarks",
       "cookies",
@@ -13,7 +20,6 @@ export default defineConfig({
       "webNavigation",
       "geolocation",
     ],
-    host_permissions: ["*://*.companionintelligence.com/"],
     icons: {
       "16": "icon/favicon-16x16.png",
       "32": "icon/favicon-32x32.png",

@@ -1,0 +1,176 @@
+{
+  "domain": "disneyplus.com",
+  "name": "Disney+ Data Scraper",
+  "description": "Scrapes Disney+ watchlist, viewing history, and account data",
+  "targetUrl": [
+    "https://www.disneyplus.com/browse/watchlist*",
+    "https://www.disneyplus.com/home*",
+    "https://www.disneyplus.com/profile*",
+    "https://www.disneyplus.com/account*"
+  ],
+  "dataSelectors": {
+    "watchlist": {
+      "container": ".content-tile, .asset-tile, .watchlist-item, [data-testid='content-tile']",
+      "fields": {
+        "title": {
+          "selector": ".content-title, .title, [data-testid='content-title'], .asset-title",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a, [data-testid='content-link']",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "imageUrl": {
+          "selector": "img, .content-image, .poster-image",
+          "type": "attribute",
+          "attribute": "src",
+          "transform": "absoluteUrl"
+        },
+        "contentType": {
+          "selector": ".content-type, .media-type, [data-testid='content-type']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "duration": {
+          "selector": ".duration, .runtime, [data-testid='duration']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "releaseYear": {
+          "selector": ".release-year, .year, [data-testid='release-year']",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "continueWatching": {
+      "container": ".continue-watching-item, .resume-item, [data-testid='continue-watching']",
+      "fields": {
+        "title": {
+          "selector": ".content-title, .title, [data-testid='content-title']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a, [data-testid='content-link']",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "progress": {
+          "selector": ".progress-bar, .watch-progress, [data-testid='progress']",
+          "type": "attribute",
+          "attribute": "style",
+          "transform": "trim"
+        },
+        "timeRemaining": {
+          "selector": ".time-remaining, .remaining, [data-testid='time-remaining']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "lastWatched": {
+          "selector": ".last-watched, .timestamp, [data-testid='last-watched']",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "recommendations": {
+      "container": ".recommended-item, .content-tile, [data-testid='recommended-content']",
+      "fields": {
+        "title": {
+          "selector": ".content-title, .title, [data-testid='content-title']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a, [data-testid='content-link']",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "category": {
+          "selector": ".category, .genre, [data-testid='category']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "recommendationReason": {
+          "selector": ".recommendation-reason, .because, [data-testid='reason']",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "profiles": {
+      "container": ".profile-tile, .user-profile, [data-testid='profile-tile']",
+      "fields": {
+        "profileName": {
+          "selector": ".profile-name, .name, [data-testid='profile-name']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "profileImage": {
+          "selector": "img, .profile-avatar, .avatar-image",
+          "type": "attribute",
+          "attribute": "src",
+          "transform": "absoluteUrl"
+        },
+        "isKidsProfile": {
+          "selector": ".kids-profile, [data-testid='kids-profile']",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "accountInfo": {
+      "container": ".account-details, .subscription-info, [data-testid='account-info']",
+      "fields": {
+        "email": {
+          "selector": ".email, .account-email, [data-testid='email']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "subscriptionType": {
+          "selector": ".subscription-type, .plan-type, [data-testid='subscription']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "billingDate": {
+          "selector": ".billing-date, .next-payment, [data-testid='billing-date']",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "watchlist",
+      "description": "Disney+ saved watchlist items",
+      "personalDataType": "entertainment_preferences"
+    },
+    {
+      "name": "viewing_progress",
+      "description": "Disney+ continue watching and viewing progress",
+      "personalDataType": "entertainment_preferences"
+    },
+    {
+      "name": "recommendations",
+      "description": "Disney+ personalized content recommendations",
+      "personalDataType": "entertainment_preferences"
+    },
+    {
+      "name": "user_profiles",
+      "description": "Disney+ user profiles and settings",
+      "personalDataType": "account_data"
+    },
+    {
+      "name": "account_info",
+      "description": "Disney+ account and subscription information",
+      "personalDataType": "account_data"
+    }
+  ]
+}
