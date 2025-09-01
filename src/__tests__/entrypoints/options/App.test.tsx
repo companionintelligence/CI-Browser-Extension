@@ -171,8 +171,8 @@ describe('Options App Component', () => {
       });
 
       // Pages are displayed truncated
-      expect(screen.getByText('https://example.com...')).toBeInTheDocument();
-      expect(screen.getByText('https://google.com/search...')).toBeInTheDocument();
+      expect(screen.getByText('https://example.com')).toBeInTheDocument();
+      expect(screen.getByText('https://google.com/search')).toBeInTheDocument();
     });
 
     it('should add valid URL to page whitelist', () => {
