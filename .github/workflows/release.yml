@@ -50,15 +50,23 @@ jobs:
           ## Firefox Add-ons
           Use `ci-browser-extension-*-firefox.zip` and `ci-browser-extension-*-sources.zip` for Firefox Add-ons submission.
         
+    - name: Resolve Chrome Release Asset Path
+      id: chrome_asset
+      run: echo "asset=$(ls .output/ci-browser-extension-*-chrome.zip)" >> $GITHUB_OUTPUT
+        
     - name: Upload Chrome Release Asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: .output/ci-browser-extension-*-chrome.zip
+        asset_path: ${{ steps.chrome_asset.outputs.asset }}
         asset_name: ci-browser-extension-${{ github.ref_name }}-chrome.zip
         asset_content_type: application/zip
+        
+    - name: Resolve Firefox Release Asset Path
+      id: firefox_asset
+      run: echo "asset=$(ls .output/ci-browser-extension-*-firefox.zip)" >> $GITHUB_OUTPUT
         
     - name: Upload Firefox Release Asset
       uses: actions/upload-release-asset@v1
@@ -66,9 +74,13 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: .output/ci-browser-extension-*-firefox.zip
+        asset_path: ${{ steps.firefox_asset.outputs.asset }}
         asset_name: ci-browser-extension-${{ github.ref_name }}-firefox.zip
         asset_content_type: application/zip
+        
+    - name: Resolve Firefox Sources Asset Path
+      id: sources_asset
+      run: echo "asset=$(ls .output/ci-browser-extension-*-sources.zip)" >> $GITHUB_OUTPUT
         
     - name: Upload Firefox Sources
       uses: actions/upload-release-asset@v1
@@ -76,6 +88,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: .output/ci-browser-extension-*-sources.zip
+        asset_path: ${{ steps.sources_asset.outputs.asset }}
         asset_name: ci-browser-extension-${{ github.ref_name }}-sources.zip
         asset_content_type: application/zip
