@@ -9,17 +9,24 @@ import {
   saveUserSettings,
 } from "@/store/ciStateSlice";
 import { siteRegex } from "@/utils.ts";
-import { database, SurfingRecord } from "@/indexeddb";
+import type { SurfingRecord } from "@/indexeddb";
+import { database } from "@/indexeddb";
 import { locationService } from "@/locationService";
 
 const SLICE_SIZE = 50;
 
+interface AuthResponse {
+  accessToken: string;
+  sessionToken: string;
+}
+
 const recordHit = async function (e: any) {
   const { accessToken } = store.getState().ciState;
   const accessDecoded = accessToken ? jwtDecode(accessToken) : null;
-  const isAuthExpired = accessDecoded && accessDecoded.exp
-    ? Date.now() >= accessDecoded.exp * 1000
-    : true;
+  const isAuthExpired =
+    accessDecoded && accessDecoded.exp
+      ? Date.now() >= accessDecoded.exp * 1000
+      : true;
   if (e.frameId !== 0) {
     return;
   }
@@ -29,7 +36,7 @@ const recordHit = async function (e: any) {
     currentWindow: true,
   });
   const active = tabInfo[0];
-  
+
   if (!active?.url) {
     return;
   }
@@ -50,6 +57,7 @@ const recordHit = async function (e: any) {
 
     if (state.domain && domainRegex.test(state.domain)) {
       domainWhitelistHit = true;
+
       return;
     }
   });
@@ -61,9 +69,10 @@ const recordHit = async function (e: any) {
       const parsedUrl = URL.parse(state.url);
       if (parsedUrl) {
         parsedUrl.hash = "";
-        
+
         if (siteRegex.test(parsedUrl.toString())) {
           pageWhitelistHit = true;
+
           return;
         }
       }
@@ -79,7 +88,7 @@ const recordHit = async function (e: any) {
 
     store.dispatch(saveUserSettings());
 
-    const newEvent = await assembleContentAndEvents(state.url);
+    const newEvent = await assembleContentAndEvents(state.url!);
 
     // Store surfing data in local database
     try {
@@ -90,14 +99,14 @@ const recordHit = async function (e: any) {
           title: newEvent.content?.[0]?.title || undefined,
           description: newEvent.content?.[0]?.text || undefined,
           visitTime: newEvent.start_time,
-          synced: false // Will be marked as synced after successful API call
+          synced: false, // Will be marked as synced after successful API call
         };
 
         const recordId = await database.insertSurfingRecord(surfingRecord);
-        console.log('Surfing record stored locally with ID:', recordId);
+        console.log("Surfing record stored locally with ID:", recordId);
       }
     } catch (dbError) {
-      console.error('Failed to store surfing record in database:', dbError);
+      console.error("Failed to store surfing record in database:", dbError);
     }
 
     try {
@@ -116,15 +125,17 @@ const recordHit = async function (e: any) {
       // Mark the surfing record as synced if API call was successful
       try {
         const unsyncedRecords = await database.getUnsyncedSurfingRecords();
-        const latestRecord = unsyncedRecords.find(record => 
-          record.url === state.url && record.visitTime === newEvent.start_time
+        const latestRecord = unsyncedRecords.find(
+          (record) =>
+            record.url === state.url &&
+            record.visitTime === newEvent.start_time,
         );
         if (latestRecord && latestRecord.id) {
           await database.markSurfingRecordAsSynced(latestRecord.id);
-          console.log('Surfing record marked as synced');
+          console.log("Surfing record marked as synced");
         }
       } catch (syncError) {
-        console.error('Failed to mark surfing record as synced:', syncError);
+        console.error("Failed to mark surfing record as synced:", syncError);
       }
     } catch (err) {
       console.log("error posting event", err);
@@ -142,7 +153,10 @@ async function triggerHistoryCrawl() {
   const state = store.getState().ciState;
   //Check to see if any whitelisted domains didn't finish their initial data crawl, and run it if they didn't (as long as they're not on Edge).
   Object.entries(state.domainWhitelistPending).forEach(
-    async ([domainWhitelistItemKey, domainWhitelistItemValue]: [string, any]) => {
+    async ([domainWhitelistItemKey, domainWhitelistItemValue]: [
+      string,
+      any,
+    ]) => {
       //If the whitelistPending entry for a whitelist item is more than 5 minutes old, or is not a date, then clear it.
       //In the former case, the user likely closed the browser before the history crawl was completed.
       //The latter case sometimes happens for reasons I can't really deduce, but trying again should work.
@@ -189,30 +203,25 @@ async function triggerHistoryCrawl() {
         await Promise.all(
           baseResults.map((item) => {
             return new Promise<void>((resolve, reject) => {
-              if (item.url) {
-                const parsed = URL.parse(item.url);
-                if (parsed && parsed.hostname && regex.test(parsed.hostname)) {
-                  try {
-                    browser.history
-                      .getVisits({
-                        url: item.url,
-                      })
-                      .then((hydratedResults) => {
-                        for (const hydratedResult of hydratedResults) {
-                          hydratedAndFilteredResults.push({
-                            ...hydratedResult,
-                            url: item.url,
-                          });
-                        }
+              if (item.url && regex.test(item.url)) {
+                try {
+                  browser.history
+                    .getVisits({
+                      url: item.url,
+                    })
+                    .then((hydratedResults) => {
+                      for (const hydratedResult of hydratedResults) {
+                        hydratedAndFilteredResults.push({
+                          ...hydratedResult,
+                          url: item.url,
+                        });
+                      }
 
-                        resolve();
-                      });
-                  } catch (err) {
-                    console.log("error", err);
-                    reject(err);
-                  }
-                } else {
-                  resolve();
+                      resolve();
+                    });
+                } catch (err) {
+                  console.log("error", err);
+                  reject(err);
                 }
               } else {
                 resolve();
@@ -317,12 +326,12 @@ async function triggerHistoryCrawl() {
           maxResults: 1000000,
         });
 
-        const hydratedAndFilteredResults = [];
+        const hydratedAndFilteredResults: any[] = [];
         const regex = new RegExp(pageWhitelistItemKey);
         await Promise.all(
           baseResults.map((item) => {
-            return new Promise((resolve, reject) => {
-              if (regex.test(item.url)) {
+            return new Promise<void>((resolve, reject) => {
+              if (item.url && regex.test(item.url)) {
                 try {
                   browser.history
                     .getVisits({
@@ -336,7 +345,7 @@ async function triggerHistoryCrawl() {
                         });
                       }
 
-                      resolve(true);
+                      resolve();
                     });
                 } catch (err) {
                   console.log("error", err);
@@ -413,10 +422,10 @@ async function triggerHistoryCrawl() {
 }
 
 async function assembleContentAndEvents(url: string, time?: string) {
-  let newThumbnailContent, newPageContent, newMediaContent;
-  const newContent = [];
+  let newThumbnailContent: any, newPageContent: any, newMediaContent: any;
+  const newContent: any[] = [];
 
-  await new Promise(function (resolve) {
+  await new Promise<void>(function (resolve) {
     try {
       axios
         .get(
@@ -430,6 +439,8 @@ async function assembleContentAndEvents(url: string, time?: string) {
             type: "Web Page",
             mimetype: "text/html",
             url: data.meta.canonical,
+            text: undefined as string | undefined,
+            title: undefined as string | undefined,
           };
 
           if (data.meta.description) {
@@ -460,7 +471,7 @@ async function assembleContentAndEvents(url: string, time?: string) {
 
           // newContent.tagMasks.source = _.uniq(newContent.tagMasks.source);
 
-          const thumbnailLink = links.thumbnail?.find((link) => {
+          const thumbnailLink = links.thumbnail?.find((link: any) => {
             return link.rel.indexOf("thumbnail") >= 0;
           });
 
@@ -530,13 +541,13 @@ export default defineBackground({
     const initServices = async () => {
       try {
         await database.init();
-        console.log('Database initialized');
-        
+        console.log("Database initialized");
+
         // Start location tracking if user has granted permission
         await locationService.startLocationTracking();
-        console.log('Location tracking started');
+        console.log("Location tracking started");
       } catch (error) {
-        console.error('Failed to initialize services:', error);
+        console.error("Failed to initialize services:", error);
       }
     };
 
@@ -562,7 +573,7 @@ export default defineBackground({
     };
 
     const refreshAccessToken = async () => {
-      if (store.getState().refreshing) {
+      if (store.getState().ciState.refreshing) {
         return;
       }
 
@@ -610,14 +621,16 @@ export default defineBackground({
             (cookie) => cookie.name === "CI_sessionToken",
           );
           let { accessToken, sessionToken } = store.getState().ciState;
-          if (accessTokenCookie && accessTokenCookie !== accessToken) {
+          if (accessTokenCookie && accessTokenCookie.value !== accessToken) {
             store.dispatch(setState({ accessToken: accessTokenCookie.value }));
           }
 
-          if (sessionTokenCookie && sessionTokenCookie !== sessionToken) {
-            const cookieDecoded = jwtDecode(sessionTokenCookie.value);
+          if (sessionTokenCookie && sessionTokenCookie.value !== sessionToken) {
+            const cookieDecoded = jwtDecode(sessionTokenCookie.value) as any;
             const cookieExpires = new Date(cookieDecoded.exp * 1000);
-            const stateDecoded = sessionToken ? jwtDecode(sessionToken) : null;
+            const stateDecoded = sessionToken
+              ? (jwtDecode(sessionToken) as any)
+              : null;
             const stateExpired = stateDecoded
               ? new Date(stateDecoded.exp * 1000)
               : null;
@@ -632,11 +645,15 @@ export default defineBackground({
           }
 
           ({ accessToken, sessionToken } = store.getState().ciState);
-          const accessDecoded = accessToken ? jwtDecode(accessToken) : null;
+          const accessDecoded = accessToken
+            ? (jwtDecode(accessToken) as any)
+            : null;
           const isAuthExpired = accessDecoded
             ? Date.now() >= accessDecoded.exp * 1000
             : true;
-          const sessionDecoded = sessionToken ? jwtDecode(sessionToken) : null;
+          const sessionDecoded = sessionToken
+            ? (jwtDecode(sessionToken) as any)
+            : null;
           const isSessionExpired = sessionDecoded
             ? Date.now() >= sessionDecoded.exp * 1000
             : true;
@@ -653,7 +670,7 @@ export default defineBackground({
           try {
             await locationService.syncLocationData();
           } catch (error) {
-            console.error('Error syncing location data:', error);
+            console.error("Error syncing location data:", error);
           }
         });
     }, 1000);
@@ -664,8 +681,8 @@ export default defineBackground({
       const existingKeys = Object.keys(store.getState().ciState);
       const toSet = Object.keys(storageDefaults)
         .filter((key) => existingKeys.indexOf(key) < 0)
-        .reduce((obj, key) => {
-          obj[key] = storageDefaults[key];
+        .reduce((obj: any, key) => {
+          obj[key] = (storageDefaults as any)[key];
 
           return obj;
         }, {});
@@ -678,10 +695,13 @@ export default defineBackground({
         });
         const active = tabInfo[0];
 
-        const parsed = URL.parse(active.url);
-
-        store.dispatch(setState({ domain: parsed.hostname }));
-        store.dispatch(setState({ url: active.url }));
+        if (active?.url) {
+          const parsed = URL.parse(active.url);
+          if (parsed) {
+            store.dispatch(setState({ domain: parsed.hostname }));
+            store.dispatch(setState({ url: active.url }));
+          }
+        }
       });
 
       // Use onCompleted for non-SPA pages, but make sure the URL is valid

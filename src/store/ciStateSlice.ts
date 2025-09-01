@@ -30,6 +30,7 @@ interface CiState {
   url: string | null;
   domain: string | null;
   lastUrl: string | null;
+  refreshing: boolean;
 }
 
 export const ciStateSlice = createSlice({
@@ -46,10 +47,12 @@ export const ciStateSlice = createSlice({
     url: null,
     domain: null,
     lastUrl: null,
+    refreshing: false,
   } as CiState,
   reducers: {
     setState: (state, action) => {
       const payload = action.payload as Partial<CiState>;
+
       return { ...state, ...payload };
     },
     addDomainWhitelistEntry(state, action) {
@@ -119,6 +122,10 @@ export const ciStateSlice = createSlice({
         action.payload = `https://${action.payload}`;
       }
 
+      if (!parsed) {
+        return state;
+      }
+
       parsed.hash = "";
       const strippedUrl = parsed.toString();
 
@@ -155,7 +162,9 @@ export const ciStateSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(loadUserSettings.fulfilled, (state, action) => {
-      for (const [key, value] of Object.entries(action.payload as Record<string, any>)) {
+      for (const [key, value] of Object.entries(
+        action.payload as Record<string, any>,
+      )) {
         if (key in state) {
           (state as any)[key] = value;
         }

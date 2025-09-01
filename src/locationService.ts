@@ -1,4 +1,5 @@
-import { database, LocationRecord } from './indexeddb';
+import type { LocationRecord } from "./indexeddb";
+import { database } from "./indexeddb";
 
 export interface LocationData {
   latitude: number;
@@ -9,25 +10,30 @@ export interface LocationData {
 
 class LocationService {
   private lastLocationTime: number = 0;
+
   private readonly LOCATION_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
   private watchId: number | null = null;
+
   private isTracking = false;
 
   async startLocationTracking(): Promise<void> {
     if (this.isTracking) {
-      console.log('Location tracking already started');
+      console.log("Location tracking already started");
+
       return;
     }
 
     try {
       // Check if geolocation is available
       if (!navigator.geolocation) {
-        console.error('Geolocation is not supported by this browser');
+        console.error("Geolocation is not supported by this browser");
+
         return;
       }
 
       this.isTracking = true;
-      console.log('Starting location tracking...');
+      console.log("Starting location tracking...");
 
       // Get initial location
       await this.getCurrentLocation();
@@ -39,12 +45,11 @@ class LocationService {
         {
           enableHighAccuracy: false, // Use false to save battery
           timeout: 10000, // 10 seconds
-          maximumAge: this.LOCATION_INTERVAL // Use cached location if recent enough
-        }
+          maximumAge: this.LOCATION_INTERVAL, // Use cached location if recent enough
+        },
       );
-
     } catch (error) {
-      console.error('Failed to start location tracking:', error);
+      console.error("Failed to start location tracking:", error);
       this.isTracking = false;
     }
   }
@@ -54,14 +59,16 @@ class LocationService {
       navigator.geolocation.clearWatch(this.watchId);
       this.watchId = null;
     }
+
     this.isTracking = false;
-    console.log('Location tracking stopped');
+    console.log("Location tracking stopped");
   }
 
   async getCurrentLocation(): Promise<LocationData | null> {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error('Geolocation not available'));
+        reject(new Error("Geolocation not available"));
+
         return;
       }
 
@@ -71,27 +78,29 @@ class LocationService {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy: position.coords.accuracy,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           };
           resolve(locationData);
         },
         (error) => {
-          console.error('Error getting current location:', error);
+          console.error("Error getting current location:", error);
           resolve(null);
         },
         {
           enableHighAccuracy: false,
           timeout: 10000,
-          maximumAge: 60000 // 1 minute
-        }
+          maximumAge: 60000, // 1 minute
+        },
       );
     });
   }
 
-  private async handleLocationSuccess(position: GeolocationPosition): Promise<void> {
+  private async handleLocationSuccess(
+    position: GeolocationPosition,
+  ): Promise<void> {
     try {
       const now = Date.now();
-      
+
       // Only record location if enough time has passed since last record
       if (now - this.lastLocationTime < this.LOCATION_INTERVAL) {
         return;
@@ -102,75 +111,78 @@ class LocationService {
         longitude: position.coords.longitude,
         accuracy: position.coords.accuracy,
         timestamp: new Date().toISOString(),
-        synced: false
+        synced: false,
       };
 
       // Store in local database
       await database.insertLocationRecord(locationRecord);
       this.lastLocationTime = now;
 
-      console.log('Location recorded:', locationRecord);
+      console.log("Location recorded:", locationRecord);
 
       // Attempt to sync with server
       await this.syncLocationData();
-
     } catch (error) {
-      console.error('Error handling location success:', error);
+      console.error("Error handling location success:", error);
     }
   }
 
   private handleLocationError(error: GeolocationPositionError): void {
-    let errorMessage = 'Unknown location error';
-    
+    let errorMessage = "Unknown location error";
+
     switch (error.code) {
       case error.PERMISSION_DENIED:
-        errorMessage = 'Location access denied by user';
+        errorMessage = "Location access denied by user";
         break;
       case error.POSITION_UNAVAILABLE:
-        errorMessage = 'Location information unavailable';
+        errorMessage = "Location information unavailable";
         break;
       case error.TIMEOUT:
-        errorMessage = 'Location request timed out';
+        errorMessage = "Location request timed out";
         break;
     }
-    
-    console.warn('Location error:', errorMessage, error);
+
+    console.warn("Location error:", errorMessage, error);
   }
 
-  async recordLocationManually(latitude: number, longitude: number, accuracy?: number): Promise<void> {
+  async recordLocationManually(
+    latitude: number,
+    longitude: number,
+    accuracy?: number,
+  ): Promise<void> {
     try {
       const locationRecord: LocationRecord = {
         latitude,
         longitude,
         accuracy,
         timestamp: new Date().toISOString(),
-        synced: false
+        synced: false,
       };
 
       await database.insertLocationRecord(locationRecord);
-      console.log('Manual location recorded:', locationRecord);
+      console.log("Manual location recorded:", locationRecord);
 
       // Attempt to sync with server
       await this.syncLocationData();
-
     } catch (error) {
-      console.error('Error recording manual location:', error);
+      console.error("Error recording manual location:", error);
     }
   }
 
   async syncLocationData(): Promise<void> {
     try {
       // Import store to access auth token
-      const { store } = await import('./store');
+      const { store } = await import("./store");
       const state = store.getState().ciState;
-      
+
       if (!state.accessToken) {
-        console.log('No access token available, skipping location sync');
+        console.log("No access token available, skipping location sync");
+
         return;
       }
 
       const unsyncedRecords = await database.getUnsyncedLocationRecords();
-      
+
       if (unsyncedRecords.length === 0) {
         return;
       }
@@ -178,30 +190,30 @@ class LocationService {
       console.log(`Syncing ${unsyncedRecords.length} location records...`);
 
       // Convert to API format
-      const locationEvents = unsyncedRecords.map(record => ({
+      const locationEvents = unsyncedRecords.map((record) => ({
         name: `Location Update`,
         start_time: record.timestamp,
-        type: 'Location',
+        type: "Location",
         location: {
           latitude: record.latitude,
           longitude: record.longitude,
-          accuracy: record.accuracy
-        }
+          accuracy: record.accuracy,
+        },
       }));
 
       // Send to CI-Server API (similar to existing event posting)
-      const axios = (await import('axios')).default;
-      
+      const axios = (await import("axios")).default;
+
       try {
         await axios.post(
-          'https://dev.companionintelligence.com/api/events',
+          "https://dev.companionintelligence.com/api/events",
           locationEvents,
           {
             headers: {
               Authorization: `Bearer ${state.accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
+              "Content-Type": "application/json",
+            },
+          },
         );
 
         // Mark records as synced
@@ -211,14 +223,14 @@ class LocationService {
           }
         }
 
-        console.log(`Successfully synced ${unsyncedRecords.length} location records`);
-
+        console.log(
+          `Successfully synced ${unsyncedRecords.length} location records`,
+        );
       } catch (apiError) {
-        console.error('Failed to sync location data with API:', apiError);
+        console.error("Failed to sync location data with API:", apiError);
       }
-
     } catch (error) {
-      console.error('Error in syncLocationData:', error);
+      console.error("Error in syncLocationData:", error);
     }
   }
 
