@@ -218,5 +218,3 @@ For support with the Companion Intelligence Browser Extension:
 - Ensure your CI Server is properly configured and accessible
 - Verify your authentication tokens are valid
 - Review browser console logs for error messages
-
----
