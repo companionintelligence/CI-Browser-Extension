@@ -7,6 +7,7 @@ import {
   setState,
   loadUserSettings,
   saveUserSettings,
+  addSyncHistoryLog,
 } from "@/store/ciStateSlice";
 import { siteRegex } from "@/utils.ts";
 
@@ -397,6 +398,10 @@ async function triggerManualHistorySync(options = {}) {
     return;
   }
 
+  const startTime = Date.now();
+  const timeRange = options.timeRange || 7 * 24 * 60 * 60 * 1000; // Default to last 7 days
+  const searchStartTime = Date.now() - timeRange;
+
   try {
     // Set sync in progress
     store.dispatch(
@@ -409,9 +414,6 @@ async function triggerManualHistorySync(options = {}) {
     store.dispatch(saveUserSettings());
 
     // Get all history (not just whitelisted domains/pages)
-    const timeRange = options.timeRange || 7 * 24 * 60 * 60 * 1000; // Default to last 7 days
-    const startTime = Date.now() - timeRange;
-
     store.dispatch(
       setState({
         historySyncStatus: "Searching browser history...",
@@ -420,11 +422,12 @@ async function triggerManualHistorySync(options = {}) {
 
     const allHistoryResults = await browser.history.search({
       text: "",
-      startTime: startTime,
+      startTime: searchStartTime,
       maxResults: 10000,
     });
 
     if (allHistoryResults.length === 0) {
+      const duration = Date.now() - startTime;
       store.dispatch(
         setState({
           historySyncInProgress: false,
@@ -432,6 +435,21 @@ async function triggerManualHistorySync(options = {}) {
           lastHistorySync: new Date().toISOString(),
         }),
       );
+
+      // Log the sync operation
+      store.dispatch(
+        addSyncHistoryLog({
+          timestamp: new Date().toISOString(),
+          timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+          totalEntries: 0,
+          processedEntries: 0,
+          uploadedEntries: 0,
+          status: "success",
+          error: null,
+          duration: duration,
+        }),
+      );
+
       store.dispatch(saveUserSettings());
 
       return;
@@ -456,7 +474,7 @@ async function triggerManualHistorySync(options = {}) {
             });
 
             for (const visit of visits) {
-              if (visit.visitTime >= startTime) {
+              if (visit.visitTime >= searchStartTime) {
                 hydratedResults.push({
                   ...visit,
                   url: item.url,
@@ -484,6 +502,7 @@ async function triggerManualHistorySync(options = {}) {
     );
 
     if (hydratedResults.length === 0) {
+      const duration = Date.now() - startTime;
       store.dispatch(
         setState({
           historySyncInProgress: false,
@@ -491,6 +510,21 @@ async function triggerManualHistorySync(options = {}) {
           lastHistorySync: new Date().toISOString(),
         }),
       );
+
+      // Log the sync operation
+      store.dispatch(
+        addSyncHistoryLog({
+          timestamp: new Date().toISOString(),
+          timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+          totalEntries: allHistoryResults.length,
+          processedEntries: processed,
+          uploadedEntries: 0,
+          status: "success",
+          error: null,
+          duration: duration,
+        }),
+      );
+
       store.dispatch(saveUserSettings());
 
       return;
@@ -505,6 +539,7 @@ async function triggerManualHistorySync(options = {}) {
     // Process and upload in batches
     let uploaded = 0;
     let failed = false;
+    let lastError = null;
 
     for (let i = 0; i < hydratedResults.length; i += SLICE_SIZE) {
       const slice = hydratedResults.slice(i, i + SLICE_SIZE);
@@ -538,10 +573,32 @@ async function triggerManualHistorySync(options = {}) {
         );
       } catch (err) {
         console.log("Error uploading history batch:", err);
+        lastError = err.message;
         failed = true;
         break;
       }
     }
+
+    const duration = Date.now() - startTime;
+
+    // Log the sync operation
+    const logStatus = failed
+      ? "failed"
+      : uploaded < hydratedResults.length
+        ? "partial"
+        : "success";
+    store.dispatch(
+      addSyncHistoryLog({
+        timestamp: new Date().toISOString(),
+        timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+        totalEntries: allHistoryResults.length,
+        processedEntries: hydratedResults.length,
+        uploadedEntries: uploaded,
+        status: logStatus,
+        error: lastError,
+        duration: duration,
+      }),
+    );
 
     // Update final status
     if (failed) {
@@ -564,6 +621,22 @@ async function triggerManualHistorySync(options = {}) {
     store.dispatch(saveUserSettings());
   } catch (error) {
     console.error("Manual history sync error:", error);
+    const duration = Date.now() - startTime;
+
+    // Log the sync operation as failed
+    store.dispatch(
+      addSyncHistoryLog({
+        timestamp: new Date().toISOString(),
+        timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+        totalEntries: 0,
+        processedEntries: 0,
+        uploadedEntries: 0,
+        status: "failed",
+        error: error.message,
+        duration: duration,
+      }),
+    );
+
     store.dispatch(
       setState({
         historySyncInProgress: false,

@@ -13,6 +13,7 @@ export const loadUserSettings = createAsyncThunk(
       "pageWhitelistPending",
       "pageWhitelistHistory",
       "lastHistorySync",
+      "syncHistoryLogs",
     ]);
 
     return localData;
@@ -36,6 +37,7 @@ export const ciStateSlice = createSlice({
     historySyncInProgress: false,
     historySyncStatus: null,
     lastHistorySync: null,
+    syncHistoryLogs: [],
   },
   reducers: {
     setState: (state = ciStateSlice.initialState, action) => {
@@ -124,6 +126,32 @@ export const ciStateSlice = createSlice({
         pageWhitelistPending: pageWhitelistPendingCopy,
       };
     },
+    addSyncHistoryLog(state, action) {
+      const newLog = {
+        id: Date.now(),
+        timestamp: action.payload.timestamp,
+        timeRange: action.payload.timeRange,
+        totalEntries: action.payload.totalEntries,
+        processedEntries: action.payload.processedEntries,
+        uploadedEntries: action.payload.uploadedEntries,
+        status: action.payload.status, // 'success', 'failed', 'partial'
+        error: action.payload.error,
+        duration: action.payload.duration,
+      };
+
+      const updatedLogs = [newLog, ...state.syncHistoryLogs].slice(0, 50); // Keep only last 50 logs
+
+      return {
+        ...state,
+        syncHistoryLogs: updatedLogs,
+      };
+    },
+    clearSyncHistoryLogs(state) {
+      return {
+        ...state,
+        syncHistoryLogs: [],
+      };
+    },
     saveUserSettings(state) {
       const parsed = JSON.parse(
         JSON.stringify({
@@ -136,6 +164,7 @@ export const ciStateSlice = createSlice({
           pageWhitelistPending: state.pageWhitelistPending,
           pageWhitelistHistory: state.pageWhitelistHistory,
           lastHistorySync: state.lastHistorySync,
+          syncHistoryLogs: state.syncHistoryLogs,
         }),
       );
       browser.storage.local.set(parsed);
@@ -159,6 +188,8 @@ export const {
   addPageWhitelistEntry,
   removePageWhitelistEntry,
   setState,
+  addSyncHistoryLog,
+  clearSyncHistoryLogs,
   saveUserSettings,
 } = ciStateSlice.actions;
 

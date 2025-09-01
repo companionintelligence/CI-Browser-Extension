@@ -7,6 +7,7 @@ import {
   addPageWhitelistEntry,
   removeDomainWhitelistEntry,
   removePageWhitelistEntry,
+  clearSyncHistoryLogs,
 } from "@/store/ciStateSlice.ts";
 
 import { domainRegex, siteRegex } from "@/utils.ts";
@@ -20,10 +21,12 @@ function App() {
     historySyncInProgress,
     historySyncStatus,
     lastHistorySync,
+    syncHistoryLogs,
   } = ciState;
   const [invalidDomain, setInvalidDomain] = useState(false);
   const [invalidPage, setInvalidPage] = useState(false);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
+  const [showSyncLogs, setShowSyncLogs] = useState(false);
 
   const addDomainEntry = (e) => {
     e.preventDefault();
@@ -70,6 +73,50 @@ function App() {
       }
     } catch (error) {
       console.error("Error triggering history sync:", error);
+    }
+  };
+
+  const clearSyncLogs = () => {
+    dispatch(clearSyncHistoryLogs());
+  };
+
+  const exportSyncLogs = () => {
+    const dataStr = JSON.stringify(syncHistoryLogs, null, 2);
+    const dataUri =
+      "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
+
+    const exportFileDefaultName = "sync_history_logs.json";
+
+    const linkElement = document.createElement("a");
+    linkElement.setAttribute("href", dataUri);
+    linkElement.setAttribute("download", exportFileDefaultName);
+    linkElement.click();
+  };
+
+  const formatDuration = (ms) => {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "success":
+        return "#28a745";
+      case "failed":
+        return "#dc3545";
+      case "partial":
+        return "#ffc107";
+      default:
+        return "#6c757d";
     }
   };
 
@@ -226,6 +273,91 @@ function App() {
                 <div className="last-sync">
                   Last successful sync:{" "}
                   {new Date(lastHistorySync).toLocaleString()}
+                </div>
+              )}
+            </div>
+
+            <div className="syncHistoryLogs">
+              <div className="sync-logs-header">
+                <h3>Sync History & Logs</h3>
+                <div className="sync-logs-controls">
+                  <button
+                    onClick={() => setShowSyncLogs(!showSyncLogs)}
+                    className="secondary"
+                  >
+                    {showSyncLogs
+                      ? "Hide Logs"
+                      : `Show Logs (${syncHistoryLogs.length})`}
+                  </button>
+                  {syncHistoryLogs.length > 0 && (
+                    <>
+                      <button
+                        onClick={exportSyncLogs}
+                        className="secondary"
+                        title="Export logs as JSON file"
+                      >
+                        Export Logs
+                      </button>
+                      <button
+                        onClick={clearSyncLogs}
+                        className="danger"
+                        title="Clear all sync logs"
+                      >
+                        Clear Logs
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {showSyncLogs && (
+                <div className="sync-logs-list">
+                  {syncHistoryLogs.length === 0 ? (
+                    <div className="no-logs">
+                      No sync operations recorded yet. Start a history sync to
+                      see logs here.
+                    </div>
+                  ) : (
+                    <div className="logs-table">
+                      <div className="logs-header">
+                        <span>Date & Time</span>
+                        <span>Range</span>
+                        <span>Total/Processed/Uploaded</span>
+                        <span>Status</span>
+                        <span>Duration</span>
+                      </div>
+                      {syncHistoryLogs.map((log) => (
+                        <div key={log.id} className="log-entry">
+                          <div className="log-timestamp">
+                            {new Date(log.timestamp).toLocaleString()}
+                          </div>
+                          <div className="log-range">
+                            {log.timeRange === 1 ? "24h" : `${log.timeRange}d`}
+                          </div>
+                          <div className="log-counts">
+                            {log.totalEntries}/{log.processedEntries}/
+                            {log.uploadedEntries}
+                          </div>
+                          <div
+                            className="log-status"
+                            style={{ color: getStatusColor(log.status) }}
+                          >
+                            {log.status.charAt(0).toUpperCase() +
+                              log.status.slice(1)}
+                            {log.error && (
+                              <div className="log-error" title={log.error}>
+                                ⚠️ {log.error.substring(0, 50)}
+                                {log.error.length > 50 ? "..." : ""}
+                              </div>
+                            )}
+                          </div>
+                          <div className="log-duration">
+                            {formatDuration(log.duration)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
