@@ -11,6 +11,7 @@
     "build": "wxt build",
     "build:dev": "wxt build --mode development",
     "build:firefox": "wxt build -b firefox",
+    "build:safari-mobile": "wxt build -b safari --mv3",
     "build:safari": "wxt build -b safari",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",

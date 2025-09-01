@@ -1,7 +1,7 @@
 # 📄 PRIVATE AND CONFIDENTIAL
 # 📄 PROPERTY OF LIFESCOPE INC
 # Companion Intelligence Browser Extension
-
+ 
 A privacy-focused browser extension that records and extracts your web browsing history to work with your private CI Server for digital memory and web history archiving.
 
 ## 🌟 Vision & Overview
@@ -112,6 +112,14 @@ npm run lint
 npm run lint:fix
 npm run compile
 ```
+## Safari Setup
+
+For Safari Mobile (iOS) development:
+
+1. Build the extension with `npm run build:safari`
+2. The output will be in `.output/safari-mv3/`
+3. Use Xcode to create a Safari App Extension wrapper for iOS distribution
+4. The extension uses Manifest V3 for better Safari iOS compatibility
 
 ### Project Structure
 ```
@@ -218,3 +226,4 @@ For support with the Companion Intelligence Browser Extension:
 - Ensure your CI Server is properly configured and accessible
 - Verify your authentication tokens are valid
 - Review browser console logs for error messages
+
