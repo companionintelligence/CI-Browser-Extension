@@ -1,6 +1,6 @@
 {
   "name": "ci-browser-extension",
-  "description": "",
+  "description": "Companion Intelligence browser extension for Chrome and Firefox",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,12 +10,17 @@
     "build": "wxt build",
     "build:dev": "wxt build --mode development",
     "build:firefox": "wxt build -b firefox",
+    "build:all": "npm run build && npm run build:firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
+    "zip:all": "npm run zip && npm run zip:firefox",
+    "clean": "rm -rf .output",
     "compile": "tsc --noEmit",
     "postinstall": "wxt prepare",
     "lint": "eslint",
-    "lint:fix": "eslint --fix"
+    "lint:fix": "eslint --fix",
+    "prepare:store": "npm run clean && npm run lint && npm run zip:all",
+    "check:types": "tsc --noEmit --skipLibCheck"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.8.2",
