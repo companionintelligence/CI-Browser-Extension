@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { jwtDecode } from "jwt-decode";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/store/ciStateSlice";
 import "./App.css";
 import { domainRegex, siteRegex } from "@/utils.ts";
+import bowser from "bowser";
 
 export default function App() {
   const dispatch = useDispatch();
@@ -23,6 +24,14 @@ export default function App() {
     // pageWhitelistPending,
     url,
   } = ciState;
+
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const browser_info = bowser.getParser(window.navigator.userAgent);
+    setIsMobile(browser_info.getPlatformType() === "mobile");
+  }, []);
 
   const domainWhitelisted = useMemo(() => {
     let domainWhitelistHit = false;
@@ -176,7 +185,7 @@ export default function App() {
   };
 
   return (
-    <div className="body">
+    <div className={`body ${isMobile ? "mobile" : ""}`}>
       <div className="login-status">
         <a href="https://dev.companionintelligence.com" target="_blank">
           {sessionTokenExpired
@@ -188,12 +197,12 @@ export default function App() {
         <div className="horizontal-container">
           {domainWhitelisted && (
             <button className="danger" onClick={deleteDomainWhitelistEntryCall}>
-              Stop tracking this Site
+              {isMobile ? "Stop tracking Site" : "Stop tracking this Site"}
             </button>
           )}
           {!domainWhitelisted && (
             <button className="primary" onClick={addDomainWhitelistEntryCall}>
-              Start tracking this Site
+              {isMobile ? "Start tracking Site" : "Start tracking this Site"}
             </button>
           )}
           {pageWhitelisted && (
@@ -201,7 +210,7 @@ export default function App() {
               className="danger margin-bottom-1em"
               onClick={deletePageWhitelistEntryCall}
             >
-              Stop tracking this Page
+              {isMobile ? "Stop tracking Page" : "Stop tracking this Page"}
             </button>
           )}
           {!pageWhitelisted && (
@@ -209,11 +218,13 @@ export default function App() {
               className="primary margin-bottom-1em"
               onClick={addPageWhitelistEntryCall}
             >
-              Start tracking this Page
+              {isMobile ? "Start tracking Page" : "Start tracking this Page"}
             </button>
           )}
         </div>
-        <button onClick={openOptionsPage}>Open Extension Options</button>
+        <button onClick={openOptionsPage}>
+          {isMobile ? "Options" : "Open Extension Options"}
+        </button>
       </div>
 
       {/*<div v-if="domainPending" className="crawl-pending">*/}
