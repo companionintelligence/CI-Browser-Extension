@@ -19,4 +19,11 @@ export default defineConfig({
   imports: {
     bowser: ["default"],
   },
+  // Browser-specific configurations
+  webExt: {
+    // Safari development configuration
+    safari: {
+      devtools: true,
+    },
+  },
 });
