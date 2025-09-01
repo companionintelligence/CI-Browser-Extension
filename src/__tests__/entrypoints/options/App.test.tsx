@@ -170,9 +170,13 @@ describe('Options App Component', () => {
         pageWhitelist: ['https://example.com', 'https://google.com/search'],
       });
 
-      // Pages are displayed truncated
-      expect(screen.getByText('https://example.com')).toBeInTheDocument();
-      expect(screen.getByText('https://google.com/search')).toBeInTheDocument();
+      // Pages are displayed truncated with "..." added
+      expect(screen.getByText('https://example.com...')).toBeInTheDocument();
+      expect(screen.getByText('https://google.com/search...')).toBeInTheDocument();
+      
+      // Full URLs should be available as title attributes
+      expect(screen.getByTitle('https://example.com')).toBeInTheDocument();
+      expect(screen.getByTitle('https://google.com/search')).toBeInTheDocument();
     });
 
     it('should add valid URL to page whitelist', () => {
