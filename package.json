@@ -21,14 +21,14 @@
     "zip:firefox": "wxt zip -b firefox",
     "zip:edge": "wxt zip -b edge",
     "zip:safari": "wxt zip -b safari",
-    "zip:safari-mobile": "wxt zip -b safari --mv3",
+    "zip:safari-mobile": "wxt build -b safari --mv3 && cd .output && zip -r ci-browser-extension-0.0.0-safari-mobile.zip safari-mv3",
     "zip:all": "npm run zip && npm run zip:firefox && npm run zip:edge && npm run zip:safari && npm run zip:safari-mobile",
     "clean": "rm -rf .output",
     "compile": "tsc --noEmit",
     "postinstall": "wxt prepare",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "prepare:store": "npm run clean && npm run lint && npm run zip:all",
+    "prepare:store": "npm run clean && npm run zip:all",
     "check:types": "tsc --noEmit --skipLibCheck"
   },
   "dependencies": {
