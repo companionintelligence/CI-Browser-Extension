@@ -33,102 +33,50 @@ export interface ScrapeResult {
   };
 }
 
-// Import all profiles statically
-import netflixProfileData from "./scrapeProfiles/netflix.json";
-import huluProfileData from "./scrapeProfiles/hulu.json";
-import disneyProfileData from "./scrapeProfiles/disney.json";
+import { profileManager } from "./profileManager";
 
 export class DomainScraper {
-  private profiles: { [key: string]: ScrapeProfile } = {};
-
-  private profileNames: { [key: string]: string } = {};
-
   constructor() {
-    this.loadProfiles();
-  }
-
-  private loadProfiles() {
-    // Load Netflix profile
-    try {
-      this.profiles["netflix.com"] = netflixProfileData as ScrapeProfile;
-      this.profileNames["netflix.com"] = netflixProfileData.name;
-    } catch (error) {
-      console.warn("Failed to load Netflix scrape profile:", error);
-    }
-
-    // Load Hulu profile
-    try {
-      this.profiles["hulu.com"] = huluProfileData as ScrapeProfile;
-      this.profileNames["hulu.com"] = huluProfileData.name;
-    } catch (error) {
-      console.warn("Failed to load Hulu scrape profile:", error);
-    }
-
-    // Load Disney+ profile
-    try {
-      this.profiles["disneyplus.com"] = disneyProfileData as ScrapeProfile;
-      this.profileNames["disneyplus.com"] = disneyProfileData.name;
-    } catch (error) {
-      console.warn("Failed to load Disney+ scrape profile:", error);
-    }
+    // ProfileManager handles all profile loading
   }
 
   public getAllProfiles(): { [key: string]: ScrapeProfile } {
-    return { ...this.profiles };
+    const allProfiles: { [key: string]: ScrapeProfile } = {};
+    const registry = profileManager.getAllProfiles();
+
+    for (const categoryProfiles of Object.values(registry)) {
+      Object.assign(allProfiles, categoryProfiles);
+    }
+
+    return allProfiles;
   }
 
   public getSupportedDomains(): string[] {
-    return Object.keys(this.profiles);
+    return profileManager.getSupportedDomains();
   }
 
   public getProfile(domain: string): ScrapeProfile | undefined {
-    return this.profiles[domain];
+    return profileManager.getProfile(domain);
   }
 
   public canScrape(url: string): boolean {
-    try {
-      const urlObj = new URL(url);
-      const domain = urlObj.hostname.replace("www.", "");
-
-      return domain in this.profiles;
-    } catch {
-      return false;
-    }
+    return profileManager.canScrape(url);
   }
 
   public getProfileForUrl(url: string): ScrapeProfile | undefined {
-    try {
-      const urlObj = new URL(url);
-      const domain = urlObj.hostname.replace("www.", "");
-      const profile = this.profiles[domain];
-
-      if (!profile) {
-        return undefined;
-      }
-
-      // Check if URL matches any of the target patterns
-      if (this.urlMatchesProfile(url, profile)) {
-        return profile;
-      }
-
-      return undefined;
-    } catch {
-      return undefined;
-    }
+    return profileManager.getProfileForUrl(url);
   }
 
   public scrape(document: Document, url: string): ScrapeResult | null {
     try {
-      const urlObj = new URL(url);
-      const domain = urlObj.hostname.replace("www.", "");
-      const profile = this.profiles[domain];
+      const profile = profileManager.getProfileForUrl(url);
 
       if (!profile) {
         return null;
       }
 
       // Check if URL matches target pattern(s)
-      if (!this.urlMatchesProfile(url, profile)) {
+      if (!profileManager.urlMatchesProfile(url, profile)) {
         return null;
       }
 
@@ -194,25 +142,6 @@ export class DomainScraper {
 
       return null;
     }
-  }
-
-  private urlMatchesProfile(url: string, profile: ScrapeProfile): boolean {
-    const targetUrls = Array.isArray(profile.targetUrl)
-      ? profile.targetUrl
-      : [profile.targetUrl];
-
-    return targetUrls.some((pattern) => this.urlMatches(url, pattern));
-  }
-
-  private urlMatches(url: string, pattern: string): boolean {
-    // Convert pattern to regex (simple wildcard support)
-    const regexPattern = pattern
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // Escape special regex chars
-      .replace(/\\\*/g, ".*"); // Convert * to .*
-
-    const regex = new RegExp(`^${regexPattern}$`);
-
-    return regex.test(url);
   }
 
   private applyTransform(

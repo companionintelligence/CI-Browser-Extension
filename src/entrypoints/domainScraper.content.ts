@@ -1,11 +1,34 @@
-import { domainScraper, ScrapeResult } from "@/domainScraper";
+import { domainScraper } from "@/domainScraper";
 
 export default defineContentScript({
   matches: [
+    // Streaming & Entertainment
     "*://*.netflix.com/*",
     "*://*.hulu.com/*",
     "*://secure.hulu.com/*",
     "*://*.disneyplus.com/*",
+    "*://*.max.com/*",
+    "*://*.primevideo.com/*",
+    "*://*.amazon.com/gp/video/*",
+    "*://*.paramountplus.com/*",
+
+    // Social Media
+    "*://*.quora.com/*",
+
+    // News & Media
+    "*://*.cnn.com/*",
+    "*://edition.cnn.com/*",
+
+    // Additional high-priority sites without APIs
+    "*://*.peacocktv.com/*",
+    "*://*.crunchyroll.com/*",
+    "*://*.sling.com/*",
+    "*://*.wsj.com/*",
+    "*://*.washingtonpost.com/*",
+    "*://*.aljazeera.com/*",
+    "*://*.axios.com/*",
+    "*://*.politico.com/*",
+    "*://*.dailymail.co.uk/*",
   ],
   main() {
     // Auto-scrape when page loads if it's a supported scraping target
