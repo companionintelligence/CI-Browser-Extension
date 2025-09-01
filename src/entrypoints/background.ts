@@ -11,6 +11,7 @@ import {
 import { siteRegex } from "@/utils.ts";
 
 const SLICE_SIZE = 50;
+const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
 
 const recordHit = async function (e) {
   const { accessToken } = store.getState().ciState;
@@ -476,6 +477,305 @@ async function assembleContentAndEvents(url: string, time?: string) {
   };
 }
 
+async function getAllBookmarks(): Promise<
+  browser.bookmarks.BookmarkTreeNode[]
+> {
+  const bookmarkTree = await browser.bookmarks.getTree();
+  const allBookmarks: browser.bookmarks.BookmarkTreeNode[] = [];
+
+  function collectBookmarks(nodes: browser.bookmarks.BookmarkTreeNode[]) {
+    for (const node of nodes) {
+      if (node.url) {
+        // This is an actual bookmark (not a folder)
+        allBookmarks.push(node);
+      }
+
+      if (node.children) {
+        collectBookmarks(node.children);
+      }
+    }
+  }
+
+  collectBookmarks(bookmarkTree);
+
+  return allBookmarks;
+}
+
+async function createBookmarkEvent(
+  bookmark: browser.bookmarks.BookmarkTreeNode,
+  eventType: "create" | "update" | "sync" = "sync",
+): Promise<{
+  name: string;
+  start_time: string;
+  type: string;
+  content: {
+    type: string;
+    mimetype?: string;
+    url?: string;
+    title?: string;
+    text?: string;
+  }[];
+  bookmark_id: string;
+}> {
+  let newThumbnailContent, newPageContent, newMediaContent;
+  const newContent = [];
+
+  // Try to get page metadata for the bookmark URL
+  await new Promise(function (resolve) {
+    try {
+      axios
+        .get(
+          "https://dev.companionintelligence.com/embed/iframely?url=" +
+            encodeURIComponent(bookmark.url!),
+        )
+        .then((result) => {
+          const data = result.data;
+
+          newPageContent = {
+            type: "Bookmark",
+            mimetype: "text/html",
+            url: data.meta.canonical || bookmark.url,
+          };
+
+          if (data.meta.description) {
+            newPageContent.text = data.meta.description;
+          }
+
+          if (data.meta.title || bookmark.title) {
+            newPageContent.title = data.meta.title || bookmark.title;
+          }
+
+          const links = data.links || [];
+
+          const thumbnailLink = links.thumbnail?.find((link) => {
+            return link.rel.indexOf("thumbnail") >= 0;
+          });
+
+          if (thumbnailLink != null) {
+            newThumbnailContent = {
+              type: "Image",
+              mimetype: thumbnailLink.type,
+              title: (data.meta.title || bookmark.title) + " - Thumbnail",
+              text: data.meta.description,
+              url: thumbnailLink.href,
+            };
+          }
+
+          if (links.player) {
+            const playerLink = links.player[0];
+            newMediaContent = {
+              type: playerLink.rel.indexOf("audio") >= 0 ? "Audio" : "Video",
+              mimetype: playerLink.type,
+              title: data.meta.title || bookmark.title,
+              text: data.meta.description,
+              url: playerLink.href,
+            };
+          }
+
+          newContent.push(newPageContent);
+          if (newThumbnailContent) {
+            newContent.push(newThumbnailContent);
+          }
+
+          if (newMediaContent) {
+            newContent.push(newMediaContent);
+          }
+
+          resolve(newContent);
+        })
+        .catch((error) => {
+          console.log("error hitting iframely for bookmark", error);
+          newPageContent = {
+            type: "Bookmark",
+            mimetype: "text/html",
+            url: bookmark.url,
+            title: bookmark.title,
+          };
+          newContent.push(newPageContent);
+          resolve(newContent);
+        });
+    } catch (error) {
+      console.log("error processing bookmark metadata", error);
+      newPageContent = {
+        type: "Bookmark",
+        mimetype: "text/html",
+        url: bookmark.url,
+        title: bookmark.title,
+      };
+      newContent.push(newPageContent);
+      resolve(newContent);
+    }
+  });
+
+  return {
+    name: `${eventType === "create" ? "Created" : eventType === "update" ? "Updated" : "Synced"} Bookmark: ${bookmark.title || bookmark.url}`,
+    start_time: new Date(bookmark.dateAdded || Date.now()).toJSON(),
+    type:
+      eventType === "create"
+        ? "Create"
+        : eventType === "update"
+          ? "Update"
+          : "Bookmark",
+    content: newContent,
+    bookmark_id: bookmark.id,
+  };
+}
+
+async function syncBookmarksToServer() {
+  const state = store.getState().ciState;
+  const { accessToken } = state;
+
+  if (!accessToken) {
+    console.log("No access token available for bookmark sync");
+
+    return;
+  }
+
+  try {
+    const allBookmarks = await getAllBookmarks();
+    console.log(`Found ${allBookmarks.length} bookmarks to sync`);
+
+    // Process bookmarks in batches
+    for (let i = 0; i < allBookmarks.length; i += SLICE_SIZE) {
+      const slice = allBookmarks.slice(i, i + SLICE_SIZE);
+      const bookmarkEvents = await Promise.all(
+        slice.map((bookmark) => createBookmarkEvent(bookmark, "sync")),
+      );
+
+      try {
+        await axios.post(
+          "https://dev.companionintelligence.com/api/events",
+          bookmarkEvents,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+          },
+        );
+        console.log(`Synced batch of ${slice.length} bookmarks`);
+      } catch (err) {
+        console.log("Error posting bookmark events", err);
+        throw err; // Re-throw to stop processing if there's an error
+      }
+    }
+
+    // Update last sync timestamp
+    await browser.storage.local.set({
+      [BOOKMARK_SYNC_KEY]: Date.now(),
+    });
+
+    console.log("Bookmark sync completed successfully");
+  } catch (error) {
+    console.error("Error syncing bookmarks:", error);
+  }
+}
+
+async function handleBookmarkCreated(
+  id: string,
+  bookmark: browser.bookmarks.BookmarkTreeNode,
+) {
+  const state = store.getState().ciState;
+  const { accessToken } = state;
+
+  if (!accessToken || !bookmark.url) {
+    return; // Skip folders or if not authenticated
+  }
+
+  try {
+    const bookmarkEvent = await createBookmarkEvent(bookmark, "create");
+    await axios.post(
+      "https://dev.companionintelligence.com/api/events",
+      bookmarkEvent,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+    console.log("Synced newly created bookmark:", bookmark.title);
+  } catch (error) {
+    console.error("Error syncing created bookmark:", error);
+  }
+}
+
+async function handleBookmarkChanged(id: string) {
+  const state = store.getState().ciState;
+  const { accessToken } = state;
+
+  if (!accessToken) {
+    return;
+  }
+
+  try {
+    const bookmarks = await browser.bookmarks.get(id);
+    const bookmark = bookmarks[0];
+
+    if (!bookmark.url) {
+      return; // Skip folders
+    }
+
+    const bookmarkEvent = await createBookmarkEvent(bookmark, "update");
+    await axios.post(
+      "https://dev.companionintelligence.com/api/events",
+      bookmarkEvent,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+    console.log("Synced updated bookmark:", bookmark.title);
+  } catch (error) {
+    console.error("Error syncing updated bookmark:", error);
+  }
+}
+
+async function handleBookmarkRemoved(
+  id: string,
+  removeInfo: browser.bookmarks.BookmarkRemoveInfo,
+) {
+  const state = store.getState().ciState;
+  const { accessToken } = state;
+
+  if (!accessToken) {
+    return;
+  }
+
+  try {
+    const bookmarkEvent = {
+      name: `Removed Bookmark: ${removeInfo.node.title || removeInfo.node.url}`,
+      start_time: new Date().toJSON(),
+      type: "Remove",
+      content: [
+        {
+          type: "Bookmark",
+          mimetype: "text/html",
+          url: removeInfo.node.url,
+          title: removeInfo.node.title,
+        },
+      ],
+      bookmark_id: id,
+    };
+
+    await axios.post(
+      "https://dev.companionintelligence.com/api/events",
+      bookmarkEvent,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+    console.log("Synced removed bookmark:", removeInfo.node.title);
+  } catch (error) {
+    console.error("Error syncing removed bookmark:", error);
+  }
+}
+
 export default defineBackground({
   main() {
     // const tagRegex = /#[^#\s]+/g;
@@ -624,6 +924,20 @@ export default defineBackground({
       // Use onHistoryStateUpdated in order to support single-page apps
       // onCompleted will not fire when an SPA updates the URL without a full page reload
       browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
+
+      // Set up bookmark sync listeners
+      browser.bookmarks.onCreated.addListener(handleBookmarkCreated);
+      browser.bookmarks.onChanged.addListener(handleBookmarkChanged);
+      browser.bookmarks.onRemoved.addListener(handleBookmarkRemoved);
+
+      // Initial bookmark sync on install
+      setTimeout(async () => {
+        const lastSync = await browser.storage.local.get(BOOKMARK_SYNC_KEY);
+        if (!lastSync[BOOKMARK_SYNC_KEY]) {
+          console.log("Performing initial bookmark sync");
+          await syncBookmarksToServer();
+        }
+      }, 5000); // Wait 5 seconds after install to ensure authentication is ready
     });
   },
 });
