@@ -10,12 +10,20 @@ import {
 } from "@/store/ciStateSlice";
 import { siteRegex } from "@/utils.ts";
 import type { ScrapeResult } from "@/domainScraper";
+import bowser from "bowser";
 import type { SurfingRecord } from "@/indexeddb";
 import { database } from "@/indexeddb";
 import { locationService } from "@/locationService";
 
 const SLICE_SIZE = 50;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
+
+// Detect mobile environment
+const browser_info = bowser.getParser(window.navigator.userAgent);
+const isMobile = browser_info.getPlatformType() === "mobile";
+
+// Adjust slice size for mobile to reduce memory usage
+const MOBILE_SLICE_SIZE = isMobile ? 25 : SLICE_SIZE;
 
 interface AuthResponse {
   accessToken: string;
@@ -236,9 +244,12 @@ async function triggerHistoryCrawl() {
         for (
           let i = 0;
           i < hydratedAndFilteredResults.length;
-          i = i + SLICE_SIZE
+          i = i + MOBILE_SLICE_SIZE
         ) {
-          const slice = hydratedAndFilteredResults.slice(i, i + SLICE_SIZE);
+          const slice = hydratedAndFilteredResults.slice(
+            i,
+            i + MOBILE_SLICE_SIZE,
+          );
           const sliceEvents = await Promise.all(
             slice.map(async (result) => {
               return assembleContentAndEvents(
@@ -374,7 +385,10 @@ async function triggerHistoryCrawl() {
         let startIndex = 0;
 
         while (!finished) {
-          const slice = events.slice(startIndex, startIndex + SLICE_SIZE);
+          const slice = events.slice(
+            startIndex,
+            startIndex + MOBILE_SLICE_SIZE,
+          );
           if (slice.length > 0) {
             try {
               await axios.post(
@@ -396,9 +410,9 @@ async function triggerHistoryCrawl() {
             }
           }
 
-          startIndex += SLICE_SIZE;
+          startIndex += MOBILE_SLICE_SIZE;
 
-          if (slice.length < SLICE_SIZE) {
+          if (slice.length < MOBILE_SLICE_SIZE) {
             finished = true;
           }
         }
