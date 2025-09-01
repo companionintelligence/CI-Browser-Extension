@@ -14,7 +14,7 @@ import { domainScraper } from "@/domainScraper";
 
 export default function App() {
   const dispatch = useDispatch();
-  const ciState = useSelector((state) => state.ciState);
+  const ciState = useSelector((state: any) => state.ciState);
   const {
     sessionToken,
     domain,
@@ -57,7 +57,7 @@ export default function App() {
   const domainWhitelisted = useMemo(() => {
     let domainWhitelistHit = false;
 
-    domainWhitelist.forEach((item) => {
+    domainWhitelist.forEach((item: string) => {
       const domainRegex = new RegExp(item);
 
       if (domainRegex.test(domain)) {
@@ -72,25 +72,27 @@ export default function App() {
 
   const sessionTokenExpired = useMemo(() => {
     return sessionToken
-      ? Date.now() >= jwtDecode<JwtPayload>(sessionToken).exp * 1000
+      ? Date.now() >= (jwtDecode(sessionToken) as any).exp * 1000
       : true;
   }, [sessionToken]);
 
   const pageWhitelisted = useMemo(() => {
     let pageWhitelistHit = false;
 
-    pageWhitelist.forEach((item) => {
+    pageWhitelist.forEach((item: string) => {
       const parsedUrl = URL.parse(item);
 
-      parsedUrl.hash = "";
+      if (parsedUrl) {
+        parsedUrl.hash = "";
 
-      if (
-        siteRegex.test(item) &&
-        new RegExp(parsedUrl.toString().replace("?", "\\?")).test(url)
-      ) {
-        pageWhitelistHit = true;
+        if (
+          siteRegex.test(item) &&
+          new RegExp(parsedUrl.toString().replace("?", "\\?")).test(url)
+        ) {
+          pageWhitelistHit = true;
 
-        return;
+          return;
+        }
       }
     });
 
@@ -145,13 +147,15 @@ export default function App() {
       currentWindow: true,
     });
     const active = tabInfo[0]!.url;
-    const domain = new URL(active).hostname;
-    if (!domainRegex.test(domain)) {
-      return;
-    }
+    if (active) {
+      const domain = new URL(active).hostname;
+      if (!domainRegex.test(domain)) {
+        return;
+      }
 
-    dispatch(addDomainWhitelistEntry(domain));
-    dispatch(setState({ domain: domain, url: active }));
+      dispatch(addDomainWhitelistEntry(domain));
+      dispatch(setState({ domain: domain, url: active }));
+    }
   };
 
   const deleteDomainWhitelistEntryCall = async function () {
@@ -160,9 +164,11 @@ export default function App() {
       currentWindow: true,
     });
     const active = tabInfo[0]!.url;
-    const domain = new URL(active).hostname;
-    dispatch(removeDomainWhitelistEntry(domain));
-    dispatch(setState({ domain: domain, url: active }));
+    if (active) {
+      const domain = new URL(active).hostname;
+      dispatch(removeDomainWhitelistEntry(domain));
+      dispatch(setState({ domain: domain, url: active }));
+    }
   };
 
   const addPageWhitelistEntryCall = async function () {
@@ -170,12 +176,19 @@ export default function App() {
       active: true,
       currentWindow: true,
     });
-    const active = tabInfo[0]!.url;
+    const active = tabInfo[0]?.url;
+    if (!active) {
+      return;
+    }
+
     if (active.match(siteRegex) == null) {
       return;
     }
 
     const parsedUrl = URL.parse(active);
+    if (!parsedUrl) {
+      return;
+    }
 
     parsedUrl.hash = "";
 
@@ -188,8 +201,15 @@ export default function App() {
       active: true,
       currentWindow: true,
     });
-    const active = tabInfo[0]!.url;
+    const active = tabInfo[0]?.url;
+    if (!active) {
+      return;
+    }
+
     const parsedUrl = URL.parse(active);
+    if (!parsedUrl) {
+      return;
+    }
 
     parsedUrl.hash = "";
 
@@ -201,7 +221,7 @@ export default function App() {
     if (browser.runtime.openOptionsPage) {
       browser.runtime.openOptionsPage();
     } else {
-      window.open(browser.runtime.getURL("options.html"));
+      window.open(browser.runtime.getURL("/options.html"));
     }
   };
 
