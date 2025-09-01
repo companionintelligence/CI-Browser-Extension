@@ -5,37 +5,37 @@
   "targetUrl": "https://www.netflix.com/settings/viewed/*",
   "dataSelectors": {
     "viewingHistory": {
-      "container": ".retableRow, [data-uia='retableRow'], tr",
+      "container": "[data-uia='retableRow'], .retableRow, tr, .title-container",
       "fields": {
         "date": {
-          "selector": "td:first-child, .date, [data-uia='date']",
+          "selector": "[data-uia='date'], .date, td:first-child, .viewing-date",
           "type": "text",
           "transform": "trim"
         },
         "title": {
-          "selector": "td:nth-child(2) a, .title a, [data-uia='title'] a, a[href*='/title/']",
+          "selector": "[data-uia='title'] a, .title a, td:nth-child(2) a, a[href*='/title/'], .title-link",
           "type": "text",
           "transform": "trim"
         },
         "titleUrl": {
-          "selector": "td:nth-child(2) a, .title a, [data-uia='title'] a, a[href*='/title/']",
+          "selector": "[data-uia='title'] a, .title a, td:nth-child(2) a, a[href*='/title/'], .title-link",
           "type": "attribute",
           "attribute": "href",
           "transform": "absoluteUrl"
         },
         "watchedDateTime": {
-          "selector": "td:first-child, .date, [data-uia='date']",
+          "selector": "[data-uia='date'], .date, td:first-child, .viewing-date",
           "type": "text",
           "transform": "parseDate"
         },
         "reportProblemUrl": {
-          "selector": "a[href*='/reportproblem/']",
+          "selector": "a[href*='/reportproblem/'], .report-link",
           "type": "attribute",
           "attribute": "href",
           "transform": "absoluteUrl"
         },
         "removeUrl": {
-          "selector": "a[href*='#']:last-child, .remove-link",
+          "selector": "a[href*='#']:last-child, .remove-link, .delete-link",
           "type": "attribute",
           "attribute": "href",
           "transform": "absoluteUrl"

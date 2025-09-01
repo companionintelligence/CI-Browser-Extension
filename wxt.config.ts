@@ -5,7 +5,10 @@ export default defineConfig({
   manifest: {
     name: "Companion Intelligence",
     permissions: ["cookies", "history", "storage", "tabs", "webNavigation"],
-    host_permissions: ["*://*.companionintelligence.com/"],
+    host_permissions: [
+      "*://*.companionintelligence.com/",
+      "*://*.netflix.com/*"
+    ],
     icons: {
       "16": "icon/favicon-16x16.png",
       "32": "icon/favicon-32x32.png",
