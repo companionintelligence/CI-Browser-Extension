@@ -22,6 +22,9 @@ export default function App() {
     pageWhitelist,
     // pageWhitelistPending,
     url,
+    historySyncInProgress,
+    historySyncStatus,
+    lastHistorySync,
   } = ciState;
 
   const domainWhitelisted = useMemo(() => {
@@ -175,6 +178,27 @@ export default function App() {
     }
   };
 
+  const triggerManualHistorySync = async function () {
+    if (historySyncInProgress) {
+      return;
+    }
+
+    try {
+      const response = await browser.runtime.sendMessage({
+        action: "triggerManualHistorySync",
+        options: {
+          timeRange: 7 * 24 * 60 * 60 * 1000, // Last 7 days
+        },
+      });
+
+      if (!response.success) {
+        console.error("Manual history sync failed:", response.error);
+      }
+    } catch (error) {
+      console.error("Error triggering manual history sync:", error);
+    }
+  };
+
   return (
     <div className="body">
       <div className="login-status">
@@ -214,6 +238,31 @@ export default function App() {
           )}
         </div>
         <button onClick={openOptionsPage}>Open Extension Options</button>
+
+        {!sessionTokenExpired && (
+          <div className="sync-section">
+            <div className="sync-header">
+              <h4>Browser History Sync</h4>
+            </div>
+            <div className="sync-controls">
+              <button
+                onClick={triggerManualHistorySync}
+                disabled={historySyncInProgress}
+                className={historySyncInProgress ? "disabled" : "primary"}
+              >
+                {historySyncInProgress ? "Syncing..." : "Sync Last 7 Days"}
+              </button>
+            </div>
+            {historySyncStatus && (
+              <div className="sync-status">{historySyncStatus}</div>
+            )}
+            {lastHistorySync && (
+              <div className="last-sync">
+                Last sync: {new Date(lastHistorySync).toLocaleString()}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/*<div v-if="domainPending" className="crawl-pending">*/}

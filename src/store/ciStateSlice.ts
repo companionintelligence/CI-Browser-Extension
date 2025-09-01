@@ -12,6 +12,7 @@ export const loadUserSettings = createAsyncThunk(
       "pageWhitelist",
       "pageWhitelistPending",
       "pageWhitelistHistory",
+      "lastHistorySync",
     ]);
 
     return localData;
@@ -32,6 +33,9 @@ export const ciStateSlice = createSlice({
     url: null,
     domain: null,
     lastUrl: null,
+    historySyncInProgress: false,
+    historySyncStatus: null,
+    lastHistorySync: null,
   },
   reducers: {
     setState: (state = ciStateSlice.initialState, action) => {
@@ -131,6 +135,7 @@ export const ciStateSlice = createSlice({
           pageWhitelist: state.pageWhitelist,
           pageWhitelistPending: state.pageWhitelistPending,
           pageWhitelistHistory: state.pageWhitelistHistory,
+          lastHistorySync: state.lastHistorySync,
         }),
       );
       browser.storage.local.set(parsed);

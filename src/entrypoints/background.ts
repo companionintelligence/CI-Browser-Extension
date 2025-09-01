@@ -366,6 +366,214 @@ async function triggerHistoryCrawl() {
   );
 }
 
+async function triggerManualHistorySync(options = {}) {
+  await store.dispatch({
+    type: "loadUserSettings",
+  });
+
+  const state = store.getState().ciState;
+
+  // Check if already syncing
+  if (state.historySyncInProgress) {
+    console.log("History sync already in progress");
+
+    return;
+  }
+
+  // Check authentication
+  const { accessToken } = state;
+  const accessDecoded = accessToken ? jwtDecode(accessToken) : null;
+  const isAuthExpired = accessDecoded
+    ? Date.now() >= accessDecoded.exp * 1000
+    : true;
+
+  if (isAuthExpired) {
+    store.dispatch(
+      setState({
+        historySyncStatus: "Authentication expired. Please log in again.",
+      }),
+    );
+
+    return;
+  }
+
+  try {
+    // Set sync in progress
+    store.dispatch(
+      setState({
+        historySyncInProgress: true,
+        historySyncStatus: "Starting history sync...",
+      }),
+    );
+
+    store.dispatch(saveUserSettings());
+
+    // Get all history (not just whitelisted domains/pages)
+    const timeRange = options.timeRange || 7 * 24 * 60 * 60 * 1000; // Default to last 7 days
+    const startTime = Date.now() - timeRange;
+
+    store.dispatch(
+      setState({
+        historySyncStatus: "Searching browser history...",
+      }),
+    );
+
+    const allHistoryResults = await browser.history.search({
+      text: "",
+      startTime: startTime,
+      maxResults: 10000,
+    });
+
+    if (allHistoryResults.length === 0) {
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: "No history found for the selected time range.",
+          lastHistorySync: new Date().toISOString(),
+        }),
+      );
+      store.dispatch(saveUserSettings());
+
+      return;
+    }
+
+    store.dispatch(
+      setState({
+        historySyncStatus: `Processing ${allHistoryResults.length} history entries...`,
+      }),
+    );
+
+    // Get detailed visit information for all history entries
+    const hydratedResults = [];
+    let processed = 0;
+
+    await Promise.all(
+      allHistoryResults.map((item) => {
+        return (async () => {
+          try {
+            const visits = await browser.history.getVisits({
+              url: item.url,
+            });
+
+            for (const visit of visits) {
+              if (visit.visitTime >= startTime) {
+                hydratedResults.push({
+                  ...visit,
+                  url: item.url,
+                });
+              }
+            }
+
+            processed++;
+            if (processed % 100 === 0) {
+              store.dispatch(
+                setState({
+                  historySyncStatus: `Processed ${processed}/${allHistoryResults.length} entries...`,
+                }),
+              );
+            }
+
+            return true;
+          } catch (err) {
+            console.log("Error processing history item:", err);
+
+            return false;
+          }
+        })();
+      }),
+    );
+
+    if (hydratedResults.length === 0) {
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: "No visits found for the selected time range.",
+          lastHistorySync: new Date().toISOString(),
+        }),
+      );
+      store.dispatch(saveUserSettings());
+
+      return;
+    }
+
+    store.dispatch(
+      setState({
+        historySyncStatus: `Uploading ${hydratedResults.length} visits to CI-Server...`,
+      }),
+    );
+
+    // Process and upload in batches
+    let uploaded = 0;
+    let failed = false;
+
+    for (let i = 0; i < hydratedResults.length; i += SLICE_SIZE) {
+      const slice = hydratedResults.slice(i, i + SLICE_SIZE);
+
+      try {
+        const sliceEvents = await Promise.all(
+          slice.map(async (result) => {
+            return assembleContentAndEvents(
+              result.url,
+              new Date(result.visitTime).toJSON(),
+            );
+          }),
+        );
+
+        await axios.post(
+          "https://dev.companionintelligence.com/api/events",
+          sliceEvents,
+          {
+            headers: {
+              Authorization: `Bearer ${state.accessToken}`,
+              "Content-Type": "application/json",
+            },
+          },
+        );
+
+        uploaded += slice.length;
+        store.dispatch(
+          setState({
+            historySyncStatus: `Uploaded ${uploaded}/${hydratedResults.length} visits...`,
+          }),
+        );
+      } catch (err) {
+        console.log("Error uploading history batch:", err);
+        failed = true;
+        break;
+      }
+    }
+
+    // Update final status
+    if (failed) {
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: `History sync failed after uploading ${uploaded} visits. Please try again.`,
+        }),
+      );
+    } else {
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: `Successfully synced ${uploaded} visits to CI-Server.`,
+          lastHistorySync: new Date().toISOString(),
+        }),
+      );
+    }
+
+    store.dispatch(saveUserSettings());
+  } catch (error) {
+    console.error("Manual history sync error:", error);
+    store.dispatch(
+      setState({
+        historySyncInProgress: false,
+        historySyncStatus: `History sync failed: ${error.message}`,
+      }),
+    );
+    store.dispatch(saveUserSettings());
+  }
+}
+
 async function assembleContentAndEvents(url: string, time?: string) {
   let newThumbnailContent, newPageContent, newMediaContent;
   const newContent = [];
@@ -624,6 +832,22 @@ export default defineBackground({
       // Use onHistoryStateUpdated in order to support single-page apps
       // onCompleted will not fire when an SPA updates the URL without a full page reload
       browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
+
+      // Listen for manual history sync requests from popup
+      browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === "triggerManualHistorySync") {
+          triggerManualHistorySync(message.options || {})
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Manual history sync failed:", error);
+              sendResponse({ success: false, error: error.message });
+            });
+
+          return true; // Will respond asynchronously
+        }
+      });
     });
   },
 });
