@@ -1,0 +1,41 @@
+{
+  "domain": "example.com",
+  "name": "Example Domain Profile",
+  "description": "Template for creating new domain scrape profiles",
+  "targetUrl": "https://www.example.com/path/*",
+  "dataSelectors": {
+    "exampleData": {
+      "container": ".data-container, .item",
+      "fields": {
+        "title": {
+          "selector": ".title, h1, h2",
+          "type": "text",
+          "transform": "trim"
+        },
+        "description": {
+          "selector": ".description, .summary, p",
+          "type": "text",
+          "transform": "trim"
+        },
+        "link": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "timestamp": {
+          "selector": ".date, .time, time",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "example_data",
+      "description": "Example data scraped from the domain",
+      "personalDataType": "general"
+    }
+  ]
+}

@@ -14,7 +14,7 @@ import { domainRegex, siteRegex } from "@/utils.ts";
 
 function App() {
   const dispatch = useDispatch();
-  const ciState = useSelector((state) => state.ciState);
+  const ciState = useSelector((state: any) => state.ciState);
   const { domainWhitelist, pageWhitelist } = ciState;
   const [invalidDomain, setInvalidDomain] = useState(false);
   const [invalidPage, setInvalidPage] = useState(false);
@@ -25,7 +25,7 @@ function App() {
     setIsMobile(browser_info.getPlatformType() === "mobile");
   }, []);
 
-  const addDomainEntry = (e) => {
+  const addDomainEntry = (e: any) => {
     e.preventDefault();
     const newDomain = e.target.elements["newDomain"].value;
     setInvalidDomain(!domainRegex.test(newDomain));
@@ -34,11 +34,11 @@ function App() {
     }
   };
 
-  const deleteDomainEntry = (domain) => {
+  const deleteDomainEntry = (domain: string) => {
     dispatch(removeDomainWhitelistEntry(domain));
   };
 
-  const addPageEntry = (e) => {
+  const addPageEntry = (e: any) => {
     e.preventDefault();
     const newPage = e.target.elements["newPage"].value;
     setInvalidPage(!siteRegex.test(newPage));
@@ -47,7 +47,7 @@ function App() {
     }
   };
 
-  const deletePageEntry = (page) => {
+  const deletePageEntry = (page: string) => {
     dispatch(removePageWhitelistEntry(page));
   };
 
