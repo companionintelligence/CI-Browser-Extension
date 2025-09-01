@@ -439,8 +439,6 @@ async function assembleContentAndEvents(url: string, time?: string) {
           newPageContent = {
             type: "Web Page",
             mimetype: "text/html",
-            url: data.meta.canonical,
-            text: undefined as string | undefined,
             title: undefined as string | undefined,
           };
 
