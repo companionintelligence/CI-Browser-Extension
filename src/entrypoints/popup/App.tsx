@@ -280,12 +280,12 @@ export default function App() {
             <div className="recent-scrape">
               <p><strong>Last scraped:</strong> {new Date(scraperData.timestamp).toLocaleString()}</p>
               <p><strong>Items found:</strong> {
-                Object.values(scraperData.data).reduce((total, items) => total + items.length, 0)
+                Object.values(scraperData.data).reduce((total, items) => total + (Array.isArray(items) ? items.length : 0), 0)
               }</p>
               <details style={{fontSize: '12px', marginTop: '8px'}}>
                 <summary>View data breakdown</summary>
                 {Object.entries(scraperData.data).map(([key, items]) => (
-                  <p key={key}>{key}: {items.length} items</p>
+                  <p key={key}>{key}: {Array.isArray(items) ? items.length : 0} items</p>
                 ))}
               </details>
             </div>
