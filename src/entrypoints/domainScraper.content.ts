@@ -18,6 +18,13 @@ export default defineContentScript({
     // News & Media
     "*://*.cnn.com/*",
     "*://edition.cnn.com/*",
+    "*://*.wsj.com/*",
+
+    // Travel & Mobility
+    "*://*.airbnb.com/*",
+
+    // Finance & Investing
+    "*://*.robinhood.com/*",
 
     // Additional high-priority sites without APIs
     "*://*.peacocktv.com/*",

@@ -17,6 +17,13 @@ import quoraProfile from "./scrapeProfiles/social-media/quora.json";
 
 // News profiles
 import cnnProfile from "./scrapeProfiles/news/cnn.json";
+import wsjProfile from "./scrapeProfiles/news/wsj.json";
+
+// Travel profiles
+import airbnbProfile from "./scrapeProfiles/travel/airbnb.json";
+
+// Finance profiles
+import robinhoodProfile from "./scrapeProfiles/finance/robinhood.json";
 
 export interface ProfileRegistry {
   [category: string]: {
@@ -52,6 +59,17 @@ export class ProfileManager {
     // Load news profiles
     this.loadCategoryProfiles("news", {
       "cnn.com": cnnProfile as ScrapeProfile,
+      "wsj.com": wsjProfile as ScrapeProfile,
+    });
+
+    // Load travel profiles
+    this.loadCategoryProfiles("travel", {
+      "airbnb.com": airbnbProfile as ScrapeProfile,
+    });
+
+    // Load finance profiles
+    this.loadCategoryProfiles("finance", {
+      "robinhood.com": robinhoodProfile as ScrapeProfile,
     });
 
     // Build domain to profile map for quick lookup
