@@ -222,7 +222,13 @@ export class DomainScraper {
           const dateParts = value.trim().split('/');
           if (dateParts.length === 3) {
             const [month, day, year] = dateParts;
-            const fullYear = parseInt(year) < 50 ? `20${year}` : `19${year}`;
+            // Dynamically determine century for two-digit years using current year as pivot
+            let fullYear = year;
+            if (year.length === 2) {
+              const currentYear = new Date().getFullYear() % 100;
+              const century = parseInt(year) <= currentYear ? 2000 : 1900;
+              fullYear = `${century + parseInt(year)}`;
+            }
             return new Date(`${month}/${day}/${fullYear}`).toISOString();
           }
         } catch {
