@@ -5,6 +5,7 @@ export default defineConfig({
   manifest: {
     name: "Companion Intelligence",
     permissions: [
+      "bookmarks",
       "cookies",
       "history",
       "storage",
@@ -23,4 +24,14 @@ export default defineConfig({
   },
   srcDir: "src",
   modules: ["@wxt-dev/module-react"],
+  imports: {
+    bowser: ["default"],
+  },
+  // Browser-specific configurations
+  webExt: {
+    // Safari development configuration
+    safari: {
+      devtools: true,
+    },
+  },
 });
