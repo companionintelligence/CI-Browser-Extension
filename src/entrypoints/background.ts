@@ -381,6 +381,11 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
   const events = [];
   
   for (const [dataType, items] of Object.entries(scrapeResult.data)) {
+    if (!Array.isArray(items)) {
+      // Optionally log a warning:
+      console.warn(`Expected array for dataType "${dataType}", got:`, items);
+      continue;
+    }
     for (const item of items) {
       const event = {
         name: `Scraped ${scrapeResult.profileName} - ${item.title || 'Data'}`,
