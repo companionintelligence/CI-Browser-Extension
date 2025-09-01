@@ -4,7 +4,7 @@ import { defineConfig } from "wxt";
 export default defineConfig({
   manifest: {
     name: "Companion Intelligence",
-    permissions: ["cookies", "history", "storage", "tabs", "webNavigation"],
+    permissions: ["cookies", "history", "storage", "tabs", "webNavigation", "geolocation"],
     host_permissions: ["*://*.companionintelligence.com/"],
     icons: {
       "16": "icon/favicon-16x16.png",
@@ -16,7 +16,4 @@ export default defineConfig({
   },
   srcDir: "src",
   modules: ["@wxt-dev/module-react"],
-  imports: {
-    bowser: ["default"],
-  },
 });

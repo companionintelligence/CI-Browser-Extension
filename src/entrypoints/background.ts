@@ -9,6 +9,8 @@ import {
   saveUserSettings,
 } from "@/store/ciStateSlice";
 import { siteRegex } from "@/utils.ts";
+import { database, SurfingRecord } from "@/indexeddb";
+import { locationService } from "@/locationService";
 
 const SLICE_SIZE = 50;
 
@@ -74,6 +76,23 @@ const recordHit = async function (e) {
 
     const newEvent = await assembleContentAndEvents(state.url);
 
+    // Store surfing data in local database
+    try {
+      const surfingRecord: SurfingRecord = {
+        url: state.url,
+        domain: state.domain,
+        title: newEvent.content?.[0]?.title || null,
+        description: newEvent.content?.[0]?.text || null,
+        visitTime: newEvent.start_time,
+        synced: false // Will be marked as synced after successful API call
+      };
+
+      const recordId = await database.insertSurfingRecord(surfingRecord);
+      console.log('Surfing record stored locally with ID:', recordId);
+    } catch (dbError) {
+      console.error('Failed to store surfing record in database:', dbError);
+    }
+
     try {
       await axios.post(
         // TODO: update to use env var
@@ -86,6 +105,20 @@ const recordHit = async function (e) {
           },
         },
       );
+
+      // Mark the surfing record as synced if API call was successful
+      try {
+        const unsyncedRecords = await database.getUnsyncedSurfingRecords();
+        const latestRecord = unsyncedRecords.find(record => 
+          record.url === state.url && record.visitTime === newEvent.start_time
+        );
+        if (latestRecord && latestRecord.id) {
+          await database.markSurfingRecordAsSynced(latestRecord.id);
+          console.log('Surfing record marked as synced');
+        }
+      } catch (syncError) {
+        console.error('Failed to mark surfing record as synced:', syncError);
+      }
     } catch (err) {
       console.log("error posting event", err);
     }
@@ -480,6 +513,23 @@ export default defineBackground({
   main() {
     // const tagRegex = /#[^#\s]+/g;
 
+    // Initialize database and location service
+    const initServices = async () => {
+      try {
+        await database.init();
+        console.log('Database initialized');
+        
+        // Start location tracking if user has granted permission
+        await locationService.startLocationTracking();
+        console.log('Location tracking started');
+      } catch (error) {
+        console.error('Failed to initialize services:', error);
+      }
+    };
+
+    // Initialize services
+    initServices();
+
     const wrapStore = createWrapStore();
     wrapStore(store);
     const ACCESS_TOKEN_KEY = "accessToken";
@@ -585,6 +635,13 @@ export default defineBackground({
           }
 
           store.dispatch(saveUserSettings());
+
+          // Sync location data periodically
+          try {
+            await locationService.syncLocationData();
+          } catch (error) {
+            console.error('Error syncing location data:', error);
+          }
         });
     }, 1000);
 

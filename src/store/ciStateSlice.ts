@@ -3,7 +3,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 export const loadUserSettings = createAsyncThunk(
   "ciState/loadUserSettings",
   async () => {
-    const localData = await browser.storage.local.get([
+    const localData = await chrome.storage.local.get([
       "accessToken",
       "sessionToken",
       "domainWhitelist",
@@ -34,7 +34,7 @@ export const ciStateSlice = createSlice({
     lastUrl: null,
   },
   reducers: {
-    setState: (state = ciStateSlice.initialState, action) => {
+    setState: (state, action) => {
       return { ...state, ...action.payload };
     },
     addDomainWhitelistEntry(state, action) {
@@ -133,7 +133,7 @@ export const ciStateSlice = createSlice({
           pageWhitelistHistory: state.pageWhitelistHistory,
         }),
       );
-      browser.storage.local.set(parsed);
+      chrome.storage.local.set(parsed);
 
       return state;
     },
