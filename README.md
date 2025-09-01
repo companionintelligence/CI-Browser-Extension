@@ -1,5 +1,5 @@
-# PRIVATE AND CONFIDENTIAL
-# PROPERTY OF LIFESCOPE INC
+# 📄 PRIVATE AND CONFIDENTIAL
+# 📄 PROPERTY OF LIFESCOPE INC
 # Companion Intelligence Browser Extension
 
 A privacy-focused browser extension that records and extracts your web browsing history to work with your private CI Server for digital memory and web history archiving.
@@ -210,11 +210,7 @@ This project uses modern development practices:
 - ESLint for code quality
 - Prettier for code formatting
 - WXT for cross-browser compatibility
-
-## 📄 License
-
-[License information to be added]
-
+ 
 ## 🆘 Support
 
 For support with the Companion Intelligence Browser Extension:
@@ -224,5 +220,3 @@ For support with the Companion Intelligence Browser Extension:
 - Review browser console logs for error messages
 
 ---
-
-Built with ❤️ using WXT + React for seamless cross-browser compatibility.
