@@ -36,7 +36,7 @@ export const ciStateSlice = createSlice({
   name: "ciState",
   initialState,
   reducers: {
-    setState: (state = initialState, action) => {
+    setState: (state, action) => {
       return { ...state, ...action.payload };
     },
     addDomainWhitelistEntry(state, action) {
