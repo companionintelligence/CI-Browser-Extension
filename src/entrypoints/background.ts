@@ -9,6 +9,7 @@ import {
   saveUserSettings,
 } from "@/store/ciStateSlice";
 import { siteRegex } from "@/utils.ts";
+import type { ScrapeResult } from "@/domainScraper";
 import bowser from "bowser";
 import { ScrapeResult } from "@/domainScraper";
 import type { SurfingRecord } from "@/indexeddb";
@@ -441,43 +442,48 @@ async function triggerHistoryCrawl() {
 async function handleScrapedData(scrapeResult: ScrapeResult) {
   const state = store.getState().ciState;
   const { accessToken } = state;
-  
+
   if (!accessToken) {
-    console.log('No access token, skipping scraped data upload');
+    console.log("No access token, skipping scraped data upload");
+
     return;
   }
 
   // Convert scraped data to events format
   const events = [];
-  
+
   for (const [dataType, items] of Object.entries(scrapeResult.data)) {
     if (!Array.isArray(items)) {
       // Optionally log a warning:
       console.warn(`Expected array for dataType "${dataType}", got:`, items);
       continue;
     }
+
     for (const item of items) {
       const event = {
-        name: `Scraped ${scrapeResult.profileName} - ${item.title || 'Data'}`,
+        name: `Scraped ${scrapeResult.profileName} - ${item.title || "Data"}`,
         start_time: scrapeResult.timestamp,
-        type: 'Scraped Data',
-        content: [{
-          type: 'Personal Data',
-          mimetype: 'application/json',
-          url: scrapeResult.url,
-          title: item.title || `${scrapeResult.profileName} Data`,
-          text: JSON.stringify(item),
-          scrapeProfile: scrapeResult.profileName,
-          domain: scrapeResult.domain,
-          dataType: dataType
-        }]
+        type: "Scraped Data",
+        content: [
+          {
+            type: "Personal Data",
+            mimetype: "application/json",
+            url: scrapeResult.url,
+            title: item.title || `${scrapeResult.profileName} Data`,
+            text: JSON.stringify(item),
+            scrapeProfile: scrapeResult.profileName,
+            domain: scrapeResult.domain,
+            dataType: dataType,
+          },
+        ],
       };
       events.push(event);
     }
   }
 
   if (events.length === 0) {
-    console.log('No events generated from scraped data');
+    console.log("No events generated from scraped data");
+
     return;
   }
 
@@ -494,7 +500,7 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
     );
     console.log(`Successfully uploaded ${events.length} scraped data events`);
   } catch (error) {
-    console.error('Error uploading scraped data:', error);
+    console.error("Error uploading scraped data:", error);
   }
 }
 
@@ -1106,13 +1112,16 @@ export default defineBackground({
 
     // Listen for scraped data from content scripts
     browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message.type === 'DOMAIN_SCRAPE_DATA') {
-        handleScrapedData(message.data).then(() => {
-          sendResponse({ success: true });
-        }).catch((error) => {
-          console.error('Error handling scraped data:', error);
-          sendResponse({ success: false, error: error.message });
-        });
+      if (message.type === "DOMAIN_SCRAPE_DATA") {
+        handleScrapedData(message.data)
+          .then(() => {
+            sendResponse({ success: true });
+          })
+          .catch((error) => {
+            console.error("Error handling scraped data:", error);
+            sendResponse({ success: false, error: error.message });
+          });
+
         return true; // Will respond asynchronously
       }
     });

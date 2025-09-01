@@ -9,7 +9,7 @@ export default defineConfig({
       "*://*.netflix.com/*",
       "*://*.hulu.com/*",
       "*://secure.hulu.com/*",
-      "*://*.disneyplus.com/*"
+      "*://*.disneyplus.com/*",
     ],
     permissions: [
       "bookmarks",
