@@ -6,7 +6,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import App from './App';
+import App from '@/entrypoints/options/App';
 
 // Mock the store slice
 const mockCiStateSlice = {
@@ -108,7 +108,7 @@ describe('Options App Component', () => {
     it('should render form inputs', () => {
       renderWithProvider();
       expect(screen.getByPlaceholderText('google.com')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('https://google.com')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('https://google.com/search?q=roses')).toBeInTheDocument();
     });
   });
 
@@ -170,14 +170,15 @@ describe('Options App Component', () => {
         pageWhitelist: ['https://example.com', 'https://google.com/search'],
       });
 
-      expect(screen.getByText('https://example.com')).toBeInTheDocument();
-      expect(screen.getByText('https://google.com/search')).toBeInTheDocument();
+      // Pages are displayed truncated
+      expect(screen.getByText('https://example.com...')).toBeInTheDocument();
+      expect(screen.getByText('https://google.com/search...')).toBeInTheDocument();
     });
 
     it('should add valid URL to page whitelist', () => {
       renderWithProvider();
       
-      const pageInput = screen.getByPlaceholderText('https://google.com');
+      const pageInput = screen.getByPlaceholderText('https://google.com/search?q=roses');
       const addButton = pageInput.closest('div')?.querySelector('.plus');
       
       fireEvent.change(pageInput, { target: { value: 'https://example.com' } });
@@ -192,7 +193,7 @@ describe('Options App Component', () => {
     it('should show error for invalid URL', () => {
       renderWithProvider();
       
-      const pageInput = screen.getByPlaceholderText('https://google.com');
+      const pageInput = screen.getByPlaceholderText('https://google.com/search?q=roses');
       const form = pageInput.closest('form');
       
       fireEvent.change(pageInput, { target: { value: 'invalid-url' } });
@@ -201,7 +202,7 @@ describe('Options App Component', () => {
         fireEvent.submit(form);
       }
 
-      expect(screen.getByText('That is not a valid URL.')).toBeInTheDocument();
+      expect(screen.getByText('That is not a valid page URL.')).toBeInTheDocument();
     });
 
     it('should display delete buttons for existing pages', () => {
@@ -263,7 +264,7 @@ describe('Options App Component', () => {
       renderWithProvider();
       
       const domainInput = screen.getByPlaceholderText('google.com');
-      const pageInput = screen.getByPlaceholderText('https://google.com');
+      const pageInput = screen.getByPlaceholderText('https://google.com/search?q=roses');
       
       expect(domainInput).toBeInTheDocument();
       expect(pageInput).toBeInTheDocument();

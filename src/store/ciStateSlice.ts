@@ -18,23 +18,25 @@ export const loadUserSettings = createAsyncThunk(
   },
 );
 
+const initialState = {
+  accessToken: null,
+  sessionToken: null,
+  domainWhitelist: [],
+  domainWhitelistPending: {},
+  domainWhitelistHistory: [],
+  pageWhitelist: [],
+  pageWhitelistPending: {},
+  pageWhitelistHistory: [],
+  url: null,
+  domain: null,
+  lastUrl: null,
+};
+
 export const ciStateSlice = createSlice({
   name: "ciState",
-  initialState: {
-    accessToken: null,
-    sessionToken: null,
-    domainWhitelist: [],
-    domainWhitelistPending: {},
-    domainWhitelistHistory: [],
-    pageWhitelist: [],
-    pageWhitelistPending: {},
-    pageWhitelistHistory: [],
-    url: null,
-    domain: null,
-    lastUrl: null,
-  },
+  initialState,
   reducers: {
-    setState: (state = ciStateSlice.initialState, action) => {
+    setState: (state = initialState, action) => {
       return { ...state, ...action.payload };
     },
     addDomainWhitelistEntry(state, action) {

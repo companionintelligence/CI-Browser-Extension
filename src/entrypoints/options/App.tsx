@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useSelector, useDispatch } from "react-redux";
+import type { RootState } from "@/store";
 import "./App.css";
 import {
   addDomainWhitelistEntry,
@@ -13,7 +14,7 @@ import { domainRegex, siteRegex } from "@/utils.ts";
 
 function App() {
   const dispatch = useDispatch();
-  const ciState = useSelector((state) => state.ciState);
+  const ciState = useSelector((state: RootState) => state.ciState);
   const { domainWhitelist, pageWhitelist } = ciState;
   const [invalidDomain, setInvalidDomain] = useState(false);
   const [invalidPage, setInvalidPage] = useState(false);

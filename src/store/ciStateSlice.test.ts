@@ -215,29 +215,38 @@ describe('ciStateSlice', () => {
   });
 
   describe('removePageWhitelistEntry', () => {
-    beforeEach(() => {
-      (global as any).URL = {
-        ...URL,
-        parse: jest.fn().mockReturnValue({
-          hash: '',
-          toString: () => 'https://example.com',
-        }),
-      };
-    });
-
     it('should remove page from whitelist', () => {
+      // Mock URL.parse to return different values for different inputs
+      const mockParse = jest.fn()
+        .mockImplementation((url: string) => {
+          if (url === 'https://example.com') {
+            return {
+              hash: '',
+              toString: () => 'https://example.com',
+            };
+          } else if (url === 'https://google.com') {
+            return {
+              hash: '',
+              toString: () => 'https://google.com',
+            };
+          }
+          return null;
+        });
+      
+      (global as any).URL.parse = mockParse;
+      
       // Add pages first
       store.dispatch(addPageWhitelistEntry('https://example.com'));
       store.dispatch(addPageWhitelistEntry('https://google.com'));
       
-      // Mock URL.parse for removal
-      ((global as any).URL.parse as jest.Mock).mockReturnValue({
-        hash: '',
-        toString: () => 'https://example.com',
-      });
+      // Verify both were added
+      let state = store.getState().ciState;
+      expect(state.pageWhitelist).toContain('https://example.com');
+      expect(state.pageWhitelist).toContain('https://google.com');
       
+      // Remove one page
       store.dispatch(removePageWhitelistEntry('https://example.com'));
-      const state = store.getState().ciState;
+      state = store.getState().ciState;
       
       expect(state.pageWhitelist).not.toContain('https://example.com');
       expect(state.pageWhitelist).toContain('https://google.com');

@@ -40,7 +40,7 @@ describe('Background Script', () => {
         name: "Visited " + url,
         start_time: time,
         type: "View",
-        content: expect.any(Array),
+        content: [],
       };
 
       // Test the basic structure that should be returned
