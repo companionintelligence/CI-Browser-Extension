@@ -89,3 +89,35 @@ button:focus-visible {
   justify-content: center;
   margin: auto auto 1rem auto;
 }
+
+.domain-scraper-status {
+  border-top: 1px solid #444;
+  padding-top: 1em;
+  text-align: left;
+}
+
+.domain-scraper-status h3 {
+  margin-bottom: 0.5em;
+  color: #646cff;
+}
+
+.scraper-profile p {
+  margin: 0.25em 0;
+  font-size: 0.9em;
+}
+
+.recent-scrape {
+  background-color: #333;
+  padding: 0.5em;
+  border-radius: 4px;
+  margin-top: 0.5em;
+}
+
+.recent-scrape p {
+  margin: 0.25em 0;
+  font-size: 0.85em;
+}
+
+.margin-top-1em {
+  margin-top: 1em;
+}
