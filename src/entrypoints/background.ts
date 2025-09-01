@@ -9,16 +9,25 @@ import {
   saveUserSettings,
 } from "@/store/ciStateSlice";
 import { siteRegex } from "@/utils.ts";
+import type { SurfingRecord } from "@/indexeddb";
+import { database } from "@/indexeddb";
+import { locationService } from "@/locationService";
 
 const SLICE_SIZE = 50;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
 
-const recordHit = async function (e) {
+interface AuthResponse {
+  accessToken: string;
+  sessionToken: string;
+}
+
+const recordHit = async function (e: any) {
   const { accessToken } = store.getState().ciState;
   const accessDecoded = accessToken ? jwtDecode(accessToken) : null;
-  const isAuthExpired = accessDecoded
-    ? Date.now() >= accessDecoded.exp * 1000
-    : true;
+  const isAuthExpired =
+    accessDecoded && accessDecoded.exp
+      ? Date.now() >= accessDecoded.exp * 1000
+      : true;
   if (e.frameId !== 0) {
     return;
   }
@@ -29,6 +38,10 @@ const recordHit = async function (e) {
   });
   const active = tabInfo[0];
 
+  if (!active?.url) {
+    return;
+  }
+
   const parsed = URL.parse(active.url);
   if (!parsed) {
     return;
@@ -36,14 +49,14 @@ const recordHit = async function (e) {
 
   store.dispatch(setState({ domain: parsed.hostname, url: active.url }));
 
-  let domainWhitelistHit,
+  let domainWhitelistHit = false,
     pageWhitelistHit = false;
   const state = store.getState().ciState;
 
   state.domainWhitelist.forEach((item) => {
     const domainRegex = new RegExp(item);
 
-    if (domainRegex.test(state.domain)) {
+    if (state.domain && domainRegex.test(state.domain)) {
       domainWhitelistHit = true;
 
       return;
@@ -53,14 +66,17 @@ const recordHit = async function (e) {
   state.pageWhitelist.forEach((item) => {
     const siteRegex = new RegExp(item.replace("?", "\\?"));
 
-    const parsedUrl = URL.parse(state.url);
+    if (state.url) {
+      const parsedUrl = URL.parse(state.url);
+      if (parsedUrl) {
+        parsedUrl.hash = "";
 
-    parsedUrl.hash = "";
+        if (siteRegex.test(parsedUrl.toString())) {
+          pageWhitelistHit = true;
 
-    if (siteRegex.test(parsedUrl.toString())) {
-      pageWhitelistHit = true;
-
-      return;
+          return;
+        }
+      }
     }
   });
 
@@ -73,7 +89,26 @@ const recordHit = async function (e) {
 
     store.dispatch(saveUserSettings());
 
-    const newEvent = await assembleContentAndEvents(state.url);
+    const newEvent = await assembleContentAndEvents(state.url!);
+
+    // Store surfing data in local database
+    try {
+      if (state.url && state.domain) {
+        const surfingRecord: SurfingRecord = {
+          url: state.url,
+          domain: state.domain,
+          title: newEvent.content?.[0]?.title || undefined,
+          description: newEvent.content?.[0]?.text || undefined,
+          visitTime: newEvent.start_time,
+          synced: false, // Will be marked as synced after successful API call
+        };
+
+        const recordId = await database.insertSurfingRecord(surfingRecord);
+        console.log("Surfing record stored locally with ID:", recordId);
+      }
+    } catch (dbError) {
+      console.error("Failed to store surfing record in database:", dbError);
+    }
 
     try {
       await axios.post(
@@ -87,6 +122,22 @@ const recordHit = async function (e) {
           },
         },
       );
+
+      // Mark the surfing record as synced if API call was successful
+      try {
+        const unsyncedRecords = await database.getUnsyncedSurfingRecords();
+        const latestRecord = unsyncedRecords.find(
+          (record) =>
+            record.url === state.url &&
+            record.visitTime === newEvent.start_time,
+        );
+        if (latestRecord && latestRecord.id) {
+          await database.markSurfingRecordAsSynced(latestRecord.id);
+          console.log("Surfing record marked as synced");
+        }
+      } catch (syncError) {
+        console.error("Failed to mark surfing record as synced:", syncError);
+      }
     } catch (err) {
       console.log("error posting event", err);
     }
@@ -103,17 +154,21 @@ async function triggerHistoryCrawl() {
   const state = store.getState().ciState;
   //Check to see if any whitelisted domains didn't finish their initial data crawl, and run it if they didn't (as long as they're not on Edge).
   Object.entries(state.domainWhitelistPending).forEach(
-    async ([domainWhitelistItemKey, domainWhitelistItemValue]) => {
+    async ([domainWhitelistItemKey, domainWhitelistItemValue]: [
+      string,
+      any,
+    ]) => {
       //If the whitelistPending entry for a whitelist item is more than 5 minutes old, or is not a date, then clear it.
       //In the former case, the user likely closed the browser before the history crawl was completed.
       //The latter case sometimes happens for reasons I can't really deduce, but trying again should work.
       if (
-        state.domainWhitelist.indexOf(domainWhitelistItemKey) &&
+        state.domainWhitelist.indexOf(domainWhitelistItemKey) !== -1 &&
+        domainWhitelistItemValue &&
         new Date(new Date().getTime() - 300000).getTime() >
           domainWhitelistItemValue
       ) {
         const omitted = { ...state.domainWhitelistPending };
-        delete omitted[domainWhitelistItemKey];
+        delete (omitted as any)[domainWhitelistItemKey];
         store.dispatch(
           setState({
             domainWhitelistPending: omitted,
@@ -144,12 +199,12 @@ async function triggerHistoryCrawl() {
           maxResults: 1000000,
         });
 
-        const hydratedAndFilteredResults = [];
+        const hydratedAndFilteredResults: any[] = [];
         const regex = new RegExp(domainWhitelistItemKey);
         await Promise.all(
           baseResults.map((item) => {
-            return new Promise((resolve, reject) => {
-              if (regex.test(URL.parse(item.url).hostname)) {
+            return new Promise<void>((resolve, reject) => {
+              if (item.url && regex.test(item.url)) {
                 try {
                   browser.history
                     .getVisits({
@@ -163,7 +218,7 @@ async function triggerHistoryCrawl() {
                         });
                       }
 
-                      resolve(true);
+                      resolve();
                     });
                 } catch (err) {
                   console.log("error", err);
@@ -272,12 +327,12 @@ async function triggerHistoryCrawl() {
           maxResults: 1000000,
         });
 
-        const hydratedAndFilteredResults = [];
+        const hydratedAndFilteredResults: any[] = [];
         const regex = new RegExp(pageWhitelistItemKey);
         await Promise.all(
           baseResults.map((item) => {
-            return new Promise((resolve, reject) => {
-              if (regex.test(item.url)) {
+            return new Promise<void>((resolve, reject) => {
+              if (item.url && regex.test(item.url)) {
                 try {
                   browser.history
                     .getVisits({
@@ -291,7 +346,7 @@ async function triggerHistoryCrawl() {
                         });
                       }
 
-                      resolve(true);
+                      resolve();
                     });
                 } catch (err) {
                   console.log("error", err);
@@ -368,10 +423,10 @@ async function triggerHistoryCrawl() {
 }
 
 async function assembleContentAndEvents(url: string, time?: string) {
-  let newThumbnailContent, newPageContent, newMediaContent;
-  const newContent = [];
+  let newThumbnailContent: any, newPageContent: any, newMediaContent: any;
+  const newContent: any[] = [];
 
-  await new Promise(function (resolve) {
+  await new Promise<void>(function (resolve) {
     try {
       axios
         .get(
@@ -384,7 +439,7 @@ async function assembleContentAndEvents(url: string, time?: string) {
           newPageContent = {
             type: "Web Page",
             mimetype: "text/html",
-            url: data.meta.canonical,
+            title: undefined as string | undefined,
           };
 
           if (data.meta.description) {
@@ -415,7 +470,7 @@ async function assembleContentAndEvents(url: string, time?: string) {
 
           // newContent.tagMasks.source = _.uniq(newContent.tagMasks.source);
 
-          const thumbnailLink = links.thumbnail?.find((link) => {
+          const thumbnailLink = links.thumbnail?.find((link: any) => {
             return link.rel.indexOf("thumbnail") >= 0;
           });
 
@@ -780,6 +835,23 @@ export default defineBackground({
   main() {
     // const tagRegex = /#[^#\s]+/g;
 
+    // Initialize database and location service
+    const initServices = async () => {
+      try {
+        await database.init();
+        console.log("Database initialized");
+
+        // Start location tracking if user has granted permission
+        await locationService.startLocationTracking();
+        console.log("Location tracking started");
+      } catch (error) {
+        console.error("Failed to initialize services:", error);
+      }
+    };
+
+    // Initialize services
+    initServices();
+
     const wrapStore = createWrapStore();
     wrapStore(store);
     const ACCESS_TOKEN_KEY = "accessToken";
@@ -799,7 +871,7 @@ export default defineBackground({
     };
 
     const refreshAccessToken = async () => {
-      if (store.getState().refreshing) {
+      if (store.getState().ciState.refreshing) {
         return;
       }
 
@@ -847,14 +919,16 @@ export default defineBackground({
             (cookie) => cookie.name === "CI_sessionToken",
           );
           let { accessToken, sessionToken } = store.getState().ciState;
-          if (accessTokenCookie && accessTokenCookie !== accessToken) {
+          if (accessTokenCookie && accessTokenCookie.value !== accessToken) {
             store.dispatch(setState({ accessToken: accessTokenCookie.value }));
           }
 
-          if (sessionTokenCookie && sessionTokenCookie !== sessionToken) {
-            const cookieDecoded = jwtDecode(sessionTokenCookie.value);
+          if (sessionTokenCookie && sessionTokenCookie.value !== sessionToken) {
+            const cookieDecoded = jwtDecode(sessionTokenCookie.value) as any;
             const cookieExpires = new Date(cookieDecoded.exp * 1000);
-            const stateDecoded = sessionToken ? jwtDecode(sessionToken) : null;
+            const stateDecoded = sessionToken
+              ? (jwtDecode(sessionToken) as any)
+              : null;
             const stateExpired = stateDecoded
               ? new Date(stateDecoded.exp * 1000)
               : null;
@@ -869,11 +943,15 @@ export default defineBackground({
           }
 
           ({ accessToken, sessionToken } = store.getState().ciState);
-          const accessDecoded = accessToken ? jwtDecode(accessToken) : null;
+          const accessDecoded = accessToken
+            ? (jwtDecode(accessToken) as any)
+            : null;
           const isAuthExpired = accessDecoded
             ? Date.now() >= accessDecoded.exp * 1000
             : true;
-          const sessionDecoded = sessionToken ? jwtDecode(sessionToken) : null;
+          const sessionDecoded = sessionToken
+            ? (jwtDecode(sessionToken) as any)
+            : null;
           const isSessionExpired = sessionDecoded
             ? Date.now() >= sessionDecoded.exp * 1000
             : true;
@@ -885,6 +963,13 @@ export default defineBackground({
           }
 
           store.dispatch(saveUserSettings());
+
+          // Sync location data periodically
+          try {
+            await locationService.syncLocationData();
+          } catch (error) {
+            console.error("Error syncing location data:", error);
+          }
         });
     }, 1000);
 
@@ -894,8 +979,8 @@ export default defineBackground({
       const existingKeys = Object.keys(store.getState().ciState);
       const toSet = Object.keys(storageDefaults)
         .filter((key) => existingKeys.indexOf(key) < 0)
-        .reduce((obj, key) => {
-          obj[key] = storageDefaults[key];
+        .reduce((obj: any, key) => {
+          obj[key] = (storageDefaults as any)[key];
 
           return obj;
         }, {});
@@ -908,10 +993,13 @@ export default defineBackground({
         });
         const active = tabInfo[0];
 
-        const parsed = URL.parse(active.url);
-
-        store.dispatch(setState({ domain: parsed.hostname }));
-        store.dispatch(setState({ url: active.url }));
+        if (active?.url) {
+          const parsed = URL.parse(active.url);
+          if (parsed) {
+            store.dispatch(setState({ domain: parsed.hostname }));
+            store.dispatch(setState({ url: active.url }));
+          }
+        }
       });
 
       // Use onCompleted for non-SPA pages, but make sure the URL is valid

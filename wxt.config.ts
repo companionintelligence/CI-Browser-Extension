@@ -11,6 +11,7 @@ export default defineConfig({
       "storage",
       "tabs",
       "webNavigation",
+      "geolocation",
     ],
     host_permissions: ["*://*.companionintelligence.com/"],
     icons: {
