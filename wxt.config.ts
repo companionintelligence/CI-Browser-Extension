@@ -4,8 +4,24 @@ import { defineConfig } from "wxt";
 export default defineConfig({
   manifest: {
     name: "Companion Intelligence",
-    permissions: ["cookies", "history", "storage", "tabs", "webNavigation"],
+    permissions: [
+      "cookies",
+      "history",
+      "storage",
+      "tabs",
+      "webNavigation",
+      "activeTab",
+    ],
     host_permissions: ["*://*.companionintelligence.com/"],
+    commands: {
+      "capture-screenshot": {
+        suggested_key: {
+          default: "Ctrl+Shift+S",
+          mac: "Command+Shift+S",
+        },
+        description: "Capture screenshot for CI-Server",
+      },
+    },
     icons: {
       "16": "icon/favicon-16x16.png",
       "32": "icon/favicon-32x32.png",

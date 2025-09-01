@@ -167,6 +167,24 @@ export default function App() {
     dispatch(setState({ domain: parsedUrl.hostname, url: active }));
   };
 
+  const captureScreenshot = async function () {
+    try {
+      // Send message to background script to capture screenshot
+      const result = await browser.runtime.sendMessage({
+        action: "captureScreenshot",
+      });
+
+      if (result.success) {
+        console.log("Screenshot captured successfully");
+        // Could show a toast notification here
+      } else {
+        console.error("Failed to capture screenshot:", result.error);
+      }
+    } catch (error) {
+      console.error("Error capturing screenshot:", error);
+    }
+  };
+
   const openOptionsPage = async function () {
     if (browser.runtime.openOptionsPage) {
       browser.runtime.openOptionsPage();
@@ -212,6 +230,14 @@ export default function App() {
               Start tracking this Page
             </button>
           )}
+        </div>
+        <div className="horizontal-container">
+          <button
+            className="primary camera-capture"
+            onClick={captureScreenshot}
+          >
+            📸 Capture Screenshot
+          </button>
         </div>
         <button onClick={openOptionsPage}>Open Extension Options</button>
       </div>

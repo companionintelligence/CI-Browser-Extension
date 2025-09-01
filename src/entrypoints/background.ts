@@ -366,6 +366,70 @@ async function triggerHistoryCrawl() {
   );
 }
 
+async function captureScreenshotAndSendToCI() {
+  try {
+    // Get the current active tab
+    const tabs = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    const currentTab = tabs[0];
+
+    if (!currentTab || !currentTab.id) {
+      throw new Error("No active tab found");
+    }
+
+    // Capture screenshot of the visible tab
+    const screenshotDataUrl = await browser.tabs.captureVisibleTab(
+      currentTab.windowId,
+      { format: "png", quality: 90 },
+    );
+
+    // Get current state for authentication
+    const state = store.getState().ciState;
+    const { accessToken } = state;
+
+    if (!accessToken) {
+      throw new Error("User not authenticated");
+    }
+
+    // Create screenshot event for CI-Server
+    const screenshotEvent = {
+      name: `Screenshot captured from ${currentTab.title || currentTab.url}`,
+      start_time: new Date().toJSON(),
+      type: "Capture",
+      content: [
+        {
+          type: "Image",
+          mimetype: "image/png",
+          title: `Screenshot - ${currentTab.title || "Untitled"}`,
+          text: `Screenshot captured from: ${currentTab.url}`,
+          url: currentTab.url,
+          data: screenshotDataUrl, // Base64 encoded image data
+        },
+      ],
+    };
+
+    // Send to CI-Server
+    await axios.post(
+      "https://dev.companionintelligence.com/api/events",
+      screenshotEvent,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error capturing screenshot:", error);
+
+    return { success: false, error: error.message };
+  }
+}
+
 async function assembleContentAndEvents(url: string, time?: string) {
   let newThumbnailContent, newPageContent, newMediaContent;
   const newContent = [];
@@ -624,6 +688,22 @@ export default defineBackground({
       // Use onHistoryStateUpdated in order to support single-page apps
       // onCompleted will not fire when an SPA updates the URL without a full page reload
       browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
+    });
+
+    // Handle messages from popup and other parts of the extension
+    browser.runtime.onMessage.addListener(async (request) => {
+      if (request.action === "captureScreenshot") {
+        const result = await captureScreenshotAndSendToCI();
+
+        return result;
+      }
+    });
+
+    // Handle keyboard shortcuts
+    browser.commands.onCommand.addListener(async (command) => {
+      if (command === "capture-screenshot") {
+        await captureScreenshotAndSendToCI();
+      }
     });
   },
 });

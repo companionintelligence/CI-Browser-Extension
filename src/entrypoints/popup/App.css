@@ -89,3 +89,17 @@ button:focus-visible {
   justify-content: center;
   margin: auto auto 1rem auto;
 }
+
+.camera-capture {
+  background-color: #28a745;
+  color: white;
+  font-weight: bold;
+  padding: 0.8em 1.5em;
+  border-radius: 6px;
+  transition: background-color 0.25s ease;
+}
+
+.camera-capture:hover {
+  background-color: #218838;
+  border-color: #1e7e34;
+}
