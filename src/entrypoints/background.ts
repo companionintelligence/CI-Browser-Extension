@@ -14,10 +14,10 @@ import { locationService } from "@/locationService";
 
 const SLICE_SIZE = 50;
 
-const recordHit = async function (e) {
+const recordHit = async function (e: any) {
   const { accessToken } = store.getState().ciState;
   const accessDecoded = accessToken ? jwtDecode(accessToken) : null;
-  const isAuthExpired = accessDecoded
+  const isAuthExpired = accessDecoded && accessDecoded.exp
     ? Date.now() >= accessDecoded.exp * 1000
     : true;
   if (e.frameId !== 0) {
@@ -29,6 +29,10 @@ const recordHit = async function (e) {
     currentWindow: true,
   });
   const active = tabInfo[0];
+  
+  if (!active?.url) {
+    return;
+  }
 
   const parsed = URL.parse(active.url);
   if (!parsed) {
@@ -37,16 +41,15 @@ const recordHit = async function (e) {
 
   store.dispatch(setState({ domain: parsed.hostname, url: active.url }));
 
-  let domainWhitelistHit,
+  let domainWhitelistHit = false,
     pageWhitelistHit = false;
   const state = store.getState().ciState;
 
   state.domainWhitelist.forEach((item) => {
     const domainRegex = new RegExp(item);
 
-    if (domainRegex.test(state.domain)) {
+    if (state.domain && domainRegex.test(state.domain)) {
       domainWhitelistHit = true;
-
       return;
     }
   });
@@ -54,14 +57,16 @@ const recordHit = async function (e) {
   state.pageWhitelist.forEach((item) => {
     const siteRegex = new RegExp(item.replace("?", "\\?"));
 
-    const parsedUrl = URL.parse(state.url);
-
-    parsedUrl.hash = "";
-
-    if (siteRegex.test(parsedUrl.toString())) {
-      pageWhitelistHit = true;
-
-      return;
+    if (state.url) {
+      const parsedUrl = URL.parse(state.url);
+      if (parsedUrl) {
+        parsedUrl.hash = "";
+        
+        if (siteRegex.test(parsedUrl.toString())) {
+          pageWhitelistHit = true;
+          return;
+        }
+      }
     }
   });
 
@@ -78,17 +83,19 @@ const recordHit = async function (e) {
 
     // Store surfing data in local database
     try {
-      const surfingRecord: SurfingRecord = {
-        url: state.url,
-        domain: state.domain,
-        title: newEvent.content?.[0]?.title || null,
-        description: newEvent.content?.[0]?.text || null,
-        visitTime: newEvent.start_time,
-        synced: false // Will be marked as synced after successful API call
-      };
+      if (state.url && state.domain) {
+        const surfingRecord: SurfingRecord = {
+          url: state.url,
+          domain: state.domain,
+          title: newEvent.content?.[0]?.title || undefined,
+          description: newEvent.content?.[0]?.text || undefined,
+          visitTime: newEvent.start_time,
+          synced: false // Will be marked as synced after successful API call
+        };
 
-      const recordId = await database.insertSurfingRecord(surfingRecord);
-      console.log('Surfing record stored locally with ID:', recordId);
+        const recordId = await database.insertSurfingRecord(surfingRecord);
+        console.log('Surfing record stored locally with ID:', recordId);
+      }
     } catch (dbError) {
       console.error('Failed to store surfing record in database:', dbError);
     }
@@ -135,17 +142,18 @@ async function triggerHistoryCrawl() {
   const state = store.getState().ciState;
   //Check to see if any whitelisted domains didn't finish their initial data crawl, and run it if they didn't (as long as they're not on Edge).
   Object.entries(state.domainWhitelistPending).forEach(
-    async ([domainWhitelistItemKey, domainWhitelistItemValue]) => {
+    async ([domainWhitelistItemKey, domainWhitelistItemValue]: [string, any]) => {
       //If the whitelistPending entry for a whitelist item is more than 5 minutes old, or is not a date, then clear it.
       //In the former case, the user likely closed the browser before the history crawl was completed.
       //The latter case sometimes happens for reasons I can't really deduce, but trying again should work.
       if (
-        state.domainWhitelist.indexOf(domainWhitelistItemKey) &&
+        state.domainWhitelist.indexOf(domainWhitelistItemKey) !== -1 &&
+        domainWhitelistItemValue &&
         new Date(new Date().getTime() - 300000).getTime() >
           domainWhitelistItemValue
       ) {
         const omitted = { ...state.domainWhitelistPending };
-        delete omitted[domainWhitelistItemKey];
+        delete (omitted as any)[domainWhitelistItemKey];
         store.dispatch(
           setState({
             domainWhitelistPending: omitted,
@@ -176,30 +184,35 @@ async function triggerHistoryCrawl() {
           maxResults: 1000000,
         });
 
-        const hydratedAndFilteredResults = [];
+        const hydratedAndFilteredResults: any[] = [];
         const regex = new RegExp(domainWhitelistItemKey);
         await Promise.all(
           baseResults.map((item) => {
-            return new Promise((resolve, reject) => {
-              if (regex.test(URL.parse(item.url).hostname)) {
-                try {
-                  browser.history
-                    .getVisits({
-                      url: item.url,
-                    })
-                    .then((hydratedResults) => {
-                      for (const hydratedResult of hydratedResults) {
-                        hydratedAndFilteredResults.push({
-                          ...hydratedResult,
-                          url: item.url,
-                        });
-                      }
+            return new Promise<void>((resolve, reject) => {
+              if (item.url) {
+                const parsed = URL.parse(item.url);
+                if (parsed && parsed.hostname && regex.test(parsed.hostname)) {
+                  try {
+                    browser.history
+                      .getVisits({
+                        url: item.url,
+                      })
+                      .then((hydratedResults) => {
+                        for (const hydratedResult of hydratedResults) {
+                          hydratedAndFilteredResults.push({
+                            ...hydratedResult,
+                            url: item.url,
+                          });
+                        }
 
-                      resolve(true);
-                    });
-                } catch (err) {
-                  console.log("error", err);
-                  reject(err);
+                        resolve();
+                      });
+                  } catch (err) {
+                    console.log("error", err);
+                    reject(err);
+                  }
+                } else {
+                  resolve();
                 }
               } else {
                 resolve();

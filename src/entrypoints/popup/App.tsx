@@ -140,12 +140,18 @@ export default function App() {
       active: true,
       currentWindow: true,
     });
-    const active = tabInfo[0]!.url;
+    const active = tabInfo[0]?.url;
+    if (!active) {
+      return;
+    }
     if (active.match(siteRegex) == null) {
       return;
     }
 
     const parsedUrl = URL.parse(active);
+    if (!parsedUrl) {
+      return;
+    }
 
     parsedUrl.hash = "";
 
@@ -158,8 +164,14 @@ export default function App() {
       active: true,
       currentWindow: true,
     });
-    const active = tabInfo[0]!.url;
+    const active = tabInfo[0]?.url;
+    if (!active) {
+      return;
+    }
     const parsedUrl = URL.parse(active);
+    if (!parsedUrl) {
+      return;
+    }
 
     parsedUrl.hash = "";
 
@@ -171,7 +183,7 @@ export default function App() {
     if (browser.runtime.openOptionsPage) {
       browser.runtime.openOptionsPage();
     } else {
-      window.open(browser.runtime.getURL("options.html"));
+      window.open(browser.runtime.getURL("/options.html"));
     }
   };
 

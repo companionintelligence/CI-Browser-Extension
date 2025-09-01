@@ -3,7 +3,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 export const loadUserSettings = createAsyncThunk(
   "ciState/loadUserSettings",
   async () => {
-    const localData = await chrome.storage.local.get([
+    const localData = await browser.storage.local.get([
       "accessToken",
       "sessionToken",
       "domainWhitelist",
@@ -17,6 +17,20 @@ export const loadUserSettings = createAsyncThunk(
     return localData;
   },
 );
+
+interface CiState {
+  accessToken: string | null;
+  sessionToken: string | null;
+  domainWhitelist: string[];
+  domainWhitelistPending: Record<string, any>;
+  domainWhitelistHistory: string[];
+  pageWhitelist: string[];
+  pageWhitelistPending: Record<string, any>;
+  pageWhitelistHistory: string[];
+  url: string | null;
+  domain: string | null;
+  lastUrl: string | null;
+}
 
 export const ciStateSlice = createSlice({
   name: "ciState",
@@ -32,10 +46,11 @@ export const ciStateSlice = createSlice({
     url: null,
     domain: null,
     lastUrl: null,
-  },
+  } as CiState,
   reducers: {
     setState: (state, action) => {
-      return { ...state, ...action.payload };
+      const payload = action.payload as Partial<CiState>;
+      return { ...state, ...payload };
     },
     addDomainWhitelistEntry(state, action) {
       let newDomainWhitelist = state.domainWhitelist;
@@ -133,15 +148,17 @@ export const ciStateSlice = createSlice({
           pageWhitelistHistory: state.pageWhitelistHistory,
         }),
       );
-      chrome.storage.local.set(parsed);
+      browser.storage.local.set(parsed);
 
       return state;
     },
   },
   extraReducers: (builder) => {
     builder.addCase(loadUserSettings.fulfilled, (state, action) => {
-      for (const [key, value] of Object.entries(action.payload)) {
-        state[key] = value;
+      for (const [key, value] of Object.entries(action.payload as Record<string, any>)) {
+        if (key in state) {
+          (state as any)[key] = value;
+        }
       }
     });
   },
