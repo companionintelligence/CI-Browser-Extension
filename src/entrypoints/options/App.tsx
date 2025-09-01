@@ -14,9 +14,16 @@ import { domainRegex, siteRegex } from "@/utils.ts";
 function App() {
   const dispatch = useDispatch();
   const ciState = useSelector((state) => state.ciState);
-  const { domainWhitelist, pageWhitelist } = ciState;
+  const {
+    domainWhitelist,
+    pageWhitelist,
+    historySyncInProgress,
+    historySyncStatus,
+    lastHistorySync,
+  } = ciState;
   const [invalidDomain, setInvalidDomain] = useState(false);
   const [invalidPage, setInvalidPage] = useState(false);
+  const [syncTimeRange, setSyncTimeRange] = useState("7");
 
   const addDomainEntry = (e) => {
     e.preventDefault();
@@ -42,6 +49,28 @@ function App() {
 
   const deletePageEntry = (page) => {
     dispatch(removePageWhitelistEntry(page));
+  };
+
+  const triggerHistorySync = async () => {
+    if (historySyncInProgress) {
+      return;
+    }
+
+    try {
+      const timeRangeMs = parseInt(syncTimeRange) * 24 * 60 * 60 * 1000;
+      const response = await browser.runtime.sendMessage({
+        action: "triggerManualHistorySync",
+        options: {
+          timeRange: timeRangeMs,
+        },
+      });
+
+      if (!response.success) {
+        console.error("History sync failed:", response.error);
+      }
+    } catch (error) {
+      console.error("Error triggering history sync:", error);
+    }
   };
 
   return (
@@ -150,6 +179,55 @@ function App() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="historySync">
+              <h3>Browser History Sync</h3>
+              <div>
+                <p>
+                  Manually sync your browser history to the CI-Server. This will
+                  sync all browsing history (not just whitelisted sites) for the
+                  selected time period.
+                </p>
+                <p>
+                  <strong>Note:</strong> Large time ranges may take several
+                  minutes to process. The sync runs in the background and you'll
+                  see progress updates.
+                </p>
+              </div>
+              <div className="sync-controls">
+                <div className="time-range-selector">
+                  <label htmlFor="syncTimeRange">Sync time range:</label>
+                  <select
+                    id="syncTimeRange"
+                    value={syncTimeRange}
+                    onChange={(e) => setSyncTimeRange(e.target.value)}
+                    disabled={historySyncInProgress}
+                  >
+                    <option value="1">Last 24 hours</option>
+                    <option value="7">Last 7 days</option>
+                    <option value="30">Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="365">Last year</option>
+                  </select>
+                </div>
+                <button
+                  onClick={triggerHistorySync}
+                  disabled={historySyncInProgress}
+                  className={historySyncInProgress ? "disabled" : "primary"}
+                >
+                  {historySyncInProgress ? "Syncing..." : "Start History Sync"}
+                </button>
+              </div>
+              {historySyncStatus && (
+                <div className="sync-status">{historySyncStatus}</div>
+              )}
+              {lastHistorySync && (
+                <div className="last-sync">
+                  Last successful sync:{" "}
+                  {new Date(lastHistorySync).toLocaleString()}
+                </div>
+              )}
             </div>
           </div>
         </div>
