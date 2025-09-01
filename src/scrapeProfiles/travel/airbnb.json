@@ -22,12 +22,12 @@
           "transform": "trim"
         },
         "checkIn": {
-          "selector": "[data-testid='check-in'], .check-in, ._1lds9wb",
+          "selector": "[data-testid='check-in'], .check-in",
           "type": "text",
           "transform": "trim"
         },
         "checkOut": {
-          "selector": "[data-testid='check-out'], .check-out, ._1lds9wb",
+          "selector": "[data-testid='check-out'], .check-out",
           "type": "text",
           "transform": "trim"
         },
