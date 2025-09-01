@@ -94,18 +94,27 @@ npm install
 # Start development mode (Chrome)
 npm run dev
 
-# Start development mode (Firefox)
+# Start development mode for other browsers
 npm run dev:firefox
+npm run dev:opera
+npm run dev:brave
+npm run dev:duckduckgo
 
-# Build for production
+# Build for production (Chrome)
 npm run build
 
-# Build for Firefox
+# Build for other browsers
 npm run build:firefox
+npm run build:opera
+npm run build:brave
+npm run build:duckduckgo
 
 # Create distribution packages
 npm run zip
 npm run zip:firefox
+npm run zip:opera
+npm run zip:brave
+npm run zip:duckduckgo
 
 # Linting and code quality
 npm run lint
@@ -148,6 +157,24 @@ npm run build:firefox
 npm run zip:firefox
 ```
 
+### For Opera
+```bash
+npm run build:opera
+npm run zip:opera
+```
+
+### For Brave
+```bash
+npm run build:brave
+npm run zip:brave
+```
+
+### For DuckDuckGo
+```bash
+npm run build:duckduckgo
+npm run zip:duckduckgo
+```
+
 The built extensions will be available in the `.output/` directory, with packaged versions in the `dist/` directory.
 
 ## 🏪 Store Publication Plans
@@ -157,6 +184,9 @@ We plan to publish this extension to all major browser extension stores:
 - **Chrome Web Store** - For Chrome and Chromium-based browsers
 - **Firefox Add-ons** - For Firefox
 - **Microsoft Edge Add-ons** - For Microsoft Edge
+- **Opera Add-ons** - For Opera browser
+- **Brave Browser Extensions** - For Brave browser (via Chrome Web Store compatibility)
+- **DuckDuckGo Browser Extensions** - For DuckDuckGo browser (via Chrome Web Store compatibility)
 - **Safari Extensions** - For Safari (future consideration)
 
 This will eliminate the need for manual installation and building, making the extension accessible to all users.
@@ -169,6 +199,18 @@ This will eliminate the need for manual installation and building, making the ex
 - **State Management**: Redux Toolkit with webext-redux for cross-context state
 - **HTTP Client**: Axios for API communications
 - **Build Tool**: Vite for fast development and building
+
+### Browser Compatibility
+The extension supports all major browsers through WXT's cross-browser compilation:
+- **Chrome** - Manifest V3 (primary development target)
+- **Firefox** - Manifest V2 (Mozilla's recommended version)
+- **Microsoft Edge** - Manifest V3 (Chromium-based)
+- **Opera** - Manifest V3 (Chromium-based) 
+- **Brave** - Manifest V3 (Chromium-based)
+- **DuckDuckGo Browser** - Manifest V3 (Chromium-based)
+- **Safari** - Manifest V3 (iOS compatibility)
+
+All Chromium-based browsers use identical manifests and functionality, while Firefox uses a slightly adapted Manifest V2 version for optimal compatibility.
 
 ### Key Components
 - **Background Script**: Handles web navigation monitoring, API communications, and data processing
