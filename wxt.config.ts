@@ -7,7 +7,10 @@ export default defineConfig({
     permissions: ["cookies", "history", "storage", "tabs", "webNavigation"],
     host_permissions: [
       "*://*.companionintelligence.com/",
-      "*://*.netflix.com/*"
+      "*://*.netflix.com/*",
+      "*://*.hulu.com/*",
+      "*://secure.hulu.com/*",
+      "*://*.disneyplus.com/*"
     ],
     icons: {
       "16": "icon/favicon-16x16.png",

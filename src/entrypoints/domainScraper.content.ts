@@ -1,7 +1,12 @@
 import { domainScraper, ScrapeResult } from '@/domainScraper';
 
 export default defineContentScript({
-  matches: ["*://*.netflix.com/*"],
+  matches: [
+    "*://*.netflix.com/*",
+    "*://*.hulu.com/*", 
+    "*://secure.hulu.com/*",
+    "*://*.disneyplus.com/*"
+  ],
   main() {
     // Auto-scrape when page loads if it's a supported scraping target
     function performScraping() {
@@ -62,6 +67,8 @@ export default defineContentScript({
       }
     });
 
-    console.log('Domain scraper content script loaded for Netflix');
+    // Determine which domain we're on for logging
+    const domain = window.location.hostname.replace('www.', '').replace('secure.', '');
+    console.log(`Domain scraper content script loaded for ${domain}`);
   },
 });

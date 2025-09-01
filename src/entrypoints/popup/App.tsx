@@ -252,16 +252,29 @@ export default function App() {
             <div className="scraper-profile">
               <p><strong>Profile:</strong> {scraperProfile.name}</p>
               <p><strong>Description:</strong> {scraperProfile.description}</p>
+              <p><strong>Data Types:</strong> {scraperProfile.dataTypes.map(dt => dt.name).join(', ')}</p>
               {canScrapeCurrentUrl && (
                 <p style={{color: 'green'}}>✓ This page can be scraped for personal data</p>
               )}
               {!canScrapeCurrentUrl && url && (
-                <p style={{color: 'orange'}}>⚠ Navigate to {scraperProfile.targetUrl.replace('*', '')} to scrape data</p>
+                <div>
+                  <p style={{color: 'orange'}}>⚠ Navigate to supported pages to scrape data:</p>
+                  <ul style={{fontSize: '12px', marginLeft: '20px'}}>
+                    {(Array.isArray(scraperProfile.targetUrl) ? scraperProfile.targetUrl : [scraperProfile.targetUrl])
+                      .map((targetUrl, idx) => (
+                        <li key={idx}>{targetUrl.replace(/https?:\/\/[^\/]+/, '').replace('*', 'any-path')}</li>
+                      ))
+                    }
+                  </ul>
+                </div>
               )}
             </div>
           )}
           {!scraperProfile && domain && (
-            <p>No scrape profile available for {domain}</p>
+            <div>
+              <p>No scrape profile available for {domain}</p>
+              <p style={{fontSize: '12px'}}>Supported domains: netflix.com, hulu.com, disneyplus.com</p>
+            </div>
           )}
           {scraperData && (
             <div className="recent-scrape">
@@ -269,6 +282,12 @@ export default function App() {
               <p><strong>Items found:</strong> {
                 Object.values(scraperData.data).reduce((total, items) => total + items.length, 0)
               }</p>
+              <details style={{fontSize: '12px', marginTop: '8px'}}>
+                <summary>View data breakdown</summary>
+                {Object.entries(scraperData.data).map(([key, items]) => (
+                  <p key={key}>{key}: {items.length} items</p>
+                ))}
+              </details>
             </div>
           )}
         </div>

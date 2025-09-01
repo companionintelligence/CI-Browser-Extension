@@ -1,8 +1,12 @@
 {
   "domain": "netflix.com",
-  "name": "Netflix Viewing History",
-  "description": "Scrapes Netflix viewing history from the settings page",
-  "targetUrl": "https://www.netflix.com/settings/viewed/*",
+  "name": "Netflix Data Scraper",
+  "description": "Scrapes Netflix viewing history, watchlist, and account data",
+  "targetUrl": [
+    "https://www.netflix.com/settings/viewed/*",
+    "https://www.netflix.com/browse/my-list*",
+    "https://www.netflix.com/youraccount*"
+  ],
   "dataSelectors": {
     "viewingHistory": {
       "container": "[data-uia='retableRow'], .retableRow, tr, .title-container",
@@ -41,12 +45,75 @@
           "transform": "absoluteUrl"
         }
       }
+    },
+    "watchlist": {
+      "container": ".title-card, [data-uia='title-card'], .slider-item, .title-wrapper, .boxart-container",
+      "fields": {
+        "title": {
+          "selector": ".fallback-text, [data-uia='title-card-name'], .video-title, .title-text, .title",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a, [data-uia='title-card-link']",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "imageUrl": {
+          "selector": "img, .boxart-image",
+          "type": "attribute",
+          "attribute": "src",
+          "transform": "absoluteUrl"
+        },
+        "addedDate": {
+          "selector": ".date-added, [data-uia='date-added'], .added-date",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "recommendations": {
+      "container": ".title-card, [data-uia='title-card'], .slider-item, .billboard-row .title-wrapper",
+      "fields": {
+        "title": {
+          "selector": ".fallback-text, [data-uia='title-card-name'], .video-title, .title-text",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a, [data-uia='title-card-link']",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "category": {
+          "selector": "[data-uia='row-header'], .row-header, .category-header",
+          "type": "text",
+          "transform": "trim"
+        },
+        "matchScore": {
+          "selector": ".match-score, [data-uia='match-score']",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
     }
   },
   "dataTypes": [
     {
       "name": "viewing_history",
       "description": "Netflix viewing history entries with watch dates and titles",
+      "personalDataType": "entertainment_preferences"
+    },
+    {
+      "name": "watchlist",
+      "description": "Netflix saved watchlist items",
+      "personalDataType": "entertainment_preferences"
+    },
+    {
+      "name": "recommendations",
+      "description": "Netflix personalized recommendations",
       "personalDataType": "entertainment_preferences"
     }
   ]

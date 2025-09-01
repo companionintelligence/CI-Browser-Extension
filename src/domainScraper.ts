@@ -2,7 +2,7 @@ export interface ScrapeProfile {
   domain: string;
   name: string;
   description: string;
-  targetUrl: string;
+  targetUrl: string | string[];
   dataSelectors: {
     [key: string]: {
       container: string;
@@ -33,11 +33,14 @@ export interface ScrapeResult {
   };
 }
 
-// Import Netflix profile statically to avoid runtime import issues
+// Import all profiles statically
 import netflixProfileData from './scrapeProfiles/netflix.json';
+import huluProfileData from './scrapeProfiles/hulu.json';
+import disneyProfileData from './scrapeProfiles/disney.json';
 
 export class DomainScraper {
   private profiles: { [key: string]: ScrapeProfile } = {};
+  private profileNames: { [key: string]: string } = {};
 
   constructor() {
     this.loadProfiles();
@@ -47,9 +50,34 @@ export class DomainScraper {
     // Load Netflix profile
     try {
       this.profiles['netflix.com'] = netflixProfileData as ScrapeProfile;
+      this.profileNames['netflix.com'] = netflixProfileData.name;
     } catch (error) {
       console.warn('Failed to load Netflix scrape profile:', error);
     }
+
+    // Load Hulu profile
+    try {
+      this.profiles['hulu.com'] = huluProfileData as ScrapeProfile;
+      this.profileNames['hulu.com'] = huluProfileData.name;
+    } catch (error) {
+      console.warn('Failed to load Hulu scrape profile:', error);
+    }
+
+    // Load Disney+ profile
+    try {
+      this.profiles['disneyplus.com'] = disneyProfileData as ScrapeProfile;
+      this.profileNames['disneyplus.com'] = disneyProfileData.name;
+    } catch (error) {
+      console.warn('Failed to load Disney+ scrape profile:', error);
+    }
+  }
+
+  public getAllProfiles(): { [key: string]: ScrapeProfile } {
+    return { ...this.profiles };
+  }
+
+  public getSupportedDomains(): string[] {
+    return Object.keys(this.profiles);
   }
 
   public getProfile(domain: string): ScrapeProfile | undefined {
@@ -59,9 +87,29 @@ export class DomainScraper {
   public canScrape(url: string): boolean {
     try {
       const urlObj = new URL(url);
-      return urlObj.hostname.replace('www.', '') in this.profiles;
+      const domain = urlObj.hostname.replace('www.', '');
+      return domain in this.profiles;
     } catch {
       return false;
+    }
+  }
+
+  public getProfileForUrl(url: string): ScrapeProfile | undefined {
+    try {
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname.replace('www.', '');
+      const profile = this.profiles[domain];
+      
+      if (!profile) return undefined;
+      
+      // Check if URL matches any of the target patterns
+      if (this.urlMatchesProfile(url, profile)) {
+        return profile;
+      }
+      
+      return undefined;
+    } catch {
+      return undefined;
     }
   }
 
@@ -75,8 +123,8 @@ export class DomainScraper {
         return null;
       }
 
-      // Check if URL matches target pattern
-      if (!this.urlMatches(url, profile.targetUrl)) {
+      // Check if URL matches target pattern(s)
+      if (!this.urlMatchesProfile(url, profile)) {
         return null;
       }
 
@@ -140,6 +188,12 @@ export class DomainScraper {
       console.error('Error scraping data:', error);
       return null;
     }
+  }
+
+  private urlMatchesProfile(url: string, profile: ScrapeProfile): boolean {
+    const targetUrls = Array.isArray(profile.targetUrl) ? profile.targetUrl : [profile.targetUrl];
+    
+    return targetUrls.some(pattern => this.urlMatches(url, pattern));
   }
 
   private urlMatches(url: string, pattern: string): boolean {
