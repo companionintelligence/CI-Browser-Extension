@@ -33,13 +33,7 @@ interface CiState {
   refreshing: boolean;
 }
 
-export const ciStateSlice = createSlice({
-  name: "ciState",
-  initialState,
-  reducers: {
-    setState: (state, action) => {
-      return { ...state, ...action.payload }; 
-      
+// Removed incomplete duplicate ciStateSlice declaration and reducer
 export const ciStateSlice = createSlice({
   name: "ciState",
   initialState: {
