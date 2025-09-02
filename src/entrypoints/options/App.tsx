@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { useSelector, useDispatch } from "react-redux";
+import type { RootState } from "@/store";
 import "./App.css";
 import {
   addDomainWhitelistEntry,
@@ -9,6 +10,7 @@ import {
   removePageWhitelistEntry,
   clearSyncHistoryLogs,
 } from "@/store/ciStateSlice.ts";
+import bowser from "bowser";
 
 import { domainRegex, siteRegex } from "@/utils.ts";
 
@@ -23,10 +25,20 @@ function App() {
     lastHistorySync,
     syncHistoryLogs,
   } = ciState;
+  const { domainWhitelist, pageWhitelist } = ciState;
   const [invalidDomain, setInvalidDomain] = useState(false);
   const [invalidPage, setInvalidPage] = useState(false);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
+
+  const [invalidDomain, setInvalidDomain] = useState(false);
+  const [invalidPage, setInvalidPage] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const browser_info = bowser.getParser(window.navigator.userAgent);
+    setIsMobile(browser_info.getPlatformType() === "mobile");
+  }, []);
 
   const addDomainEntry = (e: any) => {
     e.preventDefault();
@@ -122,7 +134,7 @@ function App() {
 
   return (
     <>
-      <div className="page">
+      <div className={`page ${isMobile ? "mobile" : ""}`}>
         <div className="boxed-group">
           <div className="title">
             Companion Intelligence Browser Extension Options
@@ -167,7 +179,7 @@ function App() {
                       <input
                         type="text"
                         name="newDomain"
-                        placeholder="google.com"
+                        placeholder={isMobile ? "google.com" : "google.com"}
                       />
                     </div>
                     <i className="plus" onClick={addDomainEntry}>
@@ -178,8 +190,8 @@ function App() {
                 </div>
               </form>
               <div className="entries">
-                {domainWhitelist.map((domain: string) => (
-                  <div className="entry">
+                {domainWhitelist.map((domain) => (
+                  <div className="entry" key={domain}>
                     <span>{domain}</span>
                     <i
                       className="delete"
@@ -206,7 +218,11 @@ function App() {
                       <input
                         type="text"
                         name="newPage"
-                        placeholder="https://google.com/search?q=roses"
+                        placeholder={
+                          isMobile
+                            ? "https://google.com/search?q=..."
+                            : "https://google.com/search?q=roses"
+                        }
                       />
                     </div>
                     <i className="plus" onClick={addPageEntry}>
@@ -217,9 +233,15 @@ function App() {
                 </div>
               </form>
               <div className="entries">
-                {pageWhitelist.map((page: string) => (
-                  <div className="entry">
-                    <span title={page}>{page.slice(0, 40) + "..."}</span>
+                {pageWhitelist.map((page) => (
+                  <div className="entry" key={page}>
+                    <span title={page}>
+                      {isMobile && page.length > 30
+                        ? page.slice(0, 30) + "..."
+                        : page.length > 40
+                          ? page.slice(0, 40) + "..."
+                          : page}
+                    </span>
                     <i className="delete" onClick={() => deletePageEntry(page)}>
                       X
                     </i>

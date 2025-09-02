@@ -9,7 +9,7 @@ export default defineConfig({
       "*://*.netflix.com/*",
       "*://*.hulu.com/*",
       "*://secure.hulu.com/*",
-      "*://*.disneyplus.com/*"
+      "*://*.disneyplus.com/*",
     ],
     permissions: [
       "bookmarks",
@@ -27,12 +27,25 @@ export default defineConfig({
       "96": "icon/favicon-96x96.png",
       "128": "icon/favicon-96x96.png",
     },
+    // Mobile browser optimizations
+    action: {
+      default_title: "Companion Intelligence",
+      default_popup: "popup.html",
+    },
+    // Add Android Chrome support
+    minimum_chrome_version: "88",
   },
   srcDir: "src",
   modules: ["@wxt-dev/module-react"],
   imports: {
     bowser: ["default"],
-  },
+  }, 
+  // Output configurations for different browsers including mobile
+  outDir: ".output",
+  // Enable mobile browser builds
+  runner: {
+    // Disable automatic opening on mobile
+    openBrowser: false,
   // Browser-specific configurations
   webExt: {
     // Safari development configuration

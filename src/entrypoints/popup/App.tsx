@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { jwtDecode } from "jwt-decode";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/store/ciStateSlice";
 import "./App.css";
 import { domainRegex, siteRegex } from "@/utils.ts";
+import bowser from "bowser";
 import { domainScraper } from "@/domainScraper";
 
 export default function App() {
@@ -28,7 +29,11 @@ export default function App() {
     lastHistorySync,
   } = ciState;
 
-  const [scraperData, setScraperData] = useState(null);
+
+  useEffect(() => {
+    const browser_info = bowser.getParser(window.navigator.userAgent);
+    setIsMobile(browser_info.getPlatformType() === "mobile");
+  }, []);
 
   // Check if current URL can be scraped
   const canScrapeCurrentUrl = useMemo(() => {
@@ -37,16 +42,25 @@ export default function App() {
 
   // Get scraper profile for current domain
   const scraperProfile = useMemo(() => {
-    if (!domain) return null;
-    return domainScraper.getProfile(domain.replace('www.', ''));
+    if (!domain) {
+      return null;
+    }
+
+    return domainScraper.getProfile(domain.replace("www.", ""));
   }, [domain]);
 
-  // Load recent scraper data
+  const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
+    
+    // Mobile detection
+    const browser_info = bowser.getParser(window.navigator.userAgent);
+    setIsMobile(browser_info.getPlatformType() === "mobile");
+    
+    // Load recent scraper data
     if (domain) {
-      browser.storage.local.get(null).then(allData => {
-        const scraperKeys = Object.keys(allData).filter(key => 
-          key.startsWith('scrapeData_') && key.includes(domain)
+      browser.storage.local.get(null).then((allData) => {
+        const scraperKeys = Object.keys(allData).filter(
+          (key) => key.startsWith("scrapeData_") && key.includes(domain),
         );
         if (scraperKeys.length > 0) {
           // Get the most recent entry
@@ -57,6 +71,8 @@ export default function App() {
     }
   }, [domain]);
 
+  const [scraperData, setScraperData] = useState(null);
+  
   const domainWhitelisted = useMemo(() => {
     let domainWhitelistHit = false;
 
@@ -250,7 +266,7 @@ export default function App() {
   };
 
   return (
-    <div className="body">
+    <div className={`body ${isMobile ? "mobile" : ""}`}>
       <div className="login-status">
         <a href="https://dev.companionintelligence.com" target="_blank">
           {sessionTokenExpired
@@ -262,12 +278,12 @@ export default function App() {
         <div className="horizontal-container">
           {domainWhitelisted && (
             <button className="danger" onClick={deleteDomainWhitelistEntryCall}>
-              Stop tracking this Site
+              {isMobile ? "Stop tracking Site" : "Stop tracking this Site"}
             </button>
           )}
           {!domainWhitelisted && (
             <button className="primary" onClick={addDomainWhitelistEntryCall}>
-              Start tracking this Site
+              {isMobile ? "Start tracking Site" : "Start tracking this Site"}
             </button>
           )}
           {pageWhitelisted && (
@@ -275,7 +291,7 @@ export default function App() {
               className="danger margin-bottom-1em"
               onClick={deletePageWhitelistEntryCall}
             >
-              Stop tracking this Page
+              {isMobile ? "Stop tracking Page" : "Stop tracking this Page"}
             </button>
           )}
           {!pageWhitelisted && (
@@ -283,10 +299,13 @@ export default function App() {
               className="primary margin-bottom-1em"
               onClick={addPageWhitelistEntryCall}
             >
-              Start tracking this Page
+              {isMobile ? "Start tracking Page" : "Start tracking this Page"}
             </button>
           )}
-        </div>
+        </div> 
+        <button onClick={openOptionsPage}>
+          {isMobile ? "Options" : "Open Extension Options"}
+        </button> 
         <button onClick={openOptionsPage}>Open Extension Options</button>
         {!sessionTokenExpired && (
           <div className="sync-section">
@@ -312,26 +331,43 @@ export default function App() {
             )}
           </div>
         )}
+
         {/* Domain Scraper Status */}
         <div className="domain-scraper-status margin-top-1em">
           <h3>Domain Scraper</h3>
           {scraperProfile && (
             <div className="scraper-profile">
-              <p><strong>Profile:</strong> {scraperProfile.name}</p>
-              <p><strong>Description:</strong> {scraperProfile.description}</p>
-              <p><strong>Data Types:</strong> {scraperProfile.dataTypes.map(dt => dt.name).join(', ')}</p>
+              <p>
+                <strong>Profile:</strong> {scraperProfile.name}
+              </p>
+              <p>
+                <strong>Description:</strong> {scraperProfile.description}
+              </p>
+              <p>
+                <strong>Data Types:</strong>{" "}
+                {scraperProfile.dataTypes.map((dt) => dt.name).join(", ")}
+              </p>
               {canScrapeCurrentUrl && (
-                <p style={{color: 'green'}}>✓ This page can be scraped for personal data</p>
+                <p style={{ color: "green" }}>
+                  ✓ This page can be scraped for personal data
+                </p>
               )}
               {!canScrapeCurrentUrl && url && (
                 <div>
-                  <p style={{color: 'orange'}}>⚠ Navigate to supported pages to scrape data:</p>
-                  <ul style={{fontSize: '12px', marginLeft: '20px'}}>
-                    {(Array.isArray(scraperProfile.targetUrl) ? scraperProfile.targetUrl : [scraperProfile.targetUrl])
-                      .map((targetUrl, idx) => (
-                        <li key={idx}>{targetUrl.replace(/https?:\/\/[^\/]+/, '').replace('*', 'any-path')}</li>
-                      ))
-                    }
+                  <p style={{ color: "orange" }}>
+                    ⚠ Navigate to supported pages to scrape data:
+                  </p>
+                  <ul style={{ fontSize: "12px", marginLeft: "20px" }}>
+                    {(Array.isArray(scraperProfile.targetUrl)
+                      ? scraperProfile.targetUrl
+                      : [scraperProfile.targetUrl]
+                    ).map((targetUrl, idx) => (
+                      <li key={idx}>
+                        {targetUrl
+                          .replace(/https?:\/\/[^\/]+/, "")
+                          .replace("*", "any-path")}
+                      </li>
+                    ))}
                   </ul>
                 </div>
               )}
@@ -340,24 +376,36 @@ export default function App() {
           {!scraperProfile && domain && (
             <div>
               <p>No scrape profile available for {domain}</p>
-              <p style={{fontSize: '12px'}}>Supported domains: netflix.com, hulu.com, disneyplus.com</p>
+              <p style={{ fontSize: "12px" }}>
+                Supported domains: netflix.com, hulu.com, disneyplus.com
+              </p>
             </div>
           )}
           {scraperData && (
             <div className="recent-scrape">
-              <p><strong>Last scraped:</strong> {new Date(scraperData.timestamp).toLocaleString()}</p>
-              <p><strong>Items found:</strong> {
-                Object.values(scraperData.data).reduce((total, items) => total + (Array.isArray(items) ? items.length : 0), 0)
-              }</p>
-              <details style={{fontSize: '12px', marginTop: '8px'}}>
+              <p>
+                <strong>Last scraped:</strong>{" "}
+                {new Date(scraperData.timestamp).toLocaleString()}
+              </p>
+              <p>
+                <strong>Items found:</strong>{" "}
+                {Object.values(scraperData.data).reduce(
+                  (total, items) =>
+                    total + (Array.isArray(items) ? items.length : 0),
+                  0,
+                )}
+              </p>
+              <details style={{ fontSize: "12px", marginTop: "8px" }}>
                 <summary>View data breakdown</summary>
                 {Object.entries(scraperData.data).map(([key, items]) => (
-                  <p key={key}>{key}: {Array.isArray(items) ? items.length : 0} items</p>
+                  <p key={key}>
+                    {key}: {Array.isArray(items) ? items.length : 0} items
+                  </p>
                 ))}
               </details>
             </div>
           )}
-        </div>
+        </div> 
       </div>
     </div>
   );

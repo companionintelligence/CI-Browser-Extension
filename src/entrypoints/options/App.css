@@ -1,8 +1,10 @@
 #root {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 0.5rem 2rem;
+  padding: 0.5rem 1rem;
   text-align: center;
+  min-width: 280px;
+  box-sizing: border-box;
 }
 
 :root {
@@ -33,6 +35,8 @@ a:hover {
 body {
   margin: 0;
   display: flex;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 h1 {
@@ -50,6 +54,9 @@ button {
   background-color: #1a1a1a;
   cursor: pointer;
   transition: border-color 0.25s;
+  min-height: 44px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 button:hover {
   border-color: #646cff;
@@ -78,10 +85,12 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   margin: auto;
+  flex-wrap: wrap;
 }
 
 .add-entry {
   flex-direction: column;
+  margin-bottom: 1rem;
 }
 
 .add-entry .adder {
@@ -89,6 +98,23 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   margin: auto;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.add-entry .text-box {
+  flex: 1;
+  min-width: 200px;
+}
+
+.add-entry .text-box input {
+  width: 100%;
+  padding: 0.75em;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 1em;
+  box-sizing: border-box;
+  min-height: 44px;
 }
 
 .add-entry .plus {
@@ -96,10 +122,34 @@ button:focus-visible {
   color: green;
   cursor: pointer;
   font-size: 20px;
+  padding: 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
 }
 
 .add-entry .plus:hover {
   color: darkgreen;
+  background-color: rgba(0, 128, 0, 0.1);
+}
+
+.entry {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  justify-content: space-between;
+}
+
+.entry span {
+  flex: 1;
+  text-align: left;
+  padding-right: 1rem;
+  word-break: break-all;
 }
 
 .entry .delete {
@@ -107,6 +157,15 @@ button:focus-visible {
   cursor: pointer;
   color: red;
   font-size: 20px;
+  padding: 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
 }
 
 .entry .delete:hover {
@@ -412,5 +471,140 @@ button.danger:hover:not(:disabled) {
 
   .logs-header > span {
     font-weight: bold;
+  background-color: rgba(255, 0, 0, 0.1);
+}
+
+/* Mobile-specific styles for options page */
+.page {
+  width: 100%;
+  min-height: 100vh;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.boxed-group {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 2rem;
+  margin: 0 auto;
+  max-width: 800px;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: #646cff;
+}
+
+.padded {
+  padding: 1rem;
+}
+
+.paragraphed p {
+  text-align: left;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.domainWhitelist,
+.pageWhitelist {
+  margin: 2rem 0;
+  text-align: left;
+}
+
+.domainWhitelist h3,
+.pageWhitelist h3 {
+  color: #646cff;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+}
+
+.entries {
+  margin-top: 1rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .boxed-group {
+    padding: 1rem;
+    margin: 0;
+    border-radius: 8px;
+  }
+  
+  .page {
+    padding: 0.5rem;
+  }
+  
+  .title {
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+  }
+  
+  .add-entry .adder {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .add-entry .text-box {
+    min-width: auto;
+    margin-bottom: 0.5rem;
+  }
+  
+  .add-entry .plus {
+    align-self: center;
+  }
+  
+  .entry {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .entry span {
+    padding-right: 0;
+    margin-bottom: 0.5rem;
+  }
+  
+  .entry .delete {
+    align-self: flex-end;
+  }
+}
+
+/* Mobile class for dynamic adjustments */
+.page.mobile .boxed-group {
+  padding: 0.75rem;
+}
+
+.page.mobile .title {
+  font-size: 1.2rem;
+}
+
+.page.mobile .paragraphed p {
+  font-size: 0.9rem;
+}
+
+.page.mobile .add-entry .text-box input {
+  font-size: 0.9rem;
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 0.25rem;
+  }
+  
+  .boxed-group {
+    padding: 0.75rem;
+  }
+  
+  .title {
+    font-size: 1.1rem;
+    text-align: center;
+  }
+  
+  .paragraphed p {
+    font-size: 0.9rem;
   }
 }
