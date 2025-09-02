@@ -492,11 +492,7 @@ async function triggerManualHistorySync(options = {}) {
       }),
     );
 
-    const allHistoryResults = await browser.history.search({
-      text: "",
-      startTime: searchStartTime,
-      maxResults: 10000,
-    });
+    const allHistoryResults = await fetchAllHistoryResults(searchStartTime);
 
     if (allHistoryResults.length === 0) {
       const duration = Date.now() - startTime;
