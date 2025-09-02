@@ -33,6 +33,7 @@ interface CiState {
   refreshing: boolean;
 }
 
+// Removed incomplete duplicate ciStateSlice declaration and reducer
 export const ciStateSlice = createSlice({
   name: "ciState",
   initialState: {
