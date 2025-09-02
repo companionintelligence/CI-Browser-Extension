@@ -206,7 +206,7 @@ class LocationService {
 
       try {
         await axios.post(
-          "https://dev.companionintelligence.com/api/events",
+          "https://dev.companionintelligence.com/api/places",
           locationEvents,
           {
             headers: {

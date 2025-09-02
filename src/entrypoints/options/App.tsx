@@ -23,7 +23,6 @@ function App() {
     lastHistorySync,
     syncHistoryLogs,
   } = ciState;
-  const ciState = useSelector((state: any) => state.ciState);
   const [invalidDomain, setInvalidDomain] = useState(false);
   const [invalidPage, setInvalidPage] = useState(false);
   const [syncTimeRange, setSyncTimeRange] = useState("7");

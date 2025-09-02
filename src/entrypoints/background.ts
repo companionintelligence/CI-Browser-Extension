@@ -115,7 +115,7 @@ const recordHit = async function (e: any) {
     try {
       await axios.post(
         // TODO: update to use env var
-        "https://dev.companionintelligence.com/api/events",
+        "https://dev.companionintelligence.com/api/content",
         newEvent,
         {
           headers: {
@@ -251,7 +251,7 @@ async function triggerHistoryCrawl() {
           try {
             await axios.post(
               // TODO: update to use env var
-              "https://dev.companionintelligence.com/api/events",
+              "https://dev.companionintelligence.com/api/content",
               sliceEvents,
               {
                 headers: {
@@ -380,7 +380,7 @@ async function triggerHistoryCrawl() {
             try {
               await axios.post(
                 // TODO: update to use env var
-                "https://dev.companionintelligence.com/api/events",
+                "https://dev.companionintelligence.com/api/content",
                 slice,
                 {
                   headers: {
@@ -612,7 +612,7 @@ async function triggerManualHistorySync(options = {}) {
         );
 
         await axios.post(
-          "https://dev.companionintelligence.com/api/events",
+          "https://dev.companionintelligence.com/api/content",
           sliceEvents,
           {
             headers: {
@@ -702,6 +702,7 @@ async function triggerManualHistorySync(options = {}) {
     );
     store.dispatch(saveUserSettings());
   }
+}
   
 // Handle scraped data from domain scraper content scripts
 async function handleScrapedData(scrapeResult: ScrapeResult) {
@@ -749,7 +750,7 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
 
   try {
     await axios.post(
-      "https://dev.companionintelligence.com/api/events",
+      "https://dev.companionintelligence.com/api/people",
       events,
       {
         headers: {
@@ -1041,7 +1042,7 @@ async function syncBookmarksToServer() {
 
       try {
         await axios.post(
-          "https://dev.companionintelligence.com/api/events",
+          "https://dev.companionintelligence.com/api/content",
           bookmarkEvents,
           {
             headers: {
@@ -1082,7 +1083,7 @@ async function handleBookmarkCreated(
   try {
     const bookmarkEvent = await createBookmarkEvent(bookmark, "create");
     await axios.post(
-      "https://dev.companionintelligence.com/api/events",
+      "https://dev.companionintelligence.com/api/content",
       bookmarkEvent,
       {
         headers: {
@@ -1115,7 +1116,7 @@ async function handleBookmarkChanged(id: string) {
 
     const bookmarkEvent = await createBookmarkEvent(bookmark, "update");
     await axios.post(
-      "https://dev.companionintelligence.com/api/events",
+      "https://dev.companionintelligence.com/api/content",
       bookmarkEvent,
       {
         headers: {
@@ -1158,7 +1159,7 @@ async function handleBookmarkRemoved(
     };
 
     await axios.post(
-      "https://dev.companionintelligence.com/api/events",
+      "https://dev.companionintelligence.com/api/content",
       bookmarkEvent,
       {
         headers: {
