@@ -105,7 +105,7 @@ function App() {
     linkElement.click();
   };
 
-  const formatDuration = (ms) => {
+  const formatDuration = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
