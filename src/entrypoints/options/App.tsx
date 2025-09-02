@@ -119,7 +119,7 @@ function App() {
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case "success":
         return "#28a745";
