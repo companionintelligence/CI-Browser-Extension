@@ -24,6 +24,9 @@ export default function App() {
     pageWhitelist,
     // pageWhitelistPending,
     url,
+    historySyncInProgress,
+    historySyncStatus,
+    lastHistorySync,
   } = ciState;
 
 
@@ -241,6 +244,27 @@ export default function App() {
     }
   };
 
+  const triggerManualHistorySync = async function () {
+    if (historySyncInProgress) {
+      return;
+    }
+
+    try {
+      const response = await browser.runtime.sendMessage({
+        action: "triggerManualHistorySync",
+        options: {
+          timeRange: 7 * 24 * 60 * 60 * 1000, // Last 7 days
+        },
+      });
+
+      if (!response.success) {
+        console.error("Manual history sync failed:", response.error);
+      }
+    } catch (error) {
+      console.error("Error triggering manual history sync:", error);
+    }
+  };
+
   return (
     <div className={`body ${isMobile ? "mobile" : ""}`}>
       <div className="login-status">
@@ -283,6 +307,30 @@ export default function App() {
           {isMobile ? "Options" : "Open Extension Options"}
         </button> 
         <button onClick={openOptionsPage}>Open Extension Options</button>
+        {!sessionTokenExpired && (
+          <div className="sync-section">
+            <div className="sync-header">
+              <h4>Browser History Sync</h4>
+            </div>
+            <div className="sync-controls">
+              <button
+                onClick={triggerManualHistorySync}
+                disabled={historySyncInProgress}
+                className={historySyncInProgress ? "disabled" : "primary"}
+              >
+                {historySyncInProgress ? "Syncing..." : "Sync Last 7 Days"}
+              </button>
+            </div>
+            {historySyncStatus && (
+              <div className="sync-status">{historySyncStatus}</div>
+            )}
+            {lastHistorySync && (
+              <div className="last-sync">
+                Last sync: {new Date(lastHistorySync).toLocaleString()}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Domain Scraper Status */}
         <div className="domain-scraper-status margin-top-1em">
@@ -359,39 +407,6 @@ export default function App() {
           )}
         </div> 
       </div>
-
-      {/*<div v-if="domainPending" className="crawl-pending">*/}
-      {/*    Your site history is being parsed. You may tag when the process is complete.*/}
-      {/*</div>*/}
-
-      {/*<div v-if="sitePending" className="crawl-pending">*/}
-      {/*    Your page history is being parsed. You may tag when the process is complete.*/}
-      {/*</div>*/}
-
-      {/*<div id="tagging" className="flexbox flex-column flex-x-center content actions"*/}
-      {/*     v-if="(domainWhitelisted === true || siteWhitelisted === true) && $data.loggedIn === true && $data.item.id != null">*/}
-      {/*    <div className="flexbox flex-x-center">*/}
-      {/*        <div className="title">Tag this page</div>*/}
-      {/*        <a className="how-to" href="https://lifescope.io/how-to" target="_blank"><i*/}
-      {/*            className="fa fa-question-circle"></i></a>*/}
-      {/*    </div>*/}
-
-      {/*    <div className="tagging">*/}
-      {/*      <form v-on:submit.prevent="addTag">*/}
-      {/*        <div className="add-tag">*/}
-      {/*          <span>#</span>*/}
-      {/*          <input type="text" placeholder="Add a tag" v-model="tagName"/>*/}
-      {/*          <i className="fa fa-plus" onClick="addTag"></i>*/}
-      {/*        </div>*/}
-      {/*        <div className="tags">*/}
-      {/*          <div v-if="$data.item && $data.item.tags" v-for="tag in $data.item.tags">*/}
-      {/*            <span onClick="searchTag(tag)">#{{tag}}</span>*/}
-      {/*            <i className="delete fa fa-times" onClick="removeTag(tag)"></i>*/}
-      {/*          </div>*/}
-      {/*        </div>*/}
-      {/*      </form>*/}
-      {/*    </div>*/}
-      {/*</div>*/}
     </div>
   );
 }

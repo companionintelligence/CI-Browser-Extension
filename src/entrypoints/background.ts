@@ -7,6 +7,7 @@ import {
   setState,
   loadUserSettings,
   saveUserSettings,
+  addSyncHistoryLog,
 } from "@/store/ciStateSlice";
 import { siteRegex } from "@/utils.ts";
 import type { ScrapeResult } from "@/domainScraper";
@@ -123,7 +124,7 @@ const recordHit = async function (e: any) {
     try {
       await axios.post(
         // TODO: update to use env var
-        "https://dev.companionintelligence.com/api/events",
+        "https://dev.companionintelligence.com/api/content",
         newEvent,
         {
           headers: {
@@ -262,7 +263,7 @@ async function triggerHistoryCrawl() {
           try {
             await axios.post(
               // TODO: update to use env var
-              "https://dev.companionintelligence.com/api/events",
+              "https://dev.companionintelligence.com/api/content",
               sliceEvents,
               {
                 headers: {
@@ -394,7 +395,7 @@ async function triggerHistoryCrawl() {
             try {
               await axios.post(
                 // TODO: update to use env var
-                "https://dev.companionintelligence.com/api/events",
+                "https://dev.companionintelligence.com/api/content",
                 slice,
                 {
                   headers: {
@@ -438,6 +439,282 @@ async function triggerHistoryCrawl() {
   );
 }
 
+async function triggerManualHistorySync(options = {}) {
+  await store.dispatch({
+    type: "loadUserSettings",
+  });
+
+  const state = store.getState().ciState;
+
+  // Check if already syncing
+  if (state.historySyncInProgress) {
+    console.log("History sync already in progress");
+
+    return;
+  }
+
+  // Check authentication
+  const { accessToken } = state;
+  const accessDecoded = accessToken ? jwtDecode(accessToken) : null;
+  const isAuthExpired = accessDecoded
+    ? Date.now() >= accessDecoded.exp * 1000
+    : true;
+
+  if (isAuthExpired) {
+    store.dispatch(
+      setState({
+        historySyncStatus: "Authentication expired. Please log in again.",
+      }),
+    );
+
+    return;
+  }
+
+  const startTime = Date.now();
+  const timeRange = options.timeRange || 7 * 24 * 60 * 60 * 1000; // Default to last 7 days
+  const searchStartTime = Date.now() - timeRange;
+
+  try {
+    // Set sync in progress
+    store.dispatch(
+      setState({
+        historySyncInProgress: true,
+        historySyncStatus: "Starting history sync...",
+      }),
+    );
+
+    store.dispatch(saveUserSettings());
+
+    // Get all history (not just whitelisted domains/pages)
+    store.dispatch(
+      setState({
+        historySyncStatus: "Searching browser history...",
+      }),
+    );
+
+    const allHistoryResults = await fetchAllHistoryResults(searchStartTime);
+
+    if (allHistoryResults.length === 0) {
+      const duration = Date.now() - startTime;
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: "No history found for the selected time range.",
+          lastHistorySync: new Date().toISOString(),
+        }),
+      );
+
+      // Log the sync operation
+      store.dispatch(
+        addSyncHistoryLog({
+          timestamp: new Date().toISOString(),
+          timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+          totalEntries: 0,
+          processedEntries: 0,
+          uploadedEntries: 0,
+          status: "success",
+          error: null,
+          duration: duration,
+        }),
+      );
+
+      store.dispatch(saveUserSettings());
+
+      return;
+    }
+
+    store.dispatch(
+      setState({
+        historySyncStatus: `Processing ${allHistoryResults.length} history entries...`,
+      }),
+    );
+
+    // Get detailed visit information for all history entries
+    const hydratedResults = [];
+    let processed = 0;
+
+    await Promise.all(
+      allHistoryResults.map((item) => {
+        return (async () => {
+          try {
+            const visits = await browser.history.getVisits({
+              url: item.url,
+            });
+
+            for (const visit of visits) {
+              if (visit.visitTime >= searchStartTime) {
+                hydratedResults.push({
+                  ...visit,
+                  url: item.url,
+                });
+              }
+            }
+
+            processed++;
+            if (processed % 100 === 0) {
+              store.dispatch(
+                setState({
+                  historySyncStatus: `Processed ${processed}/${allHistoryResults.length} entries...`,
+                }),
+              );
+            }
+
+            return true;
+          } catch (err) {
+            console.log("Error processing history item:", err);
+
+            return false;
+          }
+        })();
+      }),
+    );
+
+    if (hydratedResults.length === 0) {
+      const duration = Date.now() - startTime;
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: "No visits found for the selected time range.",
+          lastHistorySync: new Date().toISOString(),
+        }),
+      );
+
+      // Log the sync operation
+      store.dispatch(
+        addSyncHistoryLog({
+          timestamp: new Date().toISOString(),
+          timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+          totalEntries: allHistoryResults.length,
+          processedEntries: processed,
+          uploadedEntries: 0,
+          status: "success",
+          error: null,
+          duration: duration,
+        }),
+      );
+
+      store.dispatch(saveUserSettings());
+
+      return;
+    }
+
+    store.dispatch(
+      setState({
+        historySyncStatus: `Uploading ${hydratedResults.length} visits to CI-Server...`,
+      }),
+    );
+
+    // Process and upload in batches
+    let uploaded = 0;
+    let failed = false;
+    let lastError = null;
+
+    for (let i = 0; i < hydratedResults.length; i += SLICE_SIZE) {
+      const slice = hydratedResults.slice(i, i + SLICE_SIZE);
+
+      try {
+        const sliceEvents = await Promise.all(
+          slice.map(async (result) => {
+            return assembleContentAndEvents(
+              result.url,
+              new Date(result.visitTime).toJSON(),
+            );
+          }),
+        );
+
+        await axios.post(
+          "https://dev.companionintelligence.com/api/content",
+          sliceEvents,
+          {
+            headers: {
+              Authorization: `Bearer ${state.accessToken}`,
+              "Content-Type": "application/json",
+            },
+          },
+        );
+
+        uploaded += slice.length;
+        store.dispatch(
+          setState({
+            historySyncStatus: `Uploaded ${uploaded}/${hydratedResults.length} visits...`,
+          }),
+        );
+      } catch (err) {
+        console.log("Error uploading history batch:", err);
+        lastError = err.message;
+        failed = true;
+        break;
+      }
+    }
+
+    const duration = Date.now() - startTime;
+
+    // Log the sync operation
+    const logStatus = failed
+      ? "failed"
+      : uploaded < hydratedResults.length
+        ? "partial"
+        : "success";
+    store.dispatch(
+      addSyncHistoryLog({
+        timestamp: new Date().toISOString(),
+        timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+        totalEntries: allHistoryResults.length,
+        processedEntries: hydratedResults.length,
+        uploadedEntries: uploaded,
+        status: logStatus,
+        error: lastError,
+        duration: duration,
+      }),
+    );
+
+    // Update final status
+    if (failed) {
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: `History sync failed after uploading ${uploaded} visits. Please try again.`,
+        }),
+      );
+    } else {
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: `Successfully synced ${uploaded} visits to CI-Server.`,
+          lastHistorySync: new Date().toISOString(),
+        }),
+      );
+    }
+
+    store.dispatch(saveUserSettings());
+  } catch (error) {
+    console.error("Manual history sync error:", error);
+    const duration = Date.now() - startTime;
+
+    // Log the sync operation as failed
+    store.dispatch(
+      addSyncHistoryLog({
+        timestamp: new Date().toISOString(),
+        timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+        totalEntries: 0,
+        processedEntries: 0,
+        uploadedEntries: 0,
+        status: "failed",
+        error: error.message,
+        duration: duration,
+      }),
+    );
+
+    store.dispatch(
+      setState({
+        historySyncInProgress: false,
+        historySyncStatus: `History sync failed: ${error.message}`,
+      }),
+    );
+    store.dispatch(saveUserSettings());
+  }
+}
+  
 // Handle scraped data from domain scraper content scripts
 async function handleScrapedData(scrapeResult: ScrapeResult) {
   const state = store.getState().ciState;
@@ -489,7 +766,7 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
 
   try {
     await axios.post(
-      "https://dev.companionintelligence.com/api/events",
+      "https://dev.companionintelligence.com/api/people",
       events,
       {
         headers: {
@@ -781,7 +1058,7 @@ async function syncBookmarksToServer() {
 
       try {
         await axios.post(
-          "https://dev.companionintelligence.com/api/events",
+          "https://dev.companionintelligence.com/api/content",
           bookmarkEvents,
           {
             headers: {
@@ -822,7 +1099,7 @@ async function handleBookmarkCreated(
   try {
     const bookmarkEvent = await createBookmarkEvent(bookmark, "create");
     await axios.post(
-      "https://dev.companionintelligence.com/api/events",
+      "https://dev.companionintelligence.com/api/content",
       bookmarkEvent,
       {
         headers: {
@@ -855,7 +1132,7 @@ async function handleBookmarkChanged(id: string) {
 
     const bookmarkEvent = await createBookmarkEvent(bookmark, "update");
     await axios.post(
-      "https://dev.companionintelligence.com/api/events",
+      "https://dev.companionintelligence.com/api/content",
       bookmarkEvent,
       {
         headers: {
@@ -898,7 +1175,7 @@ async function handleBookmarkRemoved(
     };
 
     await axios.post(
-      "https://dev.companionintelligence.com/api/events",
+      "https://dev.companionintelligence.com/api/content",
       bookmarkEvent,
       {
         headers: {
@@ -1095,6 +1372,22 @@ export default defineBackground({
       // onCompleted will not fire when an SPA updates the URL without a full page reload
       browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
 
+      // Listen for manual history sync requests from popup
+      browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === "triggerManualHistorySync") {
+          triggerManualHistorySync(message.options || {})
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Manual history sync failed:", error);
+              sendResponse({ success: false, error: error.message });
+            });
+
+          return true; // Will respond asynchronously
+        }
+      });
+      
       // Set up bookmark sync listeners
       browser.bookmarks.onCreated.addListener(handleBookmarkCreated);
       browser.bookmarks.onChanged.addListener(handleBookmarkChanged);

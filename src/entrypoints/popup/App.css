@@ -221,6 +221,119 @@ button:active {
   }
 }
 
+.sync-section {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-top: 1px solid #333;
+}
+
+.sync-header h4 {
+  margin: 0 0 1rem 0;
+  color: #888;
+  font-size: 0.9em;
+}
+
+.sync-controls {
+  margin-bottom: 1rem;
+}
+
+.sync-status {
+  font-size: 0.85em;
+  color: #666;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background-color: rgba(100, 108, 255, 0.1);
+}
+
+.last-sync {
+  font-size: 0.8em;
+  color: #888;
+  text-align: center;
+}
+
+button.primary {
+  background-color: #646cff;
+  color: white;
+  border-color: #646cff;
+}
+
+button.primary:hover:not(:disabled) {
+  background-color: #535bf2;
+  border-color: #535bf2;
+}
+
+button.danger {
+  background-color: #ff4444;
+  color: white;
+  border-color: #ff4444;
+}
+
+button.danger:hover:not(:disabled) {
+  background-color: #cc3333;
+  border-color: #cc3333;
+}
+
+button.disabled,
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #333;
+  color: #888;
+  border-color: #333;
+}
+
+.margin-bottom-1em {
+  margin-bottom: 1em;
+}
+
+.body {
+  width: 350px;
+  padding: 1rem;
+}
+
+.login-status {
+  text-align: center;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background-color: rgba(100, 108, 255, 0.1);
+}
+
+.login-status a {
+  text-decoration: none;
+  font-weight: 500;
+}
+
+@media (prefers-color-scheme: light) {
+  .sync-section {
+    border-top: 1px solid #ddd;
+  }
+  
+  .sync-header h4 {
+    color: #666;
+  }
+  
+  .sync-status {
+    color: #333;
+    background-color: rgba(100, 108, 255, 0.1);
+  }
+  
+  .last-sync {
+    color: #666;
+  }
+  
+  .login-status {
+    background-color: rgba(100, 108, 255, 0.1);
+  }
+  
+  button.disabled,
+  button:disabled {
+    background-color: #f0f0f0;
+    color: #999;
+    border-color: #ddd;
+  }
+ 
 .domain-scraper-status {
   border-top: 1px solid #444;
   padding-top: 1em;
