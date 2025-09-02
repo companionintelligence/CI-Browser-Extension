@@ -519,29 +519,29 @@ async function handleHighlightedContent(data: {
     throw new Error("URL not in whitelist");
   }
 
-  // Create event structure for highlighted content
-  const highlightEvent = {
-    name: `Highlighted text from ${data.title}`,
-    start_time: data.timestamp,
-    type: "Highlight",
-    content: [
-      {
-        type: "Highlighted Text",
-        mimetype: "text/plain",
-        title: data.title,
-        text: data.selectedText,
-        url: data.url,
-        context:
-          data.contextText !== data.selectedText ? data.contextText : undefined,
-      },
-    ],
+  // Create content structure for highlighted content using the content API endpoint
+  const highlightContent = {
+    type: "Highlighted Text",
+    mimetype: "text/plain",
+    title: data.title,
+    text: data.selectedText,
+    url: data.url,
+    source_url: data.url,
+    created_at: data.timestamp,
+    context:
+      data.contextText !== data.selectedText ? data.contextText : undefined,
+    metadata: {
+      selection_length: data.selectedText.length,
+      page_title: data.title,
+      user_action: "manual_highlight",
+    },
   };
 
   try {
     await axios.post(
-      // TODO: update to use env var
-      "https://dev.companionintelligence.com/api/events",
-      highlightEvent,
+      // Use the content API endpoint instead of events
+      "https://dev.companionintelligence.com/api/content",
+      highlightContent,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -549,9 +549,9 @@ async function handleHighlightedContent(data: {
         },
       },
     );
-    console.log("Highlighted content saved successfully");
+    console.log("Highlighted content saved successfully to content API");
   } catch (error) {
-    console.error("Error posting highlighted content event:", error);
+    console.error("Error posting highlighted content to content API:", error);
     throw error;
   }
 }
