@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { useSelector, useDispatch } from "react-redux";
 import type { RootState } from "@/store";
@@ -9,6 +9,7 @@ import {
   removeDomainWhitelistEntry,
   removePageWhitelistEntry,
 } from "@/store/ciStateSlice.ts";
+import bowser from "bowser";
 
 import { domainRegex, siteRegex } from "@/utils.ts";
 
@@ -18,8 +19,14 @@ function App() {
   const { domainWhitelist, pageWhitelist } = ciState;
   const [invalidDomain, setInvalidDomain] = useState(false);
   const [invalidPage, setInvalidPage] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
-  const addDomainEntry = (e) => {
+  useEffect(() => {
+    const browser_info = bowser.getParser(window.navigator.userAgent);
+    setIsMobile(browser_info.getPlatformType() === "mobile");
+  }, []);
+
+  const addDomainEntry = (e: any) => {
     e.preventDefault();
     const newDomain = e.target.elements["newDomain"].value;
     setInvalidDomain(!domainRegex.test(newDomain));
@@ -28,11 +35,11 @@ function App() {
     }
   };
 
-  const deleteDomainEntry = (domain) => {
+  const deleteDomainEntry = (domain: string) => {
     dispatch(removeDomainWhitelistEntry(domain));
   };
 
-  const addPageEntry = (e) => {
+  const addPageEntry = (e: any) => {
     e.preventDefault();
     const newPage = e.target.elements["newPage"].value;
     setInvalidPage(!siteRegex.test(newPage));
@@ -41,13 +48,13 @@ function App() {
     }
   };
 
-  const deletePageEntry = (page) => {
+  const deletePageEntry = (page: string) => {
     dispatch(removePageWhitelistEntry(page));
   };
 
   return (
     <>
-      <div className="page">
+      <div className={`page ${isMobile ? "mobile" : ""}`}>
         <div className="boxed-group">
           <div className="title">
             Companion Intelligence Browser Extension Options
@@ -92,7 +99,7 @@ function App() {
                       <input
                         type="text"
                         name="newDomain"
-                        placeholder="google.com"
+                        placeholder={isMobile ? "google.com" : "google.com"}
                       />
                     </div>
                     <i className="plus" onClick={addDomainEntry}>
@@ -104,7 +111,7 @@ function App() {
               </form>
               <div className="entries">
                 {domainWhitelist.map((domain) => (
-                  <div className="entry">
+                  <div className="entry" key={domain}>
                     <span>{domain}</span>
                     <i
                       className="delete"
@@ -131,7 +138,11 @@ function App() {
                       <input
                         type="text"
                         name="newPage"
-                        placeholder="https://google.com/search?q=roses"
+                        placeholder={
+                          isMobile
+                            ? "https://google.com/search?q=..."
+                            : "https://google.com/search?q=roses"
+                        }
                       />
                     </div>
                     <i className="plus" onClick={addPageEntry}>
@@ -143,8 +154,14 @@ function App() {
               </form>
               <div className="entries">
                 {pageWhitelist.map((page) => (
-                  <div className="entry">
-                    <span title={page}>{page.slice(0, 40) + "..."}</span>
+                  <div className="entry" key={page}>
+                    <span title={page}>
+                      {isMobile && page.length > 30
+                        ? page.slice(0, 30) + "..."
+                        : page.length > 40
+                          ? page.slice(0, 40) + "..."
+                          : page}
+                    </span>
                     <i className="delete" onClick={() => deletePageEntry(page)}>
                       X
                     </i>

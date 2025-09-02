@@ -1,0 +1,57 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run linting
+      run: npm run lint
+      
+    - name: Run type checking
+      run: npm run compile
+      
+    - name: Build Chrome extension
+      run: npm run build
+      
+    - name: Build Firefox extension
+      run: npm run build:firefox
+      
+    - name: Create store packages
+      run: npm run zip:all
+      
+    - name: Upload Chrome build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: chrome-extension-${{ matrix.node-version }}
+        path: .output/*chrome*
+        retention-days: 30
+        
+    - name: Upload Firefox build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: firefox-extension-${{ matrix.node-version }}
+        path: .output/*firefox*
+        retention-days: 30

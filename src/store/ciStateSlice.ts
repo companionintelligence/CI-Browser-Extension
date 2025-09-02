@@ -18,26 +18,49 @@ export const loadUserSettings = createAsyncThunk(
   },
 );
 
-const initialState = {
-  accessToken: null,
-  sessionToken: null,
-  domainWhitelist: [],
-  domainWhitelistPending: {},
-  domainWhitelistHistory: [],
-  pageWhitelist: [],
-  pageWhitelistPending: {},
-  pageWhitelistHistory: [],
-  url: null,
-  domain: null,
-  lastUrl: null,
-};
+interface CiState {
+  accessToken: string | null;
+  sessionToken: string | null;
+  domainWhitelist: string[];
+  domainWhitelistPending: Record<string, any>;
+  domainWhitelistHistory: string[];
+  pageWhitelist: string[];
+  pageWhitelistPending: Record<string, any>;
+  pageWhitelistHistory: string[];
+  url: string | null;
+  domain: string | null;
+  lastUrl: string | null;
+  refreshing: boolean;
+}
 
 export const ciStateSlice = createSlice({
   name: "ciState",
   initialState,
   reducers: {
     setState: (state, action) => {
-      return { ...state, ...action.payload };
+      return { ...state, ...action.payload }; 
+      
+export const ciStateSlice = createSlice({
+  name: "ciState",
+  initialState: {
+    accessToken: null,
+    sessionToken: null,
+    domainWhitelist: [],
+    domainWhitelistPending: {},
+    domainWhitelistHistory: [],
+    pageWhitelist: [],
+    pageWhitelistPending: {},
+    pageWhitelistHistory: [],
+    url: null,
+    domain: null,
+    lastUrl: null,
+    refreshing: false,
+  } as CiState,
+  reducers: {
+    setState: (state, action) => {
+      const payload = action.payload as Partial<CiState>;
+
+      return { ...state, ...payload };
     },
     addDomainWhitelistEntry(state, action) {
       let newDomainWhitelist = state.domainWhitelist;
@@ -106,6 +129,10 @@ export const ciStateSlice = createSlice({
         action.payload = `https://${action.payload}`;
       }
 
+      if (!parsed) {
+        return state;
+      }
+
       parsed.hash = "";
       const strippedUrl = parsed.toString();
 
@@ -142,8 +169,12 @@ export const ciStateSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(loadUserSettings.fulfilled, (state, action) => {
-      for (const [key, value] of Object.entries(action.payload)) {
-        state[key] = value;
+      for (const [key, value] of Object.entries(
+        action.payload as Record<string, any>,
+      )) {
+        if (key in state) {
+          (state as any)[key] = value;
+        }
       }
     });
   },
