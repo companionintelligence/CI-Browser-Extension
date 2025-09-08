@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 
 import { useSelector, useDispatch } from "react-redux";
-import type { RootState } from "@/store";
 import "./App.css";
 import {
   addDomainWhitelistEntry,
@@ -25,9 +24,6 @@ function App() {
     lastHistorySync,
     syncHistoryLogs,
   } = ciState;
-  const { domainWhitelist, pageWhitelist } = ciState;
-  const [invalidDomain, setInvalidDomain] = useState(false);
-  const [invalidPage, setInvalidPage] = useState(false);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
 

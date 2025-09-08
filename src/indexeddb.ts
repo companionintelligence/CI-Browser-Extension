@@ -130,7 +130,7 @@ class Database {
       const store = transaction.objectStore("surfing_records");
       const index = store.index("synced");
 
-      const request = index.getAll(IDBKeyRange.only(false));
+      const request = index.getAll();
 
       request.onsuccess = () => {
         resolve(request.result);
@@ -153,7 +153,7 @@ class Database {
       const store = transaction.objectStore("location_records");
       const index = store.index("synced");
 
-      const request = index.getAll(IDBKeyRange.only(false));
+      const request = index.getAll();
 
       request.onsuccess = () => {
         resolve(request.result);
@@ -309,7 +309,7 @@ class Database {
   }> {
     await this.init();
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const transaction = this.db!.transaction(
         ["surfing_records", "location_records"],
         "readonly",
@@ -343,16 +343,12 @@ class Database {
         checkComplete();
       };
 
-      surfingStore.index("synced").count(IDBKeyRange.only(false)).onsuccess = (
-        e,
-      ) => {
+      surfingStore.index("synced").count().onsuccess = (e) => {
         stats.unsyncedSurfing = (e.target as IDBRequest).result;
         checkComplete();
       };
 
-      locationStore.index("synced").count(IDBKeyRange.only(false)).onsuccess = (
-        e,
-      ) => {
+      locationStore.index("synced").count().onsuccess = (e) => {
         stats.unsyncedLocation = (e.target as IDBRequest).result;
         checkComplete();
       };

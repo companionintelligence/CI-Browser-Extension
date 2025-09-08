@@ -10,9 +10,8 @@ import {
   addSyncHistoryLog,
 } from "@/store/ciStateSlice";
 import { siteRegex } from "@/utils.ts";
-import type { ScrapeResult } from "@/domainScraper";
 import bowser from "bowser";
-import { ScrapeResult } from "@/domainScraper";
+import type { ScrapeResult } from "@/domainScraper";
 import type { SurfingRecord } from "@/indexeddb";
 import { database } from "@/indexeddb";
 import { locationService } from "@/locationService";
@@ -21,7 +20,7 @@ const SLICE_SIZE = 50;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
 
 // Detect mobile environment
-const browser_info = bowser.getParser(window.navigator.userAgent);
+const browser_info = bowser.getParser(navigator.userAgent);
 const isMobile = browser_info.getPlatformType() === "mobile";
 
 // Adjust slice size for mobile to reduce memory usage
@@ -124,7 +123,7 @@ const recordHit = async function (e: any) {
     try {
       await axios.post(
         // TODO: update to use env var
-        "https://dev.companionintelligence.com/api/content",
+        "https://dev.companionintelligence.com/api/events",
         newEvent,
         {
           headers: {
@@ -263,7 +262,7 @@ async function triggerHistoryCrawl() {
           try {
             await axios.post(
               // TODO: update to use env var
-              "https://dev.companionintelligence.com/api/content",
+              "https://dev.companionintelligence.com/api/events",
               sliceEvents,
               {
                 headers: {
@@ -395,7 +394,7 @@ async function triggerHistoryCrawl() {
             try {
               await axios.post(
                 // TODO: update to use env var
-                "https://dev.companionintelligence.com/api/content",
+                "https://dev.companionintelligence.com/api/events",
                 slice,
                 {
                   headers: {
@@ -623,7 +622,7 @@ async function triggerManualHistorySync(options = {}) {
         );
 
         await axios.post(
-          "https://dev.companionintelligence.com/api/content",
+          "https://dev.companionintelligence.com/api/events",
           sliceEvents,
           {
             headers: {
@@ -714,7 +713,7 @@ async function triggerManualHistorySync(options = {}) {
     store.dispatch(saveUserSettings());
   }
 }
-  
+
 // Handle scraped data from domain scraper content scripts
 async function handleScrapedData(scrapeResult: ScrapeResult) {
   const state = store.getState().ciState;
@@ -786,6 +785,7 @@ async function assembleContentAndEvents(url: string, time?: string) {
   const newContent: any[] = [];
 
   await new Promise<void>(function (resolve) {
+    console.log("calling iframely for assembleContentAndEvents", url);
     try {
       axios
         .get(
@@ -871,6 +871,19 @@ async function assembleContentAndEvents(url: string, time?: string) {
           }
 
           resolve();
+        })
+        .catch((error) => {
+          console.log(
+            "error hitting iframely for assembleContentAndEvents",
+            error,
+          );
+          newPageContent = {
+            type: "web-page",
+            mimetype: "text/html",
+            url: url,
+          };
+          newContent.push(newPageContent);
+          resolve(newContent);
         });
     } catch (error) {
       console.log("error hitting iframely", error);
@@ -899,7 +912,7 @@ async function getAllBookmarks(): Promise<
 
   function collectBookmarks(nodes: browser.bookmarks.BookmarkTreeNode[]) {
     for (const node of nodes) {
-      if (node.url) {
+      if (node.url && /^(http(s)?:\/\/)/.test(node.url)) {
         // This is an actual bookmark (not a folder)
         allBookmarks.push(node);
       }
@@ -937,6 +950,7 @@ async function createBookmarkEvent(
   // Try to get page metadata for the bookmark URL
   await new Promise(function (resolve) {
     try {
+      console.log("calling iframely for createBookmarkEvent", bookmark.url);
       axios
         .get(
           "https://dev.companionintelligence.com/embed/iframely?url=" +
@@ -1056,9 +1070,11 @@ async function syncBookmarksToServer() {
         slice.map((bookmark) => createBookmarkEvent(bookmark, "sync")),
       );
 
+      console.log("posting bookmark events", bookmarkEvents);
+      console.log("accessToken", accessToken);
       try {
         await axios.post(
-          "https://dev.companionintelligence.com/api/content",
+          "https://dev.companionintelligence.com/api/events",
           bookmarkEvents,
           {
             headers: {
@@ -1099,7 +1115,7 @@ async function handleBookmarkCreated(
   try {
     const bookmarkEvent = await createBookmarkEvent(bookmark, "create");
     await axios.post(
-      "https://dev.companionintelligence.com/api/content",
+      "https://dev.companionintelligence.com/api/events",
       bookmarkEvent,
       {
         headers: {
@@ -1132,7 +1148,7 @@ async function handleBookmarkChanged(id: string) {
 
     const bookmarkEvent = await createBookmarkEvent(bookmark, "update");
     await axios.post(
-      "https://dev.companionintelligence.com/api/content",
+      "https://dev.companionintelligence.com/api/events",
       bookmarkEvent,
       {
         headers: {
@@ -1175,7 +1191,7 @@ async function handleBookmarkRemoved(
     };
 
     await axios.post(
-      "https://dev.companionintelligence.com/api/content",
+      "https://dev.companionintelligence.com/api/events",
       bookmarkEvent,
       {
         headers: {
@@ -1387,7 +1403,7 @@ export default defineBackground({
           return true; // Will respond asynchronously
         }
       });
-      
+
       // Set up bookmark sync listeners
       browser.bookmarks.onCreated.addListener(handleBookmarkCreated);
       browser.bookmarks.onChanged.addListener(handleBookmarkChanged);

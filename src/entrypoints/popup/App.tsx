@@ -29,7 +29,6 @@ export default function App() {
     lastHistorySync,
   } = ciState;
 
-
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
     setIsMobile(browser_info.getPlatformType() === "mobile");
@@ -51,11 +50,10 @@ export default function App() {
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    
     // Mobile detection
     const browser_info = bowser.getParser(window.navigator.userAgent);
     setIsMobile(browser_info.getPlatformType() === "mobile");
-    
+
     // Load recent scraper data
     if (domain) {
       browser.storage.local.get(null).then((allData) => {
@@ -72,7 +70,7 @@ export default function App() {
   }, [domain]);
 
   const [scraperData, setScraperData] = useState(null);
-  
+
   const domainWhitelisted = useMemo(() => {
     let domainWhitelistHit = false;
 
@@ -302,11 +300,10 @@ export default function App() {
               {isMobile ? "Start tracking Page" : "Start tracking this Page"}
             </button>
           )}
-        </div> 
+        </div>
         <button onClick={openOptionsPage}>
           {isMobile ? "Options" : "Open Extension Options"}
-        </button> 
-        <button onClick={openOptionsPage}>Open Extension Options</button>
+        </button>
         {!sessionTokenExpired && (
           <div className="sync-section">
             <div className="sync-header">
@@ -405,7 +402,7 @@ export default function App() {
               </details>
             </div>
           )}
-        </div> 
+        </div>
       </div>
     </div>
   );

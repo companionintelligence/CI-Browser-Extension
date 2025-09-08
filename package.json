@@ -39,7 +39,7 @@
     "lint:fix": "eslint --fix",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
     "prepare:store": "npm run clean && npm run zip:all",
     "check:types": "tsc --noEmit --skipLibCheck"
   },

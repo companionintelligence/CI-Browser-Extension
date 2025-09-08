@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom';
+import "@testing-library/jest-dom";
 
 // Mock browser APIs
 (global as any).browser = {
@@ -26,19 +26,20 @@ const originalURL = global.URL;
 // Create a proper URL constructor mock
 (global as any).URL = class MockURL {
   href: string;
-  hash: string = '';
-  
+
+  hash: string = "";
+
   constructor(url: string, base?: string) {
     this.href = base ? new originalURL(url, base).href : url;
   }
-  
+
   toString() {
     return this.href;
   }
-  
+
   static parse = jest.fn().mockReturnValue({
-    hash: '',
-    toString: () => 'https://example.com/page',
+    hash: "",
+    toString: () => "https://example.com/page",
   });
 };
 
