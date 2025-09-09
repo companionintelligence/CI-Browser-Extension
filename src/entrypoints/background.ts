@@ -123,7 +123,7 @@ const recordHit = async function (e: any) {
     try {
       await axios.post(
         // TODO: update to use env var
-        "https://dev.companionintelligence.com/api/events",
+        `https://${state.serverDomain}/api/events`,
         newEvent,
         {
           headers: {
@@ -262,7 +262,7 @@ async function triggerHistoryCrawl() {
           try {
             await axios.post(
               // TODO: update to use env var
-              "https://dev.companionintelligence.com/api/events",
+              `https://${state.serverDomain}/api/events`,
               sliceEvents,
               {
                 headers: {
@@ -394,7 +394,7 @@ async function triggerHistoryCrawl() {
             try {
               await axios.post(
                 // TODO: update to use env var
-                "https://dev.companionintelligence.com/api/events",
+                `https://${state.serverDomain}/api/events`,
                 slice,
                 {
                   headers: {
@@ -622,7 +622,7 @@ async function triggerManualHistorySync(options = {}) {
         );
 
         await axios.post(
-          "https://dev.companionintelligence.com/api/events",
+          `https://${state.serverDomain}/api/events`,
           sliceEvents,
           {
             headers: {
@@ -717,7 +717,7 @@ async function triggerManualHistorySync(options = {}) {
 // Handle scraped data from domain scraper content scripts
 async function handleScrapedData(scrapeResult: ScrapeResult) {
   const state = store.getState().ciState;
-  const { accessToken } = state;
+  const { accessToken, serverDomain } = state;
 
   if (!accessToken) {
     console.log("No access token, skipping scraped data upload");
@@ -764,16 +764,12 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
   }
 
   try {
-    await axios.post(
-      "https://dev.companionintelligence.com/api/people",
-      events,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
+    await axios.post(`https://${serverDomain}/api/people`, events, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-    );
+    });
     console.log(`Successfully uploaded ${events.length} scraped data events`);
   } catch (error) {
     console.error("Error uploading scraped data:", error);
@@ -783,13 +779,14 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
 async function assembleContentAndEvents(url: string, time?: string) {
   let newThumbnailContent: any, newPageContent: any, newMediaContent: any;
   const newContent: any[] = [];
+  const state = store.getState().ciState;
+  const { serverDomain } = state;
 
   await new Promise<void>(function (resolve) {
-    console.log("calling iframely for assembleContentAndEvents", url);
     try {
       axios
         .get(
-          "https://dev.companionintelligence.com/embed/iframely?url=" +
+          `https://${serverDomain}/embed/iframely?url=` +
             encodeURIComponent(url),
         )
         .then((result) => {
@@ -946,6 +943,8 @@ async function createBookmarkEvent(
 }> {
   let newThumbnailContent, newPageContent, newMediaContent;
   const newContent = [];
+  const state = store.getState().ciState;
+  const { serverDomain } = state;
 
   // Try to get page metadata for the bookmark URL
   await new Promise(function (resolve) {
@@ -953,7 +952,7 @@ async function createBookmarkEvent(
       console.log("calling iframely for createBookmarkEvent", bookmark.url);
       axios
         .get(
-          "https://dev.companionintelligence.com/embed/iframely?url=" +
+          `https://${serverDomain}/embed/iframely?url=` +
             encodeURIComponent(bookmark.url!),
         )
         .then((result) => {
@@ -1051,7 +1050,7 @@ async function createBookmarkEvent(
 
 async function syncBookmarksToServer() {
   const state = store.getState().ciState;
-  const { accessToken } = state;
+  const { accessToken, serverDomain } = state;
 
   if (!accessToken) {
     console.log("No access token available for bookmark sync");
@@ -1073,16 +1072,12 @@ async function syncBookmarksToServer() {
       console.log("posting bookmark events", bookmarkEvents);
       console.log("accessToken", accessToken);
       try {
-        await axios.post(
-          "https://dev.companionintelligence.com/api/events",
-          bookmarkEvents,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
+        await axios.post(`https://${serverDomain}/api/events`, bookmarkEvents, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
           },
-        );
+        });
         console.log(`Synced batch of ${slice.length} bookmarks`);
       } catch (err) {
         console.log("Error posting bookmark events", err);
@@ -1106,7 +1101,7 @@ async function handleBookmarkCreated(
   bookmark: browser.bookmarks.BookmarkTreeNode,
 ) {
   const state = store.getState().ciState;
-  const { accessToken } = state;
+  const { accessToken, serverDomain } = state;
 
   if (!accessToken || !bookmark.url) {
     return; // Skip folders or if not authenticated
@@ -1114,16 +1109,12 @@ async function handleBookmarkCreated(
 
   try {
     const bookmarkEvent = await createBookmarkEvent(bookmark, "create");
-    await axios.post(
-      "https://dev.companionintelligence.com/api/events",
-      bookmarkEvent,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
+    await axios.post(`https://${serverDomain}/api/events`, bookmarkEvent, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-    );
+    });
     console.log("Synced newly created bookmark:", bookmark.title);
   } catch (error) {
     console.error("Error syncing created bookmark:", error);
@@ -1132,7 +1123,7 @@ async function handleBookmarkCreated(
 
 async function handleBookmarkChanged(id: string) {
   const state = store.getState().ciState;
-  const { accessToken } = state;
+  const { accessToken, serverDomain } = state;
 
   if (!accessToken) {
     return;
@@ -1147,16 +1138,12 @@ async function handleBookmarkChanged(id: string) {
     }
 
     const bookmarkEvent = await createBookmarkEvent(bookmark, "update");
-    await axios.post(
-      "https://dev.companionintelligence.com/api/events",
-      bookmarkEvent,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
+    await axios.post(`https://${serverDomain}/api/events`, bookmarkEvent, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-    );
+    });
     console.log("Synced updated bookmark:", bookmark.title);
   } catch (error) {
     console.error("Error syncing updated bookmark:", error);
@@ -1168,7 +1155,7 @@ async function handleBookmarkRemoved(
   removeInfo: browser.bookmarks.BookmarkRemoveInfo,
 ) {
   const state = store.getState().ciState;
-  const { accessToken } = state;
+  const { accessToken, serverDomain } = state;
 
   if (!accessToken) {
     return;
@@ -1190,16 +1177,12 @@ async function handleBookmarkRemoved(
       bookmark_id: id,
     };
 
-    await axios.post(
-      "https://dev.companionintelligence.com/api/events",
-      bookmarkEvent,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
+    await axios.post(`https://${serverDomain}/api/events`, bookmarkEvent, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-    );
+    });
     console.log("Synced removed bookmark:", removeInfo.node.title);
   } catch (error) {
     console.error("Error syncing removed bookmark:", error);
@@ -1243,10 +1226,13 @@ export default defineBackground({
       accessToken: null,
       sessionToken: null,
       refreshing: false,
+      serverDomain: "dev.companionintelligence.com",
     };
+    const state = store.getState().ciState;
+    const { serverDomain, refreshing } = state;
 
     const refreshAccessToken = async () => {
-      if (store.getState().ciState.refreshing) {
+      if (refreshing) {
         return;
       }
 
@@ -1255,7 +1241,7 @@ export default defineBackground({
         .sessionToken;
       try {
         const data: AuthResponse = await fetchJson(
-          "https://dev.companionintelligence.com/api/authenticate/refresh",
+          `https://${serverDomain}/api/authenticate/refresh`,
           {
             method: "POST",
             headers: {
@@ -1269,7 +1255,7 @@ export default defineBackground({
         store.dispatch(setState({ sessionToken: data.sessionToken }));
         const decoded = jwtDecode(data.accessToken);
         browser.cookies.set({
-          url: "https://dev.companionintelligence.com",
+          url: `https://${serverDomain}`,
           expirationDate: decoded.exp,
           name: `CI_${ACCESS_TOKEN_KEY}`,
           value: data.accessToken,
@@ -1285,7 +1271,7 @@ export default defineBackground({
 
     setInterval(async () => {
       browser.cookies
-        .getAll({ url: "https://dev.companionintelligence.com" })
+        .getAll({ url: `https://${serverDomain}` })
         .then(async (result) => {
           const accessTokenCookie = result.find(
             (cookie) => cookie.name === "CI_accessToken",
@@ -1352,6 +1338,7 @@ export default defineBackground({
       store.dispatch(loadUserSettings());
 
       const existingKeys = Object.keys(store.getState().ciState);
+      console.log("existingKeys", existingKeys);
       const toSet = Object.keys(storageDefaults)
         .filter((key) => existingKeys.indexOf(key) < 0)
         .reduce((obj: any, key) => {
@@ -1359,6 +1346,7 @@ export default defineBackground({
 
           return obj;
         }, {});
+      console.log("toSet", toSet);
 
       store.dispatch(setState(toSet));
 

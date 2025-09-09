@@ -33,6 +33,7 @@ interface CiState {
   domain: string | null;
   lastUrl: string | null;
   refreshing: boolean;
+  serverDomain: string;
 }
 
 // Removed incomplete duplicate ciStateSlice declaration and reducer
@@ -55,6 +56,7 @@ export const ciStateSlice = createSlice({
     lastHistorySync: null,
     syncHistoryLogs: [],
     refreshing: false,
+    serverDomain: "dev.companionintelligence.com",
   } as CiState,
   reducers: {
     setState: (state, action) => {

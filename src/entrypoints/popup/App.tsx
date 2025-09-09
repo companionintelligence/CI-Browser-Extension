@@ -27,6 +27,7 @@ export default function App() {
     historySyncInProgress,
     historySyncStatus,
     lastHistorySync,
+    serverDomain,
   } = ciState;
 
   useEffect(() => {
@@ -266,7 +267,7 @@ export default function App() {
   return (
     <div className={`body ${isMobile ? "mobile" : ""}`}>
       <div className="login-status">
-        <a href="https://dev.companionintelligence.com" target="_blank">
+        <a href={`https://${serverDomain}`} target="_blank">
           {sessionTokenExpired
             ? "Log in to continue"
             : "Logged in to Companion Intelligence"}
@@ -361,7 +362,7 @@ export default function App() {
                     ).map((targetUrl, idx) => (
                       <li key={idx}>
                         {targetUrl
-                          .replace(/https?:\/\/[^\/]+/, "")
+                          .replace(/https?:\/\/[^/]+/, "")
                           .replace("*", "any-path")}
                       </li>
                     ))}

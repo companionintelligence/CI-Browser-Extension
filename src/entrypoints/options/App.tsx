@@ -8,6 +8,7 @@ import {
   removeDomainWhitelistEntry,
   removePageWhitelistEntry,
   clearSyncHistoryLogs,
+  setState,
 } from "@/store/ciStateSlice.ts";
 import bowser from "bowser";
 
@@ -23,6 +24,7 @@ function App() {
     historySyncStatus,
     lastHistorySync,
     syncHistoryLogs,
+    serverDomain,
   } = ciState;
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
@@ -30,6 +32,7 @@ function App() {
   const [invalidDomain, setInvalidDomain] = useState(false);
   const [invalidPage, setInvalidPage] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [domain, setDomain] = useState(serverDomain);
 
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
@@ -60,6 +63,14 @@ function App() {
 
   const deletePageEntry = (page: string) => {
     dispatch(removePageWhitelistEntry(page));
+  };
+
+  const changeDomain = () => {
+    dispatch(setState({ serverDomain: domain }));
+  };
+
+  const handleDomainChange = (e: any) => {
+    setDomain(e.target.value);
   };
 
   const triggerHistorySync = async () => {
@@ -163,6 +174,32 @@ function App() {
               gathered using this extension, but you can delete all indexed web
               visits from that browser in the CI app.
             </p>
+            <div className="serverDomain">
+              <h3>CI Server URL</h3>
+              <div>
+                <p>Enter the domain that your CI server is accessible at</p>
+              </div>
+              <form onSubmit={changeDomain}>
+                <div className="add-entry">
+                  <div className="adder">
+                    <div className="text-box">
+                      <input
+                        value={domain}
+                        onChange={handleDomainChange}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            changeDomain(e);
+                          }
+                        }}
+                      />
+                    </div>
+                    <button className="primary" onClick={changeDomain}>
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
             <div className="domainWhitelist">
               <h3>Tracked Domain List</h3>
               <div>

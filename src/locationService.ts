@@ -1,3 +1,5 @@
+import { store } from "./store";
+
 import type { LocationRecord } from "./indexeddb";
 import { database } from "./indexeddb";
 
@@ -172,10 +174,9 @@ class LocationService {
   async syncLocationData(): Promise<void> {
     try {
       // Import store to access auth token
-      const { store } = await import("./store");
-      const state = store.getState().ciState;
+      const { accessToken, serverDomain } = store.getState().ciState;
 
-      if (!state.accessToken) {
+      if (!accessToken) {
         console.log("No access token available, skipping location sync");
 
         return;
@@ -205,16 +206,12 @@ class LocationService {
       const axios = (await import("axios")).default;
 
       try {
-        await axios.post(
-          "https://dev.companionintelligence.com/api/places",
-          locationEvents,
-          {
-            headers: {
-              Authorization: `Bearer ${state.accessToken}`,
-              "Content-Type": "application/json",
-            },
+        await axios.post(`https://${serverDomain}/api/places`, locationEvents, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
           },
-        );
+        });
 
         // Mark records as synced
         for (const record of unsyncedRecords) {
