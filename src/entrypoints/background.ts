@@ -210,7 +210,7 @@ async function triggerHistoryCrawl() {
         });
 
         const hydratedAndFilteredResults: any[] = [];
-        const regex = new RegExp(domainWhitelistItemKey);
+        const regex = new RegExp(`^https://${domainWhitelistItemKey}`);
         await Promise.all(
           baseResults.map((item) => {
             return new Promise<void>((resolve, reject) => {
@@ -795,6 +795,7 @@ async function assembleContentAndEvents(url: string, time?: string) {
           newPageContent = {
             type: "Web Page",
             mimetype: "text/html",
+            url: data.meta.canonical || url,
             title: undefined as string | undefined,
           };
 

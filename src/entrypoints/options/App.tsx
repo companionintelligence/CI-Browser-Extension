@@ -33,6 +33,8 @@ function App() {
   const [invalidPage, setInvalidPage] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [domain, setDomain] = useState(serverDomain);
+  const [newDomain, setNewDomain] = useState('');
+  const [newPage, setNewPage] = useState('');
 
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
@@ -41,11 +43,12 @@ function App() {
 
   const addDomainEntry = (e: any) => {
     e.preventDefault();
-    const newDomain = e.target.elements["newDomain"].value;
+    console.log('newDomain', newDomain)
     setInvalidDomain(!domainRegex.test(newDomain));
     if (domainRegex.test(newDomain)) {
       dispatch(addDomainWhitelistEntry(newDomain));
     }
+    setNewDomain('');
   };
 
   const deleteDomainEntry = (domain: string) => {
@@ -54,11 +57,11 @@ function App() {
 
   const addPageEntry = (e: any) => {
     e.preventDefault();
-    const newPage = e.target.elements["newPage"].value;
     setInvalidPage(!siteRegex.test(newPage));
     if (siteRegex.test(newPage)) {
       dispatch(addPageWhitelistEntry(newPage));
     }
+    setNewPage('');
   };
 
   const deletePageEntry = (page: string) => {
@@ -72,6 +75,14 @@ function App() {
   const handleDomainChange = (e: any) => {
     setDomain(e.target.value);
   };
+
+  const handleNewDomainChange = (e: any) => {
+    setNewDomain(e.target.value);
+  }
+
+  const handleNewPageChange = (e: any) => {
+    setNewPage(e.target.value);
+  }
 
   const triggerHistorySync = async () => {
     if (historySyncInProgress) {
@@ -212,6 +223,13 @@ function App() {
                       <input
                         type="text"
                         name="newDomain"
+                        value={newDomain}
+                        onChange={handleNewDomainChange}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            addDomainEntry(e);
+                          }
+                        }}
                         placeholder={isMobile ? "google.com" : "google.com"}
                       />
                     </div>
@@ -251,6 +269,13 @@ function App() {
                       <input
                         type="text"
                         name="newPage"
+                        value={newPage}
+                        onChange={handleNewPageChange}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            addPageEntry(e);
+                          }
+                        }}
                         placeholder={
                           isMobile
                             ? "https://google.com/search?q=..."
