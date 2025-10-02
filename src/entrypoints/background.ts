@@ -121,13 +121,14 @@ const recordHit = async function (e: any) {
     }
 
     try {
+      const { accessToken } = store.getState().ciState;
       await axios.post(
         // TODO: update to use env var
         `https://${state.serverDomain}/api/events`,
         newEvent,
         {
           headers: {
-            Authorization: `Bearer ${state.accessToken}`,
+            Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
         },
@@ -260,13 +261,14 @@ async function triggerHistoryCrawl() {
             }),
           );
           try {
+            const { accessToken } = store.getState().ciState;
             await axios.post(
               // TODO: update to use env var
               `https://${state.serverDomain}/api/events`,
               sliceEvents,
               {
                 headers: {
-                  Authorization: `Bearer ${state.accessToken}`,
+                  Authorization: `Bearer ${accessToken}`,
                   "Content-Type": "application/json",
                 },
               },
@@ -392,13 +394,14 @@ async function triggerHistoryCrawl() {
           );
           if (slice.length > 0) {
             try {
+              const { accessToken } = store.getState().ciState;
               await axios.post(
                 // TODO: update to use env var
                 `https://${state.serverDomain}/api/events`,
                 slice,
                 {
                   headers: {
-                    Authorization: `Bearer ${state.accessToken}`,
+                    Authorization: `Bearer ${accessToken}`,
                     "Content-Type": "application/json",
                   },
                 },
@@ -491,7 +494,11 @@ async function triggerManualHistorySync(options = {}) {
       }),
     );
 
-    const allHistoryResults = await fetchAllHistoryResults(searchStartTime);
+    const allHistoryResults = await browser.history.search({
+      text: '',
+      startTime: searchStartTime,
+      maxResults: 1000000,
+    });
 
     if (allHistoryResults.length === 0) {
       const duration = Date.now() - startTime;
@@ -621,12 +628,14 @@ async function triggerManualHistorySync(options = {}) {
           }),
         );
 
+        const { accessToken } = store.getState().ciState;
+
         await axios.post(
           `https://${state.serverDomain}/api/events`,
           sliceEvents,
           {
             headers: {
-              Authorization: `Bearer ${state.accessToken}`,
+              Authorization: `Bearer ${accessToken}`,
               "Content-Type": "application/json",
             },
           },
@@ -1072,6 +1081,7 @@ async function syncBookmarksToServer() {
 
       console.log("posting bookmark events", bookmarkEvents);
       console.log("accessToken", accessToken);
+      const { accessToken } = store.getState().ciState;
       try {
         await axios.post(`https://${serverDomain}/api/events`, bookmarkEvents, {
           headers: {
@@ -1308,8 +1318,10 @@ export default defineBackground({
           const accessDecoded = accessToken
             ? (jwtDecode(accessToken) as any)
             : null;
+          // We want to refresh the access token before it actually expires.
+          // Otherwise, it can expire in the middle of a batch of upload requests
           const isAuthExpired = accessDecoded
-            ? Date.now() >= accessDecoded.exp * 1000
+            ? Date.now() >= (accessDecoded.exp - 5) * 1000
             : true;
           const sessionDecoded = sessionToken
             ? (jwtDecode(sessionToken) as any)
