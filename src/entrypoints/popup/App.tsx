@@ -20,9 +20,9 @@ export default function App() {
     sessionToken,
     domain,
     domainWhitelist,
-    // domainWhitelistPending,
+    domainWhitelistPending,
     pageWhitelist,
-    // pageWhitelistPending,
+    pageWhitelistPending,
     url,
     historySyncInProgress,
     historySyncStatus,
@@ -85,8 +85,11 @@ export default function App() {
       }
     });
 
-    return domainWhitelistHit;
-  }, [domainWhitelist]);
+    const domainWhitelistPendingHit =
+      Object.keys(domainWhitelistPending).indexOf(domain) > -1;
+
+    return { hit: domainWhitelistHit, pending: domainWhitelistPendingHit };
+  }, [domainWhitelist, domainWhitelistPending]);
 
   const sessionTokenExpired = useMemo(() => {
     return sessionToken
@@ -96,6 +99,7 @@ export default function App() {
 
   const pageWhitelisted = useMemo(() => {
     let pageWhitelistHit = false;
+    let pageWhitelistPendingHit = false;
 
     pageWhitelist.forEach((item: string) => {
       const parsedUrl = URL.parse(item);
@@ -114,8 +118,25 @@ export default function App() {
       }
     });
 
-    return pageWhitelistHit;
-  }, [pageWhitelist]);
+    Object.keys(pageWhitelistPending).forEach((item: string) => {
+      const parsedUrl = URL.parse(item);
+
+      if (parsedUrl) {
+        parsedUrl.hash = "";
+
+        if (
+          siteRegex.test(item) &&
+          new RegExp(parsedUrl.toString().replace("?", "\\?")).test(url)
+        ) {
+          pageWhitelistPendingHit = true;
+
+          return;
+        }
+      }
+    });
+
+    return { hit: pageWhitelistHit, pending: pageWhitelistPendingHit };
+  }, [pageWhitelist, pageWhitelistPending]);
 
   // const domainPending = useMemo(() => {
   //   let domainWhitelistHit = false;
@@ -275,17 +296,27 @@ export default function App() {
       </div>
       <div className="button-container">
         <div className="horizontal-container">
-          {domainWhitelisted && (
+          {domainWhitelisted.hit && domainWhitelisted.pending && (
+            <button disabled className="disabled">
+              History being processed...
+            </button>
+          )}
+          {domainWhitelisted.hit && !domainWhitelisted.pending && (
             <button className="danger" onClick={deleteDomainWhitelistEntryCall}>
               {isMobile ? "Stop tracking Site" : "Stop tracking this Site"}
             </button>
           )}
-          {!domainWhitelisted && (
+          {!domainWhitelisted.hit && (
             <button className="primary" onClick={addDomainWhitelistEntryCall}>
               {isMobile ? "Start tracking Site" : "Start tracking this Site"}
             </button>
           )}
-          {pageWhitelisted && (
+          {pageWhitelisted.hit && pageWhitelisted.pending && (
+            <button disabled className="disabled">
+              History being processed...
+            </button>
+          )}
+          {pageWhitelisted.hit && !pageWhitelisted.pending && (
             <button
               className="danger margin-bottom-1em"
               onClick={deletePageWhitelistEntryCall}
@@ -293,7 +324,7 @@ export default function App() {
               {isMobile ? "Stop tracking Page" : "Stop tracking this Page"}
             </button>
           )}
-          {!pageWhitelisted && (
+          {!pageWhitelisted.hit && (
             <button
               className="primary margin-bottom-1em"
               onClick={addPageWhitelistEntryCall}

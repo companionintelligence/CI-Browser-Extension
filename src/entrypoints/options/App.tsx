@@ -33,8 +33,8 @@ function App() {
   const [invalidPage, setInvalidPage] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [domain, setDomain] = useState(serverDomain);
-  const [newDomain, setNewDomain] = useState('');
-  const [newPage, setNewPage] = useState('');
+  const [newDomain, setNewDomain] = useState("");
+  const [newPage, setNewPage] = useState("");
 
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
@@ -43,12 +43,13 @@ function App() {
 
   const addDomainEntry = (e: any) => {
     e.preventDefault();
-    console.log('newDomain', newDomain)
+    console.log("newDomain", newDomain);
     setInvalidDomain(!domainRegex.test(newDomain));
     if (domainRegex.test(newDomain)) {
       dispatch(addDomainWhitelistEntry(newDomain));
     }
-    setNewDomain('');
+
+    setNewDomain("");
   };
 
   const deleteDomainEntry = (domain: string) => {
@@ -61,7 +62,8 @@ function App() {
     if (siteRegex.test(newPage)) {
       dispatch(addPageWhitelistEntry(newPage));
     }
-    setNewPage('');
+
+    setNewPage("");
   };
 
   const deletePageEntry = (page: string) => {
@@ -78,11 +80,11 @@ function App() {
 
   const handleNewDomainChange = (e: any) => {
     setNewDomain(e.target.value);
-  }
+  };
 
   const handleNewPageChange = (e: any) => {
     setNewPage(e.target.value);
-  }
+  };
 
   const triggerHistorySync = async () => {
     if (historySyncInProgress) {

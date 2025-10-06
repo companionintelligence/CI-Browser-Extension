@@ -169,13 +169,13 @@ async function triggerHistoryCrawl() {
       string,
       any,
     ]) => {
-      //If the whitelistPending entry for a whitelist item is more than 5 minutes old, or is not a date, then clear it.
+      //If the whitelistPending entry for a whitelist item is more than 10 minutes old, or is not a date, then clear it.
       //In the former case, the user likely closed the browser before the history crawl was completed.
       //The latter case sometimes happens for reasons I can't really deduce, but trying again should work.
       if (
         state.domainWhitelist.indexOf(domainWhitelistItemKey) !== -1 &&
         domainWhitelistItemValue &&
-        new Date(new Date().getTime() - 300000).getTime() >
+        new Date(new Date().getTime() - 600000).getTime() >
           domainWhitelistItemValue
       ) {
         const omitted = { ...state.domainWhitelistPending };
@@ -495,7 +495,7 @@ async function triggerManualHistorySync(options = {}) {
     );
 
     const allHistoryResults = await browser.history.search({
-      text: '',
+      text: "",
       startTime: searchStartTime,
       maxResults: 1000000,
     });
@@ -1347,78 +1347,76 @@ export default defineBackground({
         });
     }, 1000);
 
-    browser.runtime.onInstalled.addListener(async function () {
-      store.dispatch(loadUserSettings());
+    store.dispatch(loadUserSettings());
 
-      const existingKeys = Object.keys(store.getState().ciState);
-      console.log("existingKeys", existingKeys);
-      const toSet = Object.keys(storageDefaults)
-        .filter((key) => existingKeys.indexOf(key) < 0)
-        .reduce((obj: any, key) => {
-          obj[key] = (storageDefaults as any)[key];
+    const existingKeys = Object.keys(store.getState().ciState);
+    console.log("existingKeys", existingKeys);
+    const toSet = Object.keys(storageDefaults)
+      .filter((key) => existingKeys.indexOf(key) < 0)
+      .reduce((obj: any, key) => {
+        obj[key] = (storageDefaults as any)[key];
 
-          return obj;
-        }, {});
-      console.log("toSet", toSet);
+        return obj;
+      }, {});
+    console.log("toSet", toSet);
 
-      store.dispatch(setState(toSet));
+    store.dispatch(setState(toSet));
 
-      browser.tabs.onActivated.addListener(async () => {
-        const tabInfo = await browser.tabs.query({
-          active: true,
-        });
-        const active = tabInfo[0];
-
-        if (active?.url) {
-          const parsed = URL.parse(active.url);
-          if (parsed) {
-            store.dispatch(setState({ domain: parsed.hostname }));
-            store.dispatch(setState({ url: active.url }));
-          }
-        }
+    browser.tabs.onActivated.addListener(async () => {
+      const tabInfo = await browser.tabs.query({
+        active: true,
       });
+      const active = tabInfo[0];
 
-      // Use onCompleted for non-SPA pages, but make sure the URL is valid
-      // Some SPAs may trigger onCompleted with an invalid URL, and we don't want to record those hits
-      browser.webNavigation.onCompleted.addListener((e) => {
-        if (siteRegex.test(e.url)) {
-          recordHit(e);
+      if (active?.url) {
+        const parsed = URL.parse(active.url);
+        if (parsed) {
+          store.dispatch(setState({ domain: parsed.hostname }));
+          store.dispatch(setState({ url: active.url }));
         }
-      });
-      // Use onHistoryStateUpdated in order to support single-page apps
-      // onCompleted will not fire when an SPA updates the URL without a full page reload
-      browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
-
-      // Listen for manual history sync requests from popup
-      browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.action === "triggerManualHistorySync") {
-          triggerManualHistorySync(message.options || {})
-            .then(() => {
-              sendResponse({ success: true });
-            })
-            .catch((error) => {
-              console.error("Manual history sync failed:", error);
-              sendResponse({ success: false, error: error.message });
-            });
-
-          return true; // Will respond asynchronously
-        }
-      });
-
-      // Set up bookmark sync listeners
-      browser.bookmarks.onCreated.addListener(handleBookmarkCreated);
-      browser.bookmarks.onChanged.addListener(handleBookmarkChanged);
-      browser.bookmarks.onRemoved.addListener(handleBookmarkRemoved);
-
-      // Initial bookmark sync on install
-      setTimeout(async () => {
-        const lastSync = await browser.storage.local.get(BOOKMARK_SYNC_KEY);
-        if (!lastSync[BOOKMARK_SYNC_KEY]) {
-          console.log("Performing initial bookmark sync");
-          await syncBookmarksToServer();
-        }
-      }, 5000); // Wait 5 seconds after install to ensure authentication is ready
+      }
     });
+
+    // Use onCompleted for non-SPA pages, but make sure the URL is valid
+    // Some SPAs may trigger onCompleted with an invalid URL, and we don't want to record those hits
+    browser.webNavigation.onCompleted.addListener((e) => {
+      if (siteRegex.test(e.url)) {
+        recordHit(e);
+      }
+    });
+    // Use onHistoryStateUpdated in order to support single-page apps
+    // onCompleted will not fire when an SPA updates the URL without a full page reload
+    browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
+
+    // Listen for manual history sync requests from popup
+    browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.action === "triggerManualHistorySync") {
+        triggerManualHistorySync(message.options || {})
+          .then(() => {
+            sendResponse({ success: true });
+          })
+          .catch((error) => {
+            console.error("Manual history sync failed:", error);
+            sendResponse({ success: false, error: error.message });
+          });
+
+        return true; // Will respond asynchronously
+      }
+    });
+
+    // Set up bookmark sync listeners
+    browser.bookmarks.onCreated.addListener(handleBookmarkCreated);
+    browser.bookmarks.onChanged.addListener(handleBookmarkChanged);
+    browser.bookmarks.onRemoved.addListener(handleBookmarkRemoved);
+
+    // Initial bookmark sync on install
+    setTimeout(async () => {
+      const lastSync = await browser.storage.local.get(BOOKMARK_SYNC_KEY);
+      if (!lastSync[BOOKMARK_SYNC_KEY]) {
+        console.log("Performing initial bookmark sync");
+        await syncBookmarksToServer();
+      }
+    }, 5000); // Wait 5 seconds after install to ensure authentication is ready
 
     // Listen for scraped data from content scripts
     browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
