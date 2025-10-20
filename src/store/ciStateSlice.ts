@@ -14,6 +14,13 @@ export const loadUserSettings = createAsyncThunk(
       "pageWhitelistHistory",
       "lastHistorySync",
       "syncHistoryLogs",
+      "autoSyncEnabled",
+      "siteBlacklist",
+      "pageBlacklist",
+      "deviceId",
+      "deviceName",
+      "deviceType", 
+      "devicePlatform",
     ]);
 
     return localData;
@@ -34,9 +41,19 @@ interface CiState {
   lastUrl: string | null;
   refreshing: boolean;
   serverDomain: string;
+  autoSyncEnabled: boolean;
+  siteBlacklist: string[];
+  pageBlacklist: string[];
+  historySyncInProgress: boolean;
+  historySyncStatus: string | null;
+  lastHistorySync: string | null;
+  syncHistoryLogs: any[];
+  deviceId: string | null;
+  deviceName: string | null;
+  deviceType: string | null;
+  devicePlatform: string | null;
 }
 
-// Removed incomplete duplicate ciStateSlice declaration and reducer
 export const ciStateSlice = createSlice({
   name: "ciState",
   initialState: {
@@ -57,6 +74,13 @@ export const ciStateSlice = createSlice({
     syncHistoryLogs: [],
     refreshing: false,
     serverDomain: "dev.companionintelligence.com",
+    autoSyncEnabled: false,
+    siteBlacklist: [],
+    pageBlacklist: [],
+    deviceId: null,
+    deviceName: null,
+    deviceType: null,
+    devicePlatform: null,
   } as CiState,
   reducers: {
     setState: (state, action) => {
@@ -177,6 +201,58 @@ export const ciStateSlice = createSlice({
         syncHistoryLogs: [],
       };
     },
+    toggleAutoSync(state) {
+      return {
+        ...state,
+        autoSyncEnabled: !state.autoSyncEnabled,
+      };
+    },
+    addSiteBlacklist(state, action) {
+      let newSiteBlacklist = state.siteBlacklist;
+      if (newSiteBlacklist.indexOf(action.payload) === -1) {
+        newSiteBlacklist = newSiteBlacklist.concat(action.payload);
+      }
+      return { ...state, siteBlacklist: newSiteBlacklist };
+    },
+    removeSiteBlacklist(state, action) {
+      const newSiteBlacklist = state.siteBlacklist.filter(
+        (entry) => entry != null && entry !== action.payload,
+      );
+      return { ...state, siteBlacklist: newSiteBlacklist };
+    },
+    addPageBlacklist(state, action) {
+      let newPageBlacklist = state.pageBlacklist;
+      let parsed = URL.parse(action.payload);
+      if (!parsed) {
+        parsed = URL.parse(`https://${action.payload}`);
+        action.payload = `https://${action.payload}`;
+      }
+      if (!parsed) {
+        return state;
+      }
+      parsed.hash = "";
+      const parsedToString = parsed.toString();
+      if (newPageBlacklist.indexOf(parsedToString) === -1) {
+        newPageBlacklist = newPageBlacklist.concat(parsedToString);
+      }
+      return { ...state, pageBlacklist: newPageBlacklist };
+    },
+    removePageBlacklist(state, action) {
+      let parsed = URL.parse(action.payload);
+      if (!parsed) {
+        parsed = URL.parse(`https://${action.payload}`);
+        action.payload = `https://${action.payload}`;
+      }
+      if (!parsed) {
+        return state;
+      }
+      parsed.hash = "";
+      const strippedUrl = parsed.toString();
+      const newPageBlacklist = state.pageBlacklist.filter(
+        (entry) => entry != null && entry !== strippedUrl,
+      );
+      return { ...state, pageBlacklist: newPageBlacklist };
+    },
     saveUserSettings(state) {
       const parsed = JSON.parse(
         JSON.stringify({
@@ -190,6 +266,13 @@ export const ciStateSlice = createSlice({
           pageWhitelistHistory: state.pageWhitelistHistory,
           lastHistorySync: state.lastHistorySync,
           syncHistoryLogs: state.syncHistoryLogs,
+          autoSyncEnabled: state.autoSyncEnabled,
+          siteBlacklist: state.siteBlacklist,
+          pageBlacklist: state.pageBlacklist,
+          deviceId: state.deviceId,
+          deviceName: state.deviceName,
+          deviceType: state.deviceType,
+          devicePlatform: state.devicePlatform,
         }),
       );
       browser.storage.local.set(parsed);
@@ -219,6 +302,11 @@ export const {
   setState,
   addSyncHistoryLog,
   clearSyncHistoryLogs,
+  toggleAutoSync,
+  addSiteBlacklist,
+  removeSiteBlacklist,
+  addPageBlacklist,
+  removePageBlacklist,
   saveUserSettings,
 } = ciStateSlice.actions;
 

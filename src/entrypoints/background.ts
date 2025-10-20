@@ -19,11 +19,10 @@ import { locationService } from "@/locationService";
 const SLICE_SIZE = 50;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
 
-// Detect mobile environment
+let deviceSetupInProgress = false;
+
 const browser_info = bowser.getParser(navigator.userAgent);
 const isMobile = browser_info.getPlatformType() === "mobile";
-
-// Adjust slice size for mobile to reduce memory usage
 const MOBILE_SLICE_SIZE = isMobile ? 25 : SLICE_SIZE;
 
 interface AuthResponse {
@@ -101,7 +100,6 @@ const recordHit = async function (e: any) {
 
     const newEvent = await assembleContentAndEvents(state.url!);
 
-    // Store surfing data in local database
     try {
       if (state.url && state.domain) {
         const surfingRecord: SurfingRecord = {
@@ -110,14 +108,13 @@ const recordHit = async function (e: any) {
           title: newEvent.content?.[0]?.title || undefined,
           description: newEvent.content?.[0]?.text || undefined,
           visitTime: newEvent.start_time,
-          synced: false, // Will be marked as synced after successful API call
+          synced: false,
         };
 
-        const recordId = await database.insertSurfingRecord(surfingRecord);
-        console.log("Surfing record stored locally with ID:", recordId);
+        await database.insertSurfingRecord(surfingRecord);
       }
     } catch (dbError) {
-      console.error("Failed to store surfing record in database:", dbError);
+      console.error("Failed to store surfing record:", dbError);
     }
 
     try {
@@ -134,7 +131,6 @@ const recordHit = async function (e: any) {
         },
       );
 
-      // Mark the surfing record as synced if API call was successful
       try {
         const unsyncedRecords = await database.getUnsyncedSurfingRecords();
         const latestRecord = unsyncedRecords.find(
@@ -144,13 +140,12 @@ const recordHit = async function (e: any) {
         );
         if (latestRecord && latestRecord.id) {
           await database.markSurfingRecordAsSynced(latestRecord.id);
-          console.log("Surfing record marked as synced");
         }
       } catch (syncError) {
-        console.error("Failed to mark surfing record as synced:", syncError);
+        console.error("Failed to mark record as synced:", syncError);
       }
     } catch (err) {
-      console.log("error posting event", err);
+      console.error("Error posting event:", err);
     }
 
     triggerHistoryCrawl();
@@ -163,15 +158,11 @@ async function triggerHistoryCrawl() {
   });
 
   const state = store.getState().ciState;
-  //Check to see if any whitelisted domains didn't finish their initial data crawl, and run it if they didn't (as long as they're not on Edge).
   Object.entries(state.domainWhitelistPending).forEach(
     async ([domainWhitelistItemKey, domainWhitelistItemValue]: [
       string,
       any,
     ]) => {
-      //If the whitelistPending entry for a whitelist item is more than 10 minutes old, or is not a date, then clear it.
-      //In the former case, the user likely closed the browser before the history crawl was completed.
-      //The latter case sometimes happens for reasons I can't really deduce, but trying again should work.
       if (
         state.domainWhitelist.indexOf(domainWhitelistItemKey) !== -1 &&
         domainWhitelistItemValue &&
@@ -274,9 +265,8 @@ async function triggerHistoryCrawl() {
               },
             );
           } catch (err) {
-            console.log("error posting events", err);
+            console.error("Error posting events:", err);
             failed = true;
-
             break;
           }
         }
@@ -302,9 +292,6 @@ async function triggerHistoryCrawl() {
 
   Object.entries(state.pageWhitelistPending).forEach(
     async ([pageWhitelistItemKey, pageWhitelistItemValue]) => {
-      //If the whitelistPending entry for a whitelist item is more than 5 minutes old, or is not a date, then clear it.
-      //In the former case, the user likely closed the browser before the history crawl was completed.
-      //The latter case sometimes happens for reasons I can't really deduce, but trying again should work.
       if (
         state.pageWhitelist.indexOf(pageWhitelistItemKey) &&
         new Date(new Date().getTime() - 300000).getTime() >
@@ -441,7 +428,408 @@ async function triggerHistoryCrawl() {
   );
 }
 
-async function triggerManualHistorySync(options = {}) {
+async function getDeviceId(): Promise<string> {
+  const storage = await browser.storage.local.get('deviceId');
+  if (storage.deviceId) {
+    return storage.deviceId;
+  }
+  
+  throw new Error("No device_id found. Please wait for device setup to complete.");
+}
+
+async function fetchDeviceFromServer(): Promise<string | null> {
+  try {
+    const state = store.getState().ciState;
+    const { accessToken, serverDomain } = state;
+    
+    if (!accessToken) {
+      return null;
+    }
+    
+    const accessDecoded = jwtDecode(accessToken) as any;
+    const isAuthExpired = accessDecoded && accessDecoded.exp
+      ? Date.now() >= accessDecoded.exp * 1000
+      : true;
+    
+    if (isAuthExpired) {
+      return null;
+    }
+    
+    const response = await axios.get(
+      `https://${serverDomain}/api/devices`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 10000, // 10 second timeout
+      },
+    );
+    
+    const devices = response.data;
+    
+    const storage = await browser.storage.local.get('deviceId');
+    if (storage.deviceId) {
+      const matchingDevice = devices.find((d: any) => d.device_id === storage.deviceId);
+      if (matchingDevice) {
+        return storage.deviceId;
+      }
+    }
+    
+    const deviceInfo = getDeviceInfo();
+    const matchingDevice = devices.find((d: any) => 
+      d.device_name === deviceInfo.device_name &&
+      d.platform === deviceInfo.platform
+    );
+    
+    if (matchingDevice) {
+      await browser.storage.local.set({ 
+        deviceId: matchingDevice.device_id,
+        deviceName: matchingDevice.device_name,
+        deviceType: matchingDevice.device_type,
+        devicePlatform: matchingDevice.platform
+      });
+      store.dispatch(setState({ 
+        deviceId: matchingDevice.device_id,
+        deviceName: matchingDevice.device_name,
+        deviceType: matchingDevice.device_type,
+        devicePlatform: matchingDevice.platform
+      }));
+      return matchingDevice.device_id;
+    }
+    
+    return null;
+  } catch (error: any) {
+    console.error("Failed to fetch devices from server:", error?.response?.data || error?.message);
+    return null;
+  }
+}
+
+async function createDeviceOnServer(): Promise<string> {
+  const state = store.getState().ciState;
+  const { accessToken, serverDomain } = state;
+  
+  if (!accessToken) {
+    throw new Error("Cannot create device: No access token available");
+  }
+  
+  const accessDecoded = jwtDecode(accessToken) as any;
+  const isAuthExpired = accessDecoded && accessDecoded.exp
+    ? Date.now() >= accessDecoded.exp * 1000
+    : true;
+  
+  if (isAuthExpired) {
+    throw new Error("Cannot create device: Access token expired. Please log in again.");
+  }
+  
+  const deviceInfo = getDeviceInfo();
+  
+  try {
+    
+    const response = await axios.post(
+      `https://${serverDomain}/api/devices`,
+      deviceInfo,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 10000, // 10 second timeout
+      },
+    );
+    
+    const deviceId = response.data.device_id;
+    const deviceName = response.data.device_name;
+    const deviceType = response.data.device_type;
+    const devicePlatform = response.data.platform;
+    
+    await browser.storage.local.set({ 
+      deviceId,
+      deviceName,
+      deviceType,
+      devicePlatform
+    });
+    store.dispatch(setState({ 
+      deviceId,
+      deviceName,
+      deviceType,
+      devicePlatform
+    }));
+    
+    deviceSetupInProgress = false;
+    return deviceId;
+  } catch (error: any) {
+    const errorMessage = error?.response?.data?.message || 
+                        error?.response?.data?.error || 
+                        error?.message || 
+                        'Unknown error occurred';
+    
+    throw new Error(`Failed to create device: ${errorMessage}`);
+  }
+}
+
+async function authenticateWithCredentials(username: string, password: string): Promise<{ accessToken: string; sessionToken: string }> {
+  const state = store.getState().ciState;
+  const { serverDomain } = state;
+  
+  try {
+    const requestData = {
+      username: username,
+      password: password
+    };
+    
+    const response = await axios.post(
+      `https://${serverDomain}/api/authenticate`,
+      requestData,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        timeout: 10000,
+      },
+    );
+    
+    const { accessToken, sessionToken } = response.data;
+    
+    if (!accessToken || !sessionToken) {
+      throw new Error("Invalid response from server - missing tokens");
+    }
+    
+    store.dispatch(setState({ accessToken, sessionToken }));
+    await browser.storage.local.set({ accessToken, sessionToken });
+    
+    return { accessToken, sessionToken };
+  } catch (error: any) {
+    const errorMessage = error?.response?.data?.message || 
+                        error?.response?.data?.error || 
+                        error?.message || 
+                        'Unknown error occurred';
+    
+    throw new Error(`Authentication failed: ${errorMessage}`);
+  }
+}
+
+function checkAuthStatus() {
+  const state = store.getState().ciState;
+  const { accessToken, sessionToken } = state;
+  
+  return { accessToken, sessionToken };
+}
+
+async function setupDevice(): Promise<string> {
+  if (deviceSetupInProgress) {
+    throw new Error("Device setup already in progress");
+  }
+  
+  deviceSetupInProgress = true;
+  
+  try {
+    let { accessToken } = checkAuthStatus();
+    
+    if (!accessToken) {
+      throw new Error("No access token available. Please log in first.");
+    }
+    
+    const accessDecoded = jwtDecode(accessToken) as any;
+    const isAuthExpired = accessDecoded && accessDecoded.exp
+      ? Date.now() >= accessDecoded.exp * 1000
+      : true;
+    
+    if (isAuthExpired) {
+      const storedCredentials = await browser.storage.local.get(['username', 'password']);
+      if (storedCredentials.username && storedCredentials.password) {
+        try {
+          const { accessToken: newAccessToken, sessionToken: newSessionToken } = await authenticateWithCredentials(
+            storedCredentials.username,
+            storedCredentials.password
+          );
+          accessToken = newAccessToken;
+        } catch (authError: any) {
+          throw new Error(`Authentication failed: ${authError.message}. Please log in again.`);
+        }
+      } else {
+        throw new Error("Access token expired and no stored credentials found. Please log in again.");
+      }
+    }
+    
+    const existingDeviceId = await fetchDeviceFromServer();
+    
+    if (existingDeviceId) {
+      return existingDeviceId;
+    }
+    
+    const newDeviceId = await createDeviceOnServer();
+    return newDeviceId;
+    
+  } catch (error: any) {
+    const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
+    deviceSetupInProgress = false;
+    throw new Error(errorMessage);
+  }
+}
+
+function getDeviceInfo() {
+  const browser_info = bowser.getParser(navigator.userAgent);
+  const platform = browser_info.getOSName() || 'unknown';
+  const browserName = browser_info.getBrowserName() || 'Chrome';
+  
+  let device_type = 'desktop';
+  const platformType = browser_info.getPlatformType();
+  if (platformType === 'mobile') {
+    device_type = 'mobile';
+  } else if (platformType === 'tablet') {
+    device_type = 'tablet';
+  }
+  
+  const device_name = `${browserName} on ${platform}`;
+  const model = browser_info.getOSVersion() ? `${platform} ${browser_info.getOSVersion()}` : platform;
+  
+  return {
+    device_name: device_name,
+    device_type: device_type,
+    platform: platform.toLowerCase(),
+    model: model,
+  };
+}
+
+function isUrlBlacklisted(url: string, siteBlacklist: string[], pageBlacklist: string[]): boolean {
+  try {
+    const parsedUrl = URL.parse(url);
+    if (!parsedUrl || !parsedUrl.hostname) {
+      return false;
+    }
+
+    for (const site of siteBlacklist) {
+      const siteRegex = new RegExp(site);
+      if (siteRegex.test(parsedUrl.hostname)) {
+        return true;
+      }
+    }
+
+    parsedUrl.hash = "";
+    const urlWithoutHash = parsedUrl.toString();
+    for (const page of pageBlacklist) {
+      const pageRegex = new RegExp(page.replace("?", "\\?"));
+      if (pageRegex.test(urlWithoutHash)) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error("Error checking if URL is blacklisted:", error);
+    return false;
+  }
+}
+
+
+async function convertToBrowserActivity(
+  url: string,
+  visitTime: number,
+  deviceId: string,
+): Promise<{
+  time: string;
+  device_id: string;
+  url: string;
+  title?: string;
+  description?: string;
+  duration_seconds?: number;
+  scroll_depth?: number;
+  action_type: string;
+}> {
+  let title: string | undefined = undefined;
+  let description: string | undefined = undefined;
+  let duration_seconds: number | undefined = undefined;
+  let scroll_depth: number | undefined = undefined;
+  
+  try {
+    const historyItems = await browser.history.search({
+      text: url,
+      startTime: visitTime - 1000,
+      endTime: visitTime + 1000,
+      maxResults: 1
+    });
+    
+    if (historyItems.length > 0 && historyItems[0].title) {
+      title = historyItems[0].title;
+      
+      try {
+        const visits = await browser.history.getVisits({ url: url });
+        if (visits.length > 0) {
+          const closestVisit = visits.reduce((closest, visit) => {
+            const currentDiff = Math.abs(visit.visitTime! - visitTime);
+            const closestDiff = Math.abs(closest.visitTime! - visitTime);
+            return currentDiff < closestDiff ? visit : closest;
+          });
+          
+          if (closestVisit.visitTime && closestVisit.transition) {
+            const nextVisit = visits.find(v => v.visitTime! > closestVisit.visitTime!);
+            if (nextVisit && nextVisit.visitTime) {
+              duration_seconds = Math.round((nextVisit.visitTime - closestVisit.visitTime) / 1000);
+            } else {
+              duration_seconds = 30;
+            }
+          }
+        }
+      } catch (visitError) {
+        // Continue without duration
+      }
+    } else {
+      try {
+        const tabs = await browser.tabs.query({ url: url });
+        if (tabs.length > 0 && tabs[0].title) {
+          title = tabs[0].title;
+        }
+      } catch (tabError) {
+        // Continue without title
+      }
+    }
+  } catch (error) {
+    // Continue without title
+  }
+  
+  try {
+    const tabs = await browser.tabs.query({ url: url });
+    if (tabs.length > 0) {
+      try {
+        const results = await browser.tabs.sendMessage(tabs[0].id!, {
+          action: 'getMetaDescription'
+        });
+        if (results && results.description) {
+          description = results.description;
+        }
+      } catch (contentError) {
+        // Continue without description
+      }
+      
+      try {
+        const scrollResults = await browser.tabs.sendMessage(tabs[0].id!, {
+          action: 'getScrollDepth'
+        });
+        if (scrollResults && scrollResults.scrollDepth !== undefined) {
+          scroll_depth = scrollResults.scrollDepth;
+        }
+      } catch (scrollError) {
+        // Continue without scroll depth
+      }
+    }
+  } catch (error) {
+    // Continue without description or scroll depth
+  }
+  
+  return {
+    time: new Date(visitTime).toISOString(),
+    device_id: deviceId,
+    url: url,
+    title: title,
+    description: description,
+    duration_seconds: duration_seconds,
+    scroll_depth: scroll_depth,
+    action_type: 'visit',
+  };
+}
+
+async function triggerManualHistorySync(options: { timeRange?: number } = {}) {
   await store.dispatch({
     type: "loadUserSettings",
   });
@@ -457,8 +845,8 @@ async function triggerManualHistorySync(options = {}) {
 
   // Check authentication
   const { accessToken } = state;
-  const accessDecoded = accessToken ? jwtDecode(accessToken) : null;
-  const isAuthExpired = accessDecoded
+  const accessDecoded = accessToken ? (jwtDecode(accessToken) as any) : null;
+  const isAuthExpired = accessDecoded && accessDecoded.exp
     ? Date.now() >= accessDecoded.exp * 1000
     : true;
 
@@ -472,9 +860,21 @@ async function triggerManualHistorySync(options = {}) {
     return;
   }
 
+  try {
+    await getDeviceId();
+  } catch (error) {
+    store.dispatch(
+      setState({
+        historySyncStatus: "Device setup failed due to SSL certificate issues. Please run Chrome with --ignore-certificate-errors flag.",
+      }),
+    );
+    return;
+  }
+
   const startTime = Date.now();
   const timeRange = options.timeRange || 7 * 24 * 60 * 60 * 1000; // Default to last 7 days
   const searchStartTime = Date.now() - timeRange;
+
 
   try {
     // Set sync in progress
@@ -536,21 +936,35 @@ async function triggerManualHistorySync(options = {}) {
     );
 
     // Get detailed visit information for all history entries
-    const hydratedResults = [];
+    const hydratedResults: Array<{ visitTime: number; url: string }> = [];
     let processed = 0;
+    let blacklistedCount = 0;
+    const { siteBlacklist = [], pageBlacklist = [] } = state;
 
     await Promise.all(
       allHistoryResults.map((item) => {
         return (async () => {
           try {
+            // Check if this URL is blacklisted
+            if (item.url && isUrlBlacklisted(item.url, siteBlacklist, pageBlacklist)) {
+              blacklistedCount++;
+              processed++;
+              return true;
+            }
+
+            if (!item.url) {
+              processed++;
+              return true;
+            }
+
             const visits = await browser.history.getVisits({
               url: item.url,
             });
 
             for (const visit of visits) {
-              if (visit.visitTime >= searchStartTime) {
+              if (visit.visitTime && visit.visitTime >= searchStartTime) {
                 hydratedResults.push({
-                  ...visit,
+                  visitTime: visit.visitTime,
                   url: item.url,
                 });
               }
@@ -558,9 +972,12 @@ async function triggerManualHistorySync(options = {}) {
 
             processed++;
             if (processed % 100 === 0) {
+              const statusMessage = blacklistedCount > 0
+                ? `Processed ${processed}/${allHistoryResults.length} entries (${blacklistedCount} blacklisted)...`
+                : `Processed ${processed}/${allHistoryResults.length} entries...`;
               store.dispatch(
                 setState({
-                  historySyncStatus: `Processed ${processed}/${allHistoryResults.length} entries...`,
+                  historySyncStatus: statusMessage,
                 }),
               );
             }
@@ -577,10 +994,13 @@ async function triggerManualHistorySync(options = {}) {
 
     if (hydratedResults.length === 0) {
       const duration = Date.now() - startTime;
+      const statusMessage = blacklistedCount > 0
+        ? `No visits to sync (${blacklistedCount} blacklisted entries excluded).`
+        : "No visits found for the selected time range.";
       store.dispatch(
         setState({
           historySyncInProgress: false,
-          historySyncStatus: "No visits found for the selected time range.",
+          historySyncStatus: statusMessage,
           lastHistorySync: new Date().toISOString(),
         }),
       );
@@ -604,11 +1024,17 @@ async function triggerManualHistorySync(options = {}) {
       return;
     }
 
+    const statusMessage = blacklistedCount > 0
+      ? `Uploading ${hydratedResults.length} visits to CI-Server (${blacklistedCount} blacklisted entries excluded)...`
+      : `Uploading ${hydratedResults.length} visits to CI-Server...`;
     store.dispatch(
       setState({
-        historySyncStatus: `Uploading ${hydratedResults.length} visits to CI-Server...`,
+        historySyncStatus: statusMessage,
       }),
     );
+
+    // Get device ID for browser activity
+    const deviceId = await getDeviceId();
 
     // Process and upload in batches
     let uploaded = 0;
@@ -619,37 +1045,45 @@ async function triggerManualHistorySync(options = {}) {
       const slice = hydratedResults.slice(i, i + SLICE_SIZE);
 
       try {
-        const sliceEvents = await Promise.all(
+        // Convert to BrowserActivity format
+        const browserActivities = await Promise.all(
           slice.map(async (result) => {
-            return assembleContentAndEvents(
+            return convertToBrowserActivity(
               result.url,
-              new Date(result.visitTime).toJSON(),
+              result.visitTime,
+              deviceId,
             );
           }),
         );
 
         const { accessToken } = store.getState().ciState;
 
-        await axios.post(
-          `https://${state.serverDomain}/api/events`,
-          sliceEvents,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
+        if (!accessToken) {
+          throw new Error("No access token available for authentication");
+        }
 
-        uploaded += slice.length;
+        for (const activity of browserActivities) {
+          await axios.post(
+            `https://${state.serverDomain}/api/browser-activity`,
+            activity,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+              timeout: 30000,
+            },
+          );
+          uploaded++;
+        }
         store.dispatch(
           setState({
             historySyncStatus: `Uploaded ${uploaded}/${hydratedResults.length} visits...`,
           }),
         );
-      } catch (err) {
-        console.log("Error uploading history batch:", err);
-        lastError = err.message;
+      } catch (err: any) {
+        console.error("Error uploading history batch:", err?.message);
+        lastError = err?.response?.data?.message || err?.message || String(err);
         failed = true;
         break;
       }
@@ -678,17 +1112,23 @@ async function triggerManualHistorySync(options = {}) {
 
     // Update final status
     if (failed) {
+      const failureMessage = blacklistedCount > 0
+        ? `History sync failed after uploading ${uploaded} visits (${blacklistedCount} blacklisted entries excluded). Please try again.`
+        : `History sync failed after uploading ${uploaded} visits. Please try again.`;
       store.dispatch(
         setState({
           historySyncInProgress: false,
-          historySyncStatus: `History sync failed after uploading ${uploaded} visits. Please try again.`,
+          historySyncStatus: failureMessage,
         }),
       );
     } else {
+      const successMessage = blacklistedCount > 0
+        ? `Successfully synced ${uploaded} visits to CI-Server (${blacklistedCount} blacklisted entries excluded).`
+        : `Successfully synced ${uploaded} visits to CI-Server.`;
       store.dispatch(
         setState({
           historySyncInProgress: false,
-          historySyncStatus: `Successfully synced ${uploaded} visits to CI-Server.`,
+          historySyncStatus: successMessage,
           lastHistorySync: new Date().toISOString(),
         }),
       );
@@ -698,6 +1138,7 @@ async function triggerManualHistorySync(options = {}) {
   } catch (error) {
     console.error("Manual history sync error:", error);
     const duration = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     // Log the sync operation as failed
     store.dispatch(
@@ -708,7 +1149,7 @@ async function triggerManualHistorySync(options = {}) {
         processedEntries: 0,
         uploadedEntries: 0,
         status: "failed",
-        error: error.message,
+        error: errorMessage,
         duration: duration,
       }),
     );
@@ -716,7 +1157,7 @@ async function triggerManualHistorySync(options = {}) {
     store.dispatch(
       setState({
         historySyncInProgress: false,
-        historySyncStatus: `History sync failed: ${error.message}`,
+        historySyncStatus: `History sync failed: ${errorMessage}`,
       }),
     );
     store.dispatch(saveUserSettings());
@@ -729,8 +1170,6 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
   const { accessToken, serverDomain } = state;
 
   if (!accessToken) {
-    console.log("No access token, skipping scraped data upload");
-
     return;
   }
 
@@ -739,8 +1178,6 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
 
   for (const [dataType, items] of Object.entries(scrapeResult.data)) {
     if (!Array.isArray(items)) {
-      // Optionally log a warning:
-      console.warn(`Expected array for dataType "${dataType}", got:`, items);
       continue;
     }
 
@@ -767,8 +1204,6 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
   }
 
   if (events.length === 0) {
-    console.log("No events generated from scraped data");
-
     return;
   }
 
@@ -779,14 +1214,15 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
         "Content-Type": "application/json",
       },
     });
-    console.log(`Successfully uploaded ${events.length} scraped data events`);
   } catch (error) {
     console.error("Error uploading scraped data:", error);
   }
 }
 
 async function assembleContentAndEvents(url: string, time?: string) {
-  let newThumbnailContent: any, newPageContent: any, newMediaContent: any;
+  let newThumbnailContent: any;
+  let newPageContent: any;
+  let newMediaContent: any;
   const newContent: any[] = [];
   const state = store.getState().ciState;
   const { serverDomain } = state;
@@ -880,20 +1316,17 @@ async function assembleContentAndEvents(url: string, time?: string) {
           resolve();
         })
         .catch((error) => {
-          console.log(
-            "error hitting iframely for assembleContentAndEvents",
-            error,
-          );
+          console.error("Error hitting iframely:", error);
           newPageContent = {
             type: "web-page",
             mimetype: "text/html",
             url: url,
           };
           newContent.push(newPageContent);
-          resolve(newContent);
+          resolve();
         });
     } catch (error) {
-      console.log("error hitting iframely", error);
+      console.error("Error hitting iframely:", error);
       newPageContent = {
         type: "web-page",
         url: url,
@@ -911,13 +1344,11 @@ async function assembleContentAndEvents(url: string, time?: string) {
   };
 }
 
-async function getAllBookmarks(): Promise<
-  browser.bookmarks.BookmarkTreeNode[]
-> {
+async function getAllBookmarks(): Promise<any[]> {
   const bookmarkTree = await browser.bookmarks.getTree();
-  const allBookmarks: browser.bookmarks.BookmarkTreeNode[] = [];
+  const allBookmarks: any[] = [];
 
-  function collectBookmarks(nodes: browser.bookmarks.BookmarkTreeNode[]) {
+  function collectBookmarks(nodes: any[]) {
     for (const node of nodes) {
       if (node.url && /^(http(s)?:\/\/)/.test(node.url)) {
         // This is an actual bookmark (not a folder)
@@ -936,7 +1367,7 @@ async function getAllBookmarks(): Promise<
 }
 
 async function createBookmarkEvent(
-  bookmark: browser.bookmarks.BookmarkTreeNode,
+  bookmark: any,
   eventType: "create" | "update" | "sync" = "sync",
 ): Promise<{
   name: string;
@@ -951,15 +1382,16 @@ async function createBookmarkEvent(
   }[];
   bookmark_id: string;
 }> {
-  let newThumbnailContent, newPageContent, newMediaContent;
-  const newContent = [];
+  let newThumbnailContent: any;
+  let newPageContent: any;
+  let newMediaContent: any;
+  const newContent: any[] = [];
   const state = store.getState().ciState;
   const { serverDomain } = state;
 
   // Try to get page metadata for the bookmark URL
-  await new Promise(function (resolve) {
+  await new Promise<void>(function (resolve) {
     try {
-      console.log("calling iframely for createBookmarkEvent", bookmark.url);
       axios
         .get(
           `https://${serverDomain}/embed/iframely?url=` +
@@ -984,7 +1416,7 @@ async function createBookmarkEvent(
 
           const links = data.links || [];
 
-          const thumbnailLink = links.thumbnail?.find((link) => {
+          const thumbnailLink = links.thumbnail?.find((link: any) => {
             return link.rel.indexOf("thumbnail") >= 0;
           });
 
@@ -1018,10 +1450,10 @@ async function createBookmarkEvent(
             newContent.push(newMediaContent);
           }
 
-          resolve(newContent);
+          resolve();
         })
         .catch((error) => {
-          console.log("error hitting iframely for bookmark", error);
+          console.error("Error hitting iframely for bookmark:", error);
           newPageContent = {
             type: "Bookmark",
             mimetype: "text/html",
@@ -1029,10 +1461,10 @@ async function createBookmarkEvent(
             title: bookmark.title,
           };
           newContent.push(newPageContent);
-          resolve(newContent);
+          resolve();
         });
     } catch (error) {
-      console.log("error processing bookmark metadata", error);
+      console.error("Error processing bookmark metadata:", error);
       newPageContent = {
         type: "Bookmark",
         mimetype: "text/html",
@@ -1040,7 +1472,7 @@ async function createBookmarkEvent(
         title: bookmark.title,
       };
       newContent.push(newPageContent);
-      resolve(newContent);
+      resolve();
     }
   });
 
@@ -1063,14 +1495,11 @@ async function syncBookmarksToServer() {
   const { accessToken, serverDomain } = state;
 
   if (!accessToken) {
-    console.log("No access token available for bookmark sync");
-
     return;
   }
 
   try {
     const allBookmarks = await getAllBookmarks();
-    console.log(`Found ${allBookmarks.length} bookmarks to sync`);
 
     // Process bookmarks in batches
     for (let i = 0; i < allBookmarks.length; i += SLICE_SIZE) {
@@ -1079,19 +1508,16 @@ async function syncBookmarksToServer() {
         slice.map((bookmark) => createBookmarkEvent(bookmark, "sync")),
       );
 
-      console.log("posting bookmark events", bookmarkEvents);
-      console.log("accessToken", accessToken);
-      const { accessToken } = store.getState().ciState;
+      const { accessToken: currentAccessToken } = store.getState().ciState;
       try {
         await axios.post(`https://${serverDomain}/api/events`, bookmarkEvents, {
           headers: {
-            Authorization: `Bearer ${accessToken}`,
+            Authorization: `Bearer ${currentAccessToken}`,
             "Content-Type": "application/json",
           },
         });
-        console.log(`Synced batch of ${slice.length} bookmarks`);
       } catch (err) {
-        console.log("Error posting bookmark events", err);
+        console.error("Error posting bookmark events:", err);
         throw err; // Re-throw to stop processing if there's an error
       }
     }
@@ -1101,7 +1527,6 @@ async function syncBookmarksToServer() {
       [BOOKMARK_SYNC_KEY]: Date.now(),
     });
 
-    console.log("Bookmark sync completed successfully");
   } catch (error) {
     console.error("Error syncing bookmarks:", error);
   }
@@ -1109,7 +1534,7 @@ async function syncBookmarksToServer() {
 
 async function handleBookmarkCreated(
   id: string,
-  bookmark: browser.bookmarks.BookmarkTreeNode,
+  bookmark: any,
 ) {
   const state = store.getState().ciState;
   const { accessToken, serverDomain } = state;
@@ -1126,7 +1551,6 @@ async function handleBookmarkCreated(
         "Content-Type": "application/json",
       },
     });
-    console.log("Synced newly created bookmark:", bookmark.title);
   } catch (error) {
     console.error("Error syncing created bookmark:", error);
   }
@@ -1155,7 +1579,6 @@ async function handleBookmarkChanged(id: string) {
         "Content-Type": "application/json",
       },
     });
-    console.log("Synced updated bookmark:", bookmark.title);
   } catch (error) {
     console.error("Error syncing updated bookmark:", error);
   }
@@ -1163,7 +1586,7 @@ async function handleBookmarkChanged(id: string) {
 
 async function handleBookmarkRemoved(
   id: string,
-  removeInfo: browser.bookmarks.BookmarkRemoveInfo,
+  removeInfo: any,
 ) {
   const state = store.getState().ciState;
   const { accessToken, serverDomain } = state;
@@ -1194,7 +1617,6 @@ async function handleBookmarkRemoved(
         "Content-Type": "application/json",
       },
     });
-    console.log("Synced removed bookmark:", removeInfo.node.title);
   } catch (error) {
     console.error("Error syncing removed bookmark:", error);
   }
@@ -1202,23 +1624,15 @@ async function handleBookmarkRemoved(
 
 export default defineBackground({
   main() {
-    // const tagRegex = /#[^#\s]+/g;
-
-    // Initialize database and location service
     const initServices = async () => {
       try {
         await database.init();
-        console.log("Database initialized");
-
-        // Start location tracking if user has granted permission
         await locationService.startLocationTracking();
-        console.log("Location tracking started");
       } catch (error) {
         console.error("Failed to initialize services:", error);
       }
     };
 
-    // Initialize services
     initServices();
 
     const wrapStore = createWrapStore();
@@ -1274,6 +1688,13 @@ export default defineBackground({
           secure: true,
         });
         store.dispatch(setState({ refreshing: false }));
+        
+        // Setup device after successful authentication
+        try {
+          await setupDevice();
+        } catch (error) {
+          console.error("Failed to setup device after token refresh:", error);
+        }
       } catch (err) {
         console.error("Error refreshing token", err);
         store.dispatch(setState({ refreshing: false }));
@@ -1350,17 +1771,42 @@ export default defineBackground({
     store.dispatch(loadUserSettings());
 
     const existingKeys = Object.keys(store.getState().ciState);
-    console.log("existingKeys", existingKeys);
     const toSet = Object.keys(storageDefaults)
       .filter((key) => existingKeys.indexOf(key) < 0)
       .reduce((obj: any, key) => {
         obj[key] = (storageDefaults as any)[key];
-
         return obj;
       }, {});
-    console.log("toSet", toSet);
 
     store.dispatch(setState(toSet));
+    
+    setTimeout(async () => {
+      try {
+        await setupDevice();
+      } catch (error: any) {
+        if (error?.message?.includes("Network Error")) {
+          console.log("Device setup failed due to SSL certificate issues");
+        }
+      }
+    }, 2000);
+
+    browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+      try {
+        if (message && message.type === 'SETUP_DEVICE') {
+          try {
+            await setupDevice();
+            sendResponse({ success: true });
+          } catch (error: any) {
+            const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
+            sendResponse({ success: false, error: errorMessage });
+          }
+          return true;
+        }
+      } catch (error) {
+        sendResponse({ success: false, error: 'Message listener error' });
+        return true;
+      }
+    });
 
     browser.tabs.onActivated.addListener(async () => {
       const tabInfo = await browser.tabs.query({
@@ -1377,18 +1823,13 @@ export default defineBackground({
       }
     });
 
-    // Use onCompleted for non-SPA pages, but make sure the URL is valid
-    // Some SPAs may trigger onCompleted with an invalid URL, and we don't want to record those hits
     browser.webNavigation.onCompleted.addListener((e) => {
       if (siteRegex.test(e.url)) {
         recordHit(e);
       }
     });
-    // Use onHistoryStateUpdated in order to support single-page apps
-    // onCompleted will not fire when an SPA updates the URL without a full page reload
     browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
 
-    // Listen for manual history sync requests from popup
     browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.action === "triggerManualHistorySync") {
         triggerManualHistorySync(message.options || {})
@@ -1400,25 +1841,50 @@ export default defineBackground({
             sendResponse({ success: false, error: error.message });
           });
 
-        return true; // Will respond asynchronously
+        return true;
       }
     });
 
-    // Set up bookmark sync listeners
+    const AUTO_SYNC_INTERVAL = 60 * 60 * 1000;
+    const AUTO_SYNC_TIME_RANGE = 24 * 60 * 60 * 1000;
+
+    setInterval(async () => {
+      try {
+        await store.dispatch({
+          type: "loadUserSettings",
+        });
+
+        const state = store.getState().ciState;
+        
+        if (state.autoSyncEnabled && !state.historySyncInProgress) {
+          const { accessToken } = state;
+          const accessDecoded = accessToken ? (jwtDecode(accessToken) as any) : null;
+          const isAuthExpired = accessDecoded && accessDecoded.exp
+            ? Date.now() >= accessDecoded.exp * 1000
+            : true;
+
+          if (!isAuthExpired) {
+            await triggerManualHistorySync({
+              timeRange: AUTO_SYNC_TIME_RANGE,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Auto-sync error:", error);
+      }
+    }, AUTO_SYNC_INTERVAL);
+
     browser.bookmarks.onCreated.addListener(handleBookmarkCreated);
     browser.bookmarks.onChanged.addListener(handleBookmarkChanged);
     browser.bookmarks.onRemoved.addListener(handleBookmarkRemoved);
 
-    // Initial bookmark sync on install
     setTimeout(async () => {
       const lastSync = await browser.storage.local.get(BOOKMARK_SYNC_KEY);
       if (!lastSync[BOOKMARK_SYNC_KEY]) {
-        console.log("Performing initial bookmark sync");
         await syncBookmarksToServer();
       }
-    }, 5000); // Wait 5 seconds after install to ensure authentication is ready
+    }, 5000);
 
-    // Listen for scraped data from content scripts
     browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.type === "DOMAIN_SCRAPE_DATA") {
         handleScrapedData(message.data)
@@ -1430,7 +1896,7 @@ export default defineBackground({
             sendResponse({ success: false, error: error.message });
           });
 
-        return true; // Will respond asynchronously
+        return true;
       }
     });
   },

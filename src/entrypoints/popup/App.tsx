@@ -7,11 +7,13 @@ import {
   addPageWhitelistEntry,
   removePageWhitelistEntry,
   setState,
+  toggleAutoSync,
 } from "@/store/ciStateSlice";
 import "./App.css";
 import { domainRegex, siteRegex } from "@/utils.ts";
 import bowser from "bowser";
 import { domainScraper } from "@/domainScraper";
+import BlacklistManager from "./BlacklistManager";
 
 export default function App() {
   const dispatch = useDispatch();
@@ -28,12 +30,33 @@ export default function App() {
     historySyncStatus,
     lastHistorySync,
     serverDomain,
+    autoSyncEnabled,
+    siteBlacklist,
+    pageBlacklist,
+    deviceId,
+    deviceName,
+    deviceType,
+    devicePlatform,
   } = ciState;
+
+  const [showBlacklistManager, setShowBlacklistManager] = useState(false);
 
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
     setIsMobile(browser_info.getPlatformType() === "mobile");
   }, []);
+
+  // Reload user settings when popup opens to get latest device info
+  useEffect(() => {
+    dispatch({ type: "loadUserSettings" });
+    
+    // Also refresh periodically while popup is open to catch device updates
+    const interval = setInterval(() => {
+      dispatch({ type: "loadUserSettings" });
+    }, 2000); // Check every 2 seconds
+    
+    return () => clearInterval(interval);
+  }, [dispatch]);
 
   // Check if current URL can be scraped
   const canScrapeCurrentUrl = useMemo(() => {
@@ -64,13 +87,15 @@ export default function App() {
         if (scraperKeys.length > 0) {
           // Get the most recent entry
           const latestKey = scraperKeys.sort().pop();
-          setScraperData(allData[latestKey]);
+          if (latestKey) {
+            setScraperData(allData[latestKey]);
+          }
         }
       });
     }
   }, [domain]);
 
-  const [scraperData, setScraperData] = useState(null);
+  const [scraperData, setScraperData] = useState<any>(null);
 
   const domainWhitelisted = useMemo(() => {
     let domainWhitelistHit = false;
@@ -138,47 +163,6 @@ export default function App() {
     return { hit: pageWhitelistHit, pending: pageWhitelistPendingHit };
   }, [pageWhitelist, pageWhitelistPending]);
 
-  // const domainPending = useMemo(() => {
-  //   let domainWhitelistHit = false;
-  //
-  //   Object.entries(domainWhitelistPending).forEach(([key, value]) => {
-  //     const domainRegex = new RegExp(value);
-  //
-  //     if (domainRegex.test(domain)) {
-  //       domainWhitelistHit = true;
-  //
-  //       return;
-  //     }
-  //   });
-  //
-  //   return domainWhitelistHit;
-  // }, [domainWhitelistPending]);
-
-  // const pagePending = useMemo(() => {
-  //   let pageWhitelistHit = false;
-  //
-  //   Object.entries(pageWhitelistPending).forEach(([key, value]) => {
-  //     const parsedUrl = URL.parse(value);
-  //
-  //     if (parsedUrl.protocol && parsedUrl.host && parsedUrl.pathname) {
-  //       let condensedUrl = parsedUrl.protocol + "//" + parsedUrl.host;
-  //
-  //       if (parsedUrl.pathname !== "/") {
-  //         condensedUrl += parsedUrl.pathname;
-  //       }
-  //
-  //       const tempRegex = new RegExp(condensedUrl);
-  //
-  //       if (siteRegex.test(value) && tempRegex.test(url)) {
-  //         pageWhitelistHit = true;
-  //
-  //         return;
-  //       }
-  //     }
-  //   });
-  //
-  //   return pageWhitelistHit;
-  // }, [pageWhitelistPending]);
 
   const addDomainWhitelistEntryCall = async function () {
     const tabInfo = await browser.tabs.query({
@@ -285,6 +269,18 @@ export default function App() {
     }
   };
 
+  const handleAutoSyncToggle = () => {
+    dispatch(toggleAutoSync());
+  };
+
+  if (showBlacklistManager) {
+    return (
+      <div className={`body ${isMobile ? "mobile" : ""}`}>
+        <BlacklistManager onBack={() => setShowBlacklistManager(false)} />
+      </div>
+    );
+  }
+
   return (
     <div className={`body ${isMobile ? "mobile" : ""}`}>
       <div className="login-status">
@@ -341,6 +337,54 @@ export default function App() {
             <div className="sync-header">
               <h4>Browser History Sync</h4>
             </div>
+            
+            <div className="auto-sync-control">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={autoSyncEnabled}
+                  onChange={handleAutoSyncToggle}
+                />
+                <span>Auto-sync all browser history</span>
+              </label>
+              <p className="auto-sync-description">
+                Automatically sync all browsing history (excluding blacklisted items)
+              </p>
+            </div>
+
+            {deviceId ? (
+              <div className="device-info">
+                <p className="device-name">Device: {deviceName || 'Unknown Device'}</p>
+              </div>
+            ) : (
+              <div className="device-info">
+                <p className="device-label">Not Authenticated</p>
+                <p className="device-status">
+                  Please log in through the main application first.
+                </p>
+                <p className="device-note">
+                  This extension requires authentication to sync browser history.
+                </p>
+              </div>
+            )}
+
+            <div className="blacklist-buttons">
+              <button
+                onClick={() => setShowBlacklistManager(true)}
+                className="secondary"
+              >
+                Manage Blacklists
+              </button>
+              <div className="blacklist-counts">
+                <span className="blacklist-count">
+                  Sites: {siteBlacklist.length}
+                </span>
+                <span className="blacklist-count">
+                  Pages: {pageBlacklist.length}
+                </span>
+              </div>
+            </div>
+
             <div className="sync-controls">
               <button
                 onClick={triggerManualHistorySync}
