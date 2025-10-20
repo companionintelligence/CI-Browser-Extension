@@ -1,0 +1,181 @@
+{
+  "domain": "github.com",
+  "name": "GitHub Activity Scraper",
+  "description": "Scrapes GitHub repositories, issues, pull requests, and activity",
+  "targetUrl": [
+    "https://github.com/*",
+    "https://*.github.com/*"
+  ],
+  "dataSelectors": {
+    "repositories": {
+      "container": "[data-filterable-for='your-repos-filter'], .repo-list li, article.Box-row",
+      "fields": {
+        "name": {
+          "selector": "a[href], h3 a, .repo",
+          "type": "text",
+          "transform": "trim"
+        },
+        "url": {
+          "selector": "a[href*='github.com']",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "description": {
+          "selector": "p, .mb-1, [itemprop='description']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "language": {
+          "selector": "[itemprop='programmingLanguage'], .text-gray",
+          "type": "text",
+          "transform": "trim"
+        },
+        "stars": {
+          "selector": ".starred, .stargazers, [href*='/stargazers']",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "issues": {
+      "container": ".js-navigation-container .js-issue-row, [data-hovercard-type='issue']",
+      "fields": {
+        "title": {
+          "selector": ".js-navigation-open, a.Link--primary",
+          "type": "text",
+          "transform": "trim"
+        },
+        "url": {
+          "selector": "a.Link--primary, .js-navigation-open",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "number": {
+          "selector": ".opened-by, .Issue-status",
+          "type": "text",
+          "transform": "trim"
+        },
+        "state": {
+          "selector": ".State, .IssueLabel",
+          "type": "text",
+          "transform": "trim"
+        },
+        "labels": {
+          "selector": ".IssueLabel, .labels a",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "pullRequests": {
+      "container": ".js-navigation-container .js-issue-row[data-hovercard-type='pull_request']",
+      "fields": {
+        "title": {
+          "selector": ".js-navigation-open, a.Link--primary",
+          "type": "text",
+          "transform": "trim"
+        },
+        "url": {
+          "selector": "a.Link--primary, .js-navigation-open",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "number": {
+          "selector": ".opened-by",
+          "type": "text",
+          "transform": "trim"
+        },
+        "state": {
+          "selector": ".State",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "commits": {
+      "container": ".commit, .TimelineItem--condensed",
+      "fields": {
+        "message": {
+          "selector": ".commit-title, .message",
+          "type": "text",
+          "transform": "trim"
+        },
+        "sha": {
+          "selector": ".commit-id, .sha",
+          "type": "text",
+          "transform": "trim"
+        },
+        "author": {
+          "selector": ".commit-author, .author",
+          "type": "text",
+          "transform": "trim"
+        },
+        "timestamp": {
+          "selector": "relative-time, time-ago, time",
+          "type": "attribute",
+          "attribute": "datetime",
+          "transform": "trim"
+        }
+      }
+    },
+    "activity": {
+      "container": ".news .alert, .contribution-activity-listing",
+      "fields": {
+        "activityType": {
+          "selector": ".title, .f4",
+          "type": "text",
+          "transform": "trim"
+        },
+        "repository": {
+          "selector": "a.repo, a[data-hovercard-type='repository']",
+          "type": "text",
+          "transform": "trim"
+        },
+        "repositoryUrl": {
+          "selector": "a.repo, a[data-hovercard-type='repository']",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "timestamp": {
+          "selector": "relative-time, time",
+          "type": "attribute",
+          "attribute": "datetime",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "repositories",
+      "description": "GitHub repositories viewed or starred",
+      "personalDataType": "professional_activity"
+    },
+    {
+      "name": "issues",
+      "description": "GitHub issues viewed or created",
+      "personalDataType": "professional_activity"
+    },
+    {
+      "name": "pull_requests",
+      "description": "GitHub pull requests viewed or created",
+      "personalDataType": "professional_activity"
+    },
+    {
+      "name": "commits",
+      "description": "GitHub commits viewed",
+      "personalDataType": "professional_activity"
+    },
+    {
+      "name": "activity",
+      "description": "GitHub activity feed events",
+      "personalDataType": "professional_activity"
+    }
+  ]
+}
+
+
