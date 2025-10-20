@@ -41,9 +41,10 @@ The Companion Intelligence Browser Extension is designed to create a comprehensi
 
 ### Initial Setup
 1. Install the extension following the installation instructions above
-2. Configure your CI Server URL (see Configuration section)
-3. Authenticate with your CI Server through the extension popup
-4. Configure your domain and page whitelists to specify what content to track
+2. Install nginx certificate into Chrome (LOCAL DEV ONLY)
+3. Configure your CI Server URL (see Configuration section)
+4. Authenticate with your CI Server through the extension popup
+5. Configure your domain and page whitelists to specify what content to track
 
 ### Daily Usage
 - The extension works automatically in the background
@@ -57,6 +58,10 @@ The Companion Intelligence Browser Extension is designed to create a comprehensi
 - **Media Content**: Thumbnails and embedded media information
 - **Visit Timing**: When pages were accessed
 - **Historical Data**: Past visits to whitelisted domains (processed retroactively)
+
+### Installing local nginx certificate into Chrome (LOCAL DEV ONLY)
+1. In Chrome, go to chrome://certificate-manager/localcerts/usercerts
+2. Under Trusted Certificates click Import, navigate to ci-server/infrastructure/nginx/ssl, and import localhost.crt
 
 ## ⚙️ Configuration
 
