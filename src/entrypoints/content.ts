@@ -1,67 +1,99 @@
-import bowser from "bowser";
-
 export default defineContentScript({
-  matches: ["<all_urls>"],
+  matches: ['<all_urls>'],
   main() {
-    // Detect mobile environment
-    const browser_info = bowser.getParser(window.navigator.userAgent);
-    const isMobile = browser_info.getPlatformType() === "mobile";
-    const browserName = browser_info.getBrowserName();
+    // Content script for capturing form submissions
+    // This script runs on all pages to capture form submission events
 
+    // Listen for form submissions
+    document.addEventListener('submit', async (event) => {
+  try {
+    const form = event.target as HTMLFormElement;
+    if (!form) return;
 
-    // Scroll depth tracking
-    let maxScrollDepth = 0;
-    let scrollDepthPercentage = 0;
+    // Get form data
+    const formData = new FormData(form);
+    const fields: Record<string, string> = {};
     
-    // Function to calculate scroll depth
-    const calculateScrollDepth = () => {
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-      const documentHeight = document.documentElement.scrollHeight - window.innerHeight;
-      const scrollPercentage = documentHeight > 0 ? Math.round((scrollTop / documentHeight) * 100) : 0;
-      
-      if (scrollPercentage > maxScrollDepth) {
-        maxScrollDepth = scrollPercentage;
-        scrollDepthPercentage = maxScrollDepth;
+    // Extract form fields (excluding sensitive data like passwords)
+    for (const [key, value] of formData.entries()) {
+      if (typeof value === 'string' && !key.toLowerCase().includes('password')) {
+        fields[key] = value;
       }
+    }
+
+    // Create form submission data
+    const submissionData = {
+      id: `form_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      url: window.location.href,
+      domain: window.location.hostname,
+      fields: fields,
+      timestamp: new Date().toISOString(),
     };
-    
-    // Track scroll events
-    let scrollTimeout: number;
-    window.addEventListener('scroll', () => {
-      clearTimeout(scrollTimeout);
-      scrollTimeout = window.setTimeout(calculateScrollDepth, 100); // Debounce scroll events
-    });
-    
-    // Calculate initial scroll depth
-    calculateScrollDepth();
 
-    // Listen for messages from background script
-    browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message.action === 'getMetaDescription') {
-        try {
-          // Get meta description from the page
-          const metaDescription = document.querySelector('meta[name="description"]') as HTMLMetaElement;
-          const description = metaDescription ? metaDescription.content : undefined;
-          
-          sendResponse({ description: description });
-        } catch (error) {
-          console.error("Error getting meta description:", error);
-          sendResponse({ description: undefined });
-        }
-        return true; // Keep message channel open for async response
-      }
-      
-      if (message.action === 'getScrollDepth') {
-        try {
-          // Calculate current scroll depth
-          calculateScrollDepth();
-          sendResponse({ scrollDepth: scrollDepthPercentage });
-        } catch (error) {
-          console.error("Error getting scroll depth:", error);
-          sendResponse({ scrollDepth: 0 });
-        }
-        return true; // Keep message channel open for async response
-      }
+    // Store form submission locally
+    const existingSubmissions = await browser.storage.local.get('formSubmissions');
+    const submissions = existingSubmissions.formSubmissions || [];
+    submissions.push(submissionData);
+
+    // Keep only last 1000 form submissions to prevent storage bloat
+    if (submissions.length > 1000) {
+      submissions.splice(0, submissions.length - 1000);
+    }
+
+    await browser.storage.local.set({
+      formSubmissions: submissions
     });
+
+    // Send message to background script if form sync is enabled
+    try {
+      await browser.runtime.sendMessage({
+        action: 'formSubmitted',
+        data: submissionData
+      });
+    } catch (error) {
+      // Ignore errors - background script might not be ready
+    }
+  } catch (error) {
+    console.error('Error capturing form submission:', error);
+  }
+});
+
+// Also listen for AJAX form submissions
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+  const result = await originalFetch.apply(this, args);
+  
+  // Check if this might be a form submission
+  if (args[1] && args[1].method && ['POST', 'PUT', 'PATCH'].includes(args[1].method)) {
+    try {
+      const url = typeof args[0] === 'string' ? args[0] : args[0].url;
+      const submissionData = {
+        id: `ajax_form_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        url: url,
+        domain: new URL(url).hostname,
+        fields: {},
+        timestamp: new Date().toISOString(),
+        type: 'ajax'
+      };
+
+      // Store AJAX form submission
+      const existingSubmissions = await browser.storage.local.get('formSubmissions');
+      const submissions = existingSubmissions.formSubmissions || [];
+      submissions.push(submissionData);
+
+      if (submissions.length > 1000) {
+        submissions.splice(0, submissions.length - 1000);
+      }
+
+      await browser.storage.local.set({
+        formSubmissions: submissions
+      });
+    } catch (error) {
+      console.error('Error capturing AJAX form submission:', error);
+    }
+  }
+  
+  return result;
+};
   },
 });
