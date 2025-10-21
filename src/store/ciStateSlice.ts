@@ -21,6 +21,12 @@ export const loadUserSettings = createAsyncThunk(
       "deviceName",
       "deviceType", 
       "devicePlatform",
+      "includeBookmarks",
+      "bookmarkSyncEnabled",
+      "includeDownloads",
+      "downloadSyncEnabled",
+      "includeFormSubmissions",
+      "formSyncEnabled",
     ]);
 
     return localData;
@@ -39,19 +45,25 @@ interface CiState {
   url: string | null;
   domain: string | null;
   lastUrl: string | null;
+  historySyncInProgress: boolean;
+  historySyncStatus: string | null;
+  lastHistorySync: string | null;
+  syncHistoryLogs: any[];
   refreshing: boolean;
   serverDomain: string;
   autoSyncEnabled: boolean;
   siteBlacklist: string[];
   pageBlacklist: string[];
-  historySyncInProgress: boolean;
-  historySyncStatus: string | null;
-  lastHistorySync: string | null;
-  syncHistoryLogs: any[];
   deviceId: string | null;
   deviceName: string | null;
   deviceType: string | null;
   devicePlatform: string | null;
+  includeBookmarks: boolean;
+  bookmarkSyncEnabled: boolean;
+  includeDownloads: boolean;
+  downloadSyncEnabled: boolean;
+  includeFormSubmissions: boolean;
+  formSyncEnabled: boolean;
 }
 
 export const ciStateSlice = createSlice({
@@ -81,6 +93,12 @@ export const ciStateSlice = createSlice({
     deviceName: null,
     deviceType: null,
     devicePlatform: null,
+    includeBookmarks: false,
+    bookmarkSyncEnabled: false,
+    includeDownloads: false,
+    downloadSyncEnabled: false,
+    includeFormSubmissions: false,
+    formSyncEnabled: false,
   } as CiState,
   reducers: {
     setState: (state, action) => {
@@ -207,6 +225,42 @@ export const ciStateSlice = createSlice({
         autoSyncEnabled: !state.autoSyncEnabled,
       };
     },
+    toggleBookmarkSync(state) {
+      return {
+        ...state,
+        bookmarkSyncEnabled: !state.bookmarkSyncEnabled,
+      };
+    },
+    toggleIncludeBookmarks(state) {
+      return {
+        ...state,
+        includeBookmarks: !state.includeBookmarks,
+      };
+    },
+    toggleDownloadSync(state) {
+      return {
+        ...state,
+        downloadSyncEnabled: !state.downloadSyncEnabled,
+      };
+    },
+    toggleIncludeDownloads(state) {
+      return {
+        ...state,
+        includeDownloads: !state.includeDownloads,
+      };
+    },
+    toggleFormSync(state) {
+      return {
+        ...state,
+        formSyncEnabled: !state.formSyncEnabled,
+      };
+    },
+    toggleIncludeFormSubmissions(state) {
+      return {
+        ...state,
+        includeFormSubmissions: !state.includeFormSubmissions,
+      };
+    },
     addSiteBlacklist(state, action) {
       let newSiteBlacklist = state.siteBlacklist;
       if (newSiteBlacklist.indexOf(action.payload) === -1) {
@@ -273,6 +327,12 @@ export const ciStateSlice = createSlice({
           deviceName: state.deviceName,
           deviceType: state.deviceType,
           devicePlatform: state.devicePlatform,
+          includeBookmarks: state.includeBookmarks,
+          bookmarkSyncEnabled: state.bookmarkSyncEnabled,
+          includeDownloads: state.includeDownloads,
+          downloadSyncEnabled: state.downloadSyncEnabled,
+          includeFormSubmissions: state.includeFormSubmissions,
+          formSyncEnabled: state.formSyncEnabled,
         }),
       );
       browser.storage.local.set(parsed);
@@ -303,6 +363,12 @@ export const {
   addSyncHistoryLog,
   clearSyncHistoryLogs,
   toggleAutoSync,
+  toggleBookmarkSync,
+  toggleIncludeBookmarks,
+  toggleDownloadSync,
+  toggleIncludeDownloads,
+  toggleFormSync,
+  toggleIncludeFormSubmissions,
   addSiteBlacklist,
   removeSiteBlacklist,
   addPageBlacklist,

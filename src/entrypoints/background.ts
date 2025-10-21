@@ -18,6 +18,8 @@ import { locationService } from "@/locationService";
 
 const SLICE_SIZE = 50;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
+const DOWNLOAD_SYNC_KEY = "lastDownloadSync";
+const FORM_SYNC_KEY = "lastFormSync";
 
 let deviceSetupInProgress = false;
 
@@ -1132,6 +1134,63 @@ async function triggerManualHistorySync(options: { timeRange?: number } = {}) {
           lastHistorySync: new Date().toISOString(),
         }),
       );
+
+      // Sync bookmarks if enabled and includeBookmarks is true
+      if (state.bookmarkSyncEnabled && state.includeBookmarks) {
+        try {
+          store.dispatch(
+            setState({
+              historySyncStatus: "Syncing bookmarks...",
+            }),
+          );
+          await syncBookmarksToServer();
+        } catch (bookmarkError) {
+          console.error("Bookmark sync failed:", bookmarkError);
+          store.dispatch(
+            setState({
+              historySyncStatus: `${successMessage} (Bookmark sync failed)`,
+            }),
+          );
+        }
+      }
+
+      // Sync downloads if enabled and includeDownloads is true
+      if (state.downloadSyncEnabled && state.includeDownloads) {
+        try {
+          store.dispatch(
+            setState({
+              historySyncStatus: "Syncing downloads...",
+            }),
+          );
+          await syncDownloadsToServer();
+        } catch (downloadError) {
+          console.error("Download sync failed:", downloadError);
+          store.dispatch(
+            setState({
+              historySyncStatus: `${successMessage} (Download sync failed)`,
+            }),
+          );
+        }
+      }
+
+      // Sync form submissions if enabled and includeFormSubmissions is true
+      if (state.formSyncEnabled && state.includeFormSubmissions) {
+        try {
+          store.dispatch(
+            setState({
+              historySyncStatus: "Syncing form submissions...",
+            }),
+          );
+          await syncFormSubmissionsToServer();
+        } catch (formError) {
+          console.error("Form submission sync failed:", formError);
+          store.dispatch(
+            setState({
+              historySyncStatus: `${successMessage} (Form sync failed)`,
+            }),
+          );
+        }
+      }
     }
 
     store.dispatch(saveUserSettings());
@@ -1161,6 +1220,569 @@ async function triggerManualHistorySync(options: { timeRange?: number } = {}) {
       }),
     );
     store.dispatch(saveUserSettings());
+  }
+}
+
+// Background sync function - triggers the same logic as the periodic auto-sync
+async function triggerBackgroundSync() {
+  await store.dispatch({
+    type: "loadUserSettings",
+  });
+
+  const state = store.getState().ciState;
+  
+  // Check if already syncing
+  if (state.historySyncInProgress) {
+    console.log("Background sync already in progress");
+    return;
+  }
+
+  // Check authentication
+  const { accessToken } = state;
+  const accessDecoded = accessToken ? (jwtDecode(accessToken) as any) : null;
+  const isAuthExpired = accessDecoded && accessDecoded.exp
+    ? Date.now() >= accessDecoded.exp * 1000
+    : true;
+
+  if (isAuthExpired) {
+    store.dispatch(
+      setState({
+        historySyncStatus: "Authentication expired. Please log in again.",
+      }),
+    );
+    return;
+  }
+
+  try {
+    await getDeviceId();
+  } catch (error) {
+    store.dispatch(
+      setState({
+        historySyncStatus: "Device setup failed due to SSL certificate issues. Please run Chrome with --ignore-certificate-errors flag.",
+      }),
+    );
+    return;
+  }
+
+  const startTime = Date.now();
+  const timeRange = AUTO_SYNC_TIME_RANGE; // Use the same time range as auto-sync
+  const searchStartTime = Date.now() - timeRange;
+
+  try {
+    // Set sync in progress
+    store.dispatch(
+      setState({
+        historySyncInProgress: true,
+        historySyncStatus: "Starting background sync...",
+      }),
+    );
+
+    store.dispatch(saveUserSettings());
+
+    // Get all history (not just whitelisted domains/pages)
+    store.dispatch(
+      setState({
+        historySyncStatus: "Searching browser history...",
+      }),
+    );
+
+    const allHistoryResults = await browser.history.search({
+      text: "",
+      startTime: searchStartTime,
+      maxResults: 1000000,
+    });
+
+    if (allHistoryResults.length === 0) {
+      const duration = Date.now() - startTime;
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: "No history found for the selected time range.",
+          lastHistorySync: new Date().toISOString(),
+        }),
+      );
+
+      // Log the sync operation
+      store.dispatch(
+        addSyncHistoryLog({
+          timestamp: new Date().toISOString(),
+          timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+          totalEntries: 0,
+          processedEntries: 0,
+          uploadedEntries: 0,
+          status: "success",
+          error: null,
+          duration: duration,
+        }),
+      );
+
+      store.dispatch(saveUserSettings());
+      return;
+    }
+
+    store.dispatch(
+      setState({
+        historySyncStatus: `Processing ${allHistoryResults.length} history entries...`,
+      }),
+    );
+
+    // Get detailed visit information for all history entries
+    const hydratedResults: Array<{ visitTime: number; url: string }> = [];
+    let processed = 0;
+    let blacklistedCount = 0;
+    const { siteBlacklist = [], pageBlacklist = [] } = state;
+
+    await Promise.all(
+      allHistoryResults.map((item) => {
+        return (async () => {
+          try {
+            // Check if this URL is blacklisted
+            if (item.url && isUrlBlacklisted(item.url, siteBlacklist, pageBlacklist)) {
+              blacklistedCount++;
+              processed++;
+              return true;
+            }
+
+            if (!item.url) {
+              processed++;
+              return true;
+            }
+
+            const visits = await browser.history.getVisits({
+              url: item.url,
+            });
+
+            for (const visit of visits) {
+              if (visit.visitTime && visit.visitTime >= searchStartTime) {
+                hydratedResults.push({
+                  visitTime: visit.visitTime,
+                  url: item.url,
+                });
+              }
+            }
+
+            processed++;
+            if (processed % 100 === 0) {
+              const statusMessage = blacklistedCount > 0
+                ? `Processed ${processed}/${allHistoryResults.length} entries (${blacklistedCount} blacklisted)...`
+                : `Processed ${processed}/${allHistoryResults.length} entries...`;
+              store.dispatch(
+                setState({
+                  historySyncStatus: statusMessage,
+                }),
+              );
+            }
+
+            return true;
+          } catch (err) {
+            console.log("Error processing history item:", err);
+            return false;
+          }
+        })();
+      }),
+    );
+
+    if (hydratedResults.length === 0) {
+      const duration = Date.now() - startTime;
+      const statusMessage = blacklistedCount > 0
+        ? `No visits to sync (${blacklistedCount} blacklisted entries excluded).`
+        : "No visits found for the selected time range.";
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: statusMessage,
+          lastHistorySync: new Date().toISOString(),
+        }),
+      );
+
+      // Log the sync operation
+      store.dispatch(
+        addSyncHistoryLog({
+          timestamp: new Date().toISOString(),
+          timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+          totalEntries: allHistoryResults.length,
+          processedEntries: processed,
+          uploadedEntries: 0,
+          status: "success",
+          error: null,
+          duration: duration,
+        }),
+      );
+
+      store.dispatch(saveUserSettings());
+      return;
+    }
+
+    const statusMessage = blacklistedCount > 0
+      ? `Uploading ${hydratedResults.length} visits to CI-Server (${blacklistedCount} blacklisted entries excluded)...`
+      : `Uploading ${hydratedResults.length} visits to CI-Server...`;
+    store.dispatch(
+      setState({
+        historySyncStatus: statusMessage,
+      }),
+    );
+
+    // Process and upload visits in batches
+    let uploaded = 0;
+    let failed = false;
+    let lastError = null;
+
+    for (let i = 0; i < hydratedResults.length; i += MOBILE_SLICE_SIZE) {
+      const slice = hydratedResults.slice(i, i + MOBILE_SLICE_SIZE);
+      const events = slice.map((visit) => createSurfingEvent(visit.url, visit.visitTime));
+
+      try {
+        await axios.post(`https://${state.serverDomain}/api/events`, events, {
+          headers: {
+            Authorization: `Bearer ${state.accessToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        uploaded += slice.length;
+        store.dispatch(
+          setState({
+            historySyncStatus: `Uploaded ${uploaded}/${hydratedResults.length} visits...`,
+          }),
+        );
+      } catch (error) {
+        console.error("Error uploading batch:", error);
+        failed = true;
+        lastError = error instanceof Error ? error.message : String(error);
+        break;
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    const logStatus = failed ? "failed" : "success";
+
+    // Log the sync operation
+    store.dispatch(
+      addSyncHistoryLog({
+        timestamp: new Date().toISOString(),
+        timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+        totalEntries: allHistoryResults.length,
+        processedEntries: hydratedResults.length,
+        uploadedEntries: uploaded,
+        status: logStatus,
+        error: lastError,
+        duration: duration,
+      }),
+    );
+
+    // Update final status
+    if (failed) {
+      const failureMessage = blacklistedCount > 0
+        ? `Background sync failed after uploading ${uploaded} visits (${blacklistedCount} blacklisted entries excluded). Please try again.`
+        : `Background sync failed after uploading ${uploaded} visits. Please try again.`;
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: failureMessage,
+        }),
+      );
+    } else {
+      const successMessage = blacklistedCount > 0
+        ? `Successfully synced ${uploaded} visits to CI-Server (${blacklistedCount} blacklisted entries excluded).`
+        : `Successfully synced ${uploaded} visits to CI-Server.`;
+      store.dispatch(
+        setState({
+          historySyncInProgress: false,
+          historySyncStatus: successMessage,
+          lastHistorySync: new Date().toISOString(),
+        }),
+      );
+
+      // Sync bookmarks if enabled and includeBookmarks is true
+      if (state.bookmarkSyncEnabled && state.includeBookmarks) {
+        try {
+          store.dispatch(
+            setState({
+              historySyncStatus: "Syncing bookmarks...",
+            }),
+          );
+          await syncBookmarksToServer();
+        } catch (bookmarkError) {
+          console.error("Bookmark sync failed:", bookmarkError);
+          store.dispatch(
+            setState({
+              historySyncStatus: `${successMessage} (Bookmark sync failed)`,
+            }),
+          );
+        }
+      }
+
+      // Sync downloads if enabled and includeDownloads is true
+      if (state.downloadSyncEnabled && state.includeDownloads) {
+        try {
+          store.dispatch(
+            setState({
+              historySyncStatus: "Syncing downloads...",
+            }),
+          );
+          await syncDownloadsToServer();
+        } catch (downloadError) {
+          console.error("Download sync failed:", downloadError);
+          store.dispatch(
+            setState({
+              historySyncStatus: `${successMessage} (Download sync failed)`,
+            }),
+          );
+        }
+      }
+
+      // Sync form submissions if enabled and includeFormSubmissions is true
+      if (state.formSyncEnabled && state.includeFormSubmissions) {
+        try {
+          store.dispatch(
+            setState({
+              historySyncStatus: "Syncing form submissions...",
+            }),
+          );
+          await syncFormSubmissionsToServer();
+        } catch (formError) {
+          console.error("Form submission sync failed:", formError);
+          store.dispatch(
+            setState({
+              historySyncStatus: `${successMessage} (Form sync failed)`,
+            }),
+          );
+        }
+      }
+    }
+
+    store.dispatch(saveUserSettings());
+  } catch (error) {
+    console.error("Background sync error:", error);
+    const duration = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Log the sync operation as failed
+    store.dispatch(
+      addSyncHistoryLog({
+        timestamp: new Date().toISOString(),
+        timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)), // Convert to days
+        totalEntries: 0,
+        processedEntries: 0,
+        uploadedEntries: 0,
+        status: "failed",
+        error: errorMessage,
+        duration: duration,
+      }),
+    );
+
+    store.dispatch(
+      setState({
+        historySyncInProgress: false,
+        historySyncStatus: `Background sync failed: ${errorMessage}`,
+      }),
+    );
+    store.dispatch(saveUserSettings());
+  }
+}
+
+// Download sync functions
+async function createDownloadEvent(
+  download: any,
+  eventType: "create" | "update" | "sync" = "sync",
+): Promise<{
+  name: string;
+  start_time: string;
+  type: string;
+  content: {
+    type: string;
+    mimetype: string;
+    url: string;
+    title?: string;
+    text?: string;
+  }[];
+  download_id: string;
+}> {
+  const newContent = [
+    {
+      type: "Download",
+      mimetype: "application/octet-stream",
+      url: download.url,
+      title: download.filename,
+      text: `Downloaded: ${download.filename} (${download.totalBytes} bytes)`,
+    },
+  ];
+
+  return {
+    name: `${eventType === "create" ? "Downloaded" : eventType === "update" ? "Updated Download" : "Synced Download"}: ${download.filename}`,
+    start_time: new Date(download.startTime || Date.now()).toJSON(),
+    type: eventType === "create" ? "Download" : eventType === "update" ? "Update" : "Sync",
+    content: newContent,
+    download_id: download.id.toString(),
+  };
+}
+
+async function syncDownloadsToServer() {
+  const state = store.getState().ciState;
+  const { accessToken, serverDomain } = state;
+
+  if (!accessToken) {
+    return;
+  }
+
+  try {
+    const downloads = await browser.downloads.search({});
+    
+    // Process downloads in batches
+    for (let i = 0; i < downloads.length; i += SLICE_SIZE) {
+      const slice = downloads.slice(i, i + SLICE_SIZE);
+      const downloadEvents = await Promise.all(
+        slice.map((download) => createDownloadEvent(download, "sync")),
+      );
+
+      try {
+        await axios.post(`https://${serverDomain}/api/events`, downloadEvents, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+      } catch (err) {
+        console.error("Error posting download events:", err);
+        throw err;
+      }
+    }
+
+    // Update last sync time
+    await browser.storage.local.set({
+      [DOWNLOAD_SYNC_KEY]: Date.now(),
+    });
+  } catch (error) {
+    console.error("Error syncing downloads:", error);
+  }
+}
+
+async function handleDownloadCreated(download: any) {
+  const state = store.getState().ciState;
+  const { accessToken, serverDomain } = state;
+
+  if (!accessToken || !state.downloadSyncEnabled) {
+    return;
+  }
+
+  try {
+    const downloadEvent = await createDownloadEvent(download, "create");
+    await axios.post(`https://${serverDomain}/api/events`, downloadEvent, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    console.error("Error syncing created download:", error);
+  }
+}
+
+// Form submission sync functions
+async function createFormSubmissionEvent(
+  formData: any,
+  eventType: "create" | "sync" = "sync",
+): Promise<{
+  name: string;
+  start_time: string;
+  type: string;
+  content: {
+    type: string;
+    mimetype: string;
+    url: string;
+    title?: string;
+    text?: string;
+  }[];
+  form_id: string;
+}> {
+  const newContent = [
+    {
+      type: "Form Submission",
+      mimetype: "application/json",
+      url: formData.url,
+      title: `Form submitted on ${formData.domain}`,
+      text: JSON.stringify({
+        domain: formData.domain,
+        formFields: formData.fields,
+        timestamp: formData.timestamp,
+      }),
+    },
+  ];
+
+  return {
+    name: `${eventType === "create" ? "Form Submitted" : "Synced Form Submission"}: ${formData.domain}`,
+    start_time: new Date(formData.timestamp).toJSON(),
+    type: eventType === "create" ? "Form Submission" : "Sync",
+    content: newContent,
+    form_id: formData.id,
+  };
+}
+
+async function syncFormSubmissionsToServer() {
+  const state = store.getState().ciState;
+  const { accessToken, serverDomain } = state;
+
+  if (!accessToken) {
+    return;
+  }
+
+  try {
+    // Get form submissions from storage
+    const formSubmissions = await browser.storage.local.get("formSubmissions");
+    const submissions = formSubmissions.formSubmissions || [];
+    
+    if (!submissions || submissions.length === 0) {
+      console.log("No form submissions to sync");
+      return;
+    }
+
+    // Process form submissions in batches
+    for (let i = 0; i < submissions.length; i += SLICE_SIZE) {
+      const slice = submissions.slice(i, i + SLICE_SIZE);
+      const formEvents = await Promise.all(
+        slice.map((submission) => createFormSubmissionEvent(submission, "sync")),
+      );
+
+      try {
+        await axios.post(`https://${serverDomain}/api/events`, formEvents, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+      } catch (err) {
+        console.error("Error posting form submission events:", err);
+        throw err;
+      }
+    }
+
+    // Update last sync time
+    await browser.storage.local.set({
+      [FORM_SYNC_KEY]: Date.now(),
+    });
+  } catch (error) {
+    console.error("Error syncing form submissions:", error);
+  }
+}
+
+async function handleFormSubmission(formData: any) {
+  const state = store.getState().ciState;
+  const { accessToken, serverDomain } = state;
+
+  if (!accessToken) {
+    return;
+  }
+
+  try {
+    const formEvent = await createFormSubmissionEvent(formData, "create");
+    await axios.post(`https://${serverDomain}/api/events`, formEvent, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    console.error("Error syncing form submission:", error);
   }
 }
 
@@ -1627,7 +2249,8 @@ export default defineBackground({
     const initServices = async () => {
       try {
         await database.init();
-        await locationService.startLocationTracking();
+        // Location tracking is now handled by content script
+        // await locationService.startLocationTracking();
       } catch (error) {
         console.error("Failed to initialize services:", error);
       }
@@ -1759,12 +2382,12 @@ export default defineBackground({
 
           store.dispatch(saveUserSettings());
 
-          // Sync location data periodically
-          try {
-            await locationService.syncLocationData();
-          } catch (error) {
-            console.error("Error syncing location data:", error);
-          }
+          // Sync location data periodically - disabled in service worker
+          // try {
+          //   await locationService.syncLocationData();
+          // } catch (error) {
+          //   console.error("Error syncing location data:", error);
+          // }
         });
     }, 1000);
 
@@ -1843,6 +2466,41 @@ export default defineBackground({
 
         return true;
       }
+
+      if (message.action === "triggerBackgroundSync") {
+        // Trigger the background periodic sync logic
+        triggerBackgroundSync()
+          .then(() => {
+            sendResponse({ success: true });
+          })
+          .catch((error) => {
+            console.error("Background sync failed:", error);
+            sendResponse({ success: false, error: error.message });
+          });
+
+        return true;
+      }
+
+      if (message.action === "formSubmitted") {
+        // Handle real-time form submission if form sync is enabled
+        const state = store.getState().ciState;
+        if (state.formSyncEnabled && state.accessToken) {
+          handleFormSubmission(message.data);
+        }
+        return true;
+      }
+
+      if (message.action === "locationUpdate") {
+        // Handle location updates from content script
+        locationService.handleLocationUpdate(message.location);
+        return true;
+      }
+
+      if (message.action === "syncLocation") {
+        // Handle location sync requests from content script
+        locationService.syncLocationData();
+        return true;
+      }
     });
 
     const AUTO_SYNC_INTERVAL = 60 * 60 * 1000;
@@ -1874,9 +2532,45 @@ export default defineBackground({
       }
     }, AUTO_SYNC_INTERVAL);
 
-    browser.bookmarks.onCreated.addListener(handleBookmarkCreated);
-    browser.bookmarks.onChanged.addListener(handleBookmarkChanged);
-    browser.bookmarks.onRemoved.addListener(handleBookmarkRemoved);
+    // Set up bookmark listeners based on settings
+    const setupBookmarkListeners = () => {
+      const state = store.getState().ciState;
+      if (state.bookmarkSyncEnabled) {
+        browser.bookmarks.onCreated.addListener(handleBookmarkCreated);
+        browser.bookmarks.onChanged.addListener(handleBookmarkChanged);
+        browser.bookmarks.onRemoved.addListener(handleBookmarkRemoved);
+      } else {
+        browser.bookmarks.onCreated.removeListener(handleBookmarkCreated);
+        browser.bookmarks.onChanged.removeListener(handleBookmarkChanged);
+        browser.bookmarks.onRemoved.removeListener(handleBookmarkRemoved);
+      }
+    };
+
+    // Initial setup
+    setupBookmarkListeners();
+
+    // Set up download listeners based on settings
+    const setupDownloadListeners = () => {
+      const state = store.getState().ciState;
+      if (state.downloadSyncEnabled) {
+        browser.downloads.onCreated.addListener(handleDownloadCreated);
+      } else {
+        browser.downloads.onCreated.removeListener(handleDownloadCreated);
+      }
+    };
+
+    // Initial setup
+    setupDownloadListeners();
+
+    // Listen for setting changes
+    browser.storage.onChanged.addListener((changes) => {
+      if (changes.bookmarkSyncEnabled) {
+        setupBookmarkListeners();
+      }
+      if (changes.downloadSyncEnabled) {
+        setupDownloadListeners();
+      }
+    });
 
     setTimeout(async () => {
       const lastSync = await browser.storage.local.get(BOOKMARK_SYNC_KEY);
