@@ -8,6 +8,12 @@ import {
   removePageWhitelistEntry,
   setState,
   toggleAutoSync,
+  toggleBookmarkSync,
+  toggleIncludeBookmarks,
+  toggleDownloadSync,
+  toggleIncludeDownloads,
+  toggleFormSync,
+  toggleIncludeFormSubmissions,
 } from "@/store/ciStateSlice";
 import "./App.css";
 import { domainRegex, siteRegex } from "@/utils.ts";
@@ -37,6 +43,12 @@ export default function App() {
     deviceName,
     deviceType,
     devicePlatform,
+    includeBookmarks,
+    bookmarkSyncEnabled,
+    includeDownloads,
+    downloadSyncEnabled,
+    includeFormSubmissions,
+    formSyncEnabled,
   } = ciState;
 
   const [showBlacklistManager, setShowBlacklistManager] = useState(false);
@@ -254,23 +266,59 @@ export default function App() {
     }
 
     try {
-      const response = await browser.runtime.sendMessage({
-        action: "triggerManualHistorySync",
-        options: {
-          timeRange: 7 * 24 * 60 * 60 * 1000, // Last 7 days
-        },
-      });
+      // If auto-sync is enabled, just trigger the background periodic sync
+      if (autoSyncEnabled) {
+        const response = await browser.runtime.sendMessage({
+          action: "triggerBackgroundSync",
+        });
 
-      if (!response.success) {
-        console.error("Manual history sync failed:", response.error);
+        if (!response.success) {
+          console.error("Background sync failed:", response.error);
+        }
+      } else {
+        // If auto-sync is disabled, do a full manual sync
+        const response = await browser.runtime.sendMessage({
+          action: "triggerManualHistorySync",
+          options: {
+            timeRange: 7 * 24 * 60 * 60 * 1000, // Last 7 days
+          },
+        });
+
+        if (!response.success) {
+          console.error("Manual history sync failed:", response.error);
+        }
       }
     } catch (error) {
-      console.error("Error triggering manual history sync:", error);
+      console.error("Error triggering sync:", error);
     }
   };
 
   const handleAutoSyncToggle = () => {
     dispatch(toggleAutoSync());
+  };
+
+  const handleBookmarkSyncToggle = () => {
+    dispatch(toggleBookmarkSync());
+  };
+
+  const handleIncludeBookmarksToggle = () => {
+    dispatch(toggleIncludeBookmarks());
+  };
+
+  const handleDownloadSyncToggle = () => {
+    dispatch(toggleDownloadSync());
+  };
+
+  const handleIncludeDownloadsToggle = () => {
+    dispatch(toggleIncludeDownloads());
+  };
+
+  const handleFormSyncToggle = () => {
+    dispatch(toggleFormSync());
+  };
+
+  const handleIncludeFormSubmissionsToggle = () => {
+    dispatch(toggleIncludeFormSubmissions());
   };
 
   if (showBlacklistManager) {
@@ -290,6 +338,175 @@ export default function App() {
             : "Logged in to Companion Intelligence"}
         </a>
       </div>
+      
+      {!sessionTokenExpired && (
+        <div className="sync-section">
+          <div className="sync-header">
+            <h4>Browser History Sync</h4>
+          </div>
+          
+          <div className="auto-sync-control">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={autoSyncEnabled}
+                onChange={handleAutoSyncToggle}
+              />
+              <span>Auto-sync all browser history</span>
+            </label>
+            <p className="auto-sync-description">
+              Automatically sync all browsing history (excluding blacklisted items)
+            </p>
+          </div>
+
+          <div className="bookmark-sync-control">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={bookmarkSyncEnabled}
+                onChange={handleBookmarkSyncToggle}
+              />
+              <span>Enable bookmark sync</span>
+            </label>
+            <p className="bookmark-sync-description">
+              Sync your bookmarks with Companion Intelligence
+            </p>
+          </div>
+
+          {bookmarkSyncEnabled && (
+            <div className="include-bookmarks-control">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={includeBookmarks}
+                  onChange={handleIncludeBookmarksToggle}
+                />
+                <span>Include bookmarks in history sync</span>
+              </label>
+              <p className="include-bookmarks-description">
+                Include bookmark data when syncing browser history
+              </p>
+            </div>
+          )}
+
+          <div className="download-sync-control">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={downloadSyncEnabled}
+                onChange={handleDownloadSyncToggle}
+              />
+              <span>Enable download sync</span>
+            </label>
+            <p className="download-sync-description">
+              Sync your download history with Companion Intelligence
+            </p>
+          </div>
+
+          {downloadSyncEnabled && (
+            <div className="include-downloads-control">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={includeDownloads}
+                  onChange={handleIncludeDownloadsToggle}
+                />
+                <span>Include downloads in history sync</span>
+              </label>
+              <p className="include-downloads-description">
+                Include download data when syncing browser history
+              </p>
+            </div>
+          )}
+
+          <div className="form-sync-control">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={formSyncEnabled}
+                onChange={handleFormSyncToggle}
+              />
+              <span>Enable form submission sync</span>
+            </label>
+            <p className="form-sync-description">
+              Sync form submissions with Companion Intelligence
+            </p>
+          </div>
+
+          {formSyncEnabled && (
+            <div className="include-form-submissions-control">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={includeFormSubmissions}
+                  onChange={handleIncludeFormSubmissionsToggle}
+                />
+                <span>Include form submissions in history sync</span>
+              </label>
+              <p className="include-form-submissions-description">
+                Include form submission data when syncing browser history
+              </p>
+            </div>
+          )}
+
+          {deviceId ? (
+            <div className="device-info">
+              <p className="device-name">Device: {deviceName || 'Unknown Device'}</p>
+            </div>
+          ) : (
+            <div className="device-info">
+              <p className="device-label">Not Authenticated</p>
+              <p className="device-status">
+                Please log in through the main application first.
+              </p>
+              <p className="device-note">
+                This extension requires authentication to sync browser history.
+              </p>
+            </div>
+          )}
+
+          <div className="blacklist-buttons">
+            <button
+              onClick={() => setShowBlacklistManager(true)}
+              className="secondary"
+            >
+              Manage Blacklists
+            </button>
+            <div className="blacklist-counts">
+              <span className="blacklist-count">
+                Sites: {siteBlacklist.length}
+              </span>
+              <span className="blacklist-count">
+                Pages: {pageBlacklist.length}
+              </span>
+            </div>
+          </div>
+
+          <div className="sync-controls">
+            <button
+              onClick={triggerManualHistorySync}
+              disabled={historySyncInProgress}
+              className={historySyncInProgress ? "disabled" : "primary"}
+            >
+              {historySyncInProgress 
+                ? "Syncing..." 
+                : autoSyncEnabled 
+                  ? "Trigger Background Sync" 
+                  : "Sync Last 7 Days"
+              }
+            </button>
+          </div>
+          {historySyncStatus && (
+            <div className="sync-status">{historySyncStatus}</div>
+          )}
+          {lastHistorySync && (
+            <div className="last-sync">
+              Last sync: {new Date(lastHistorySync).toLocaleString()}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="button-container">
         <div className="horizontal-container">
           {domainWhitelisted.hit && domainWhitelisted.pending && (
@@ -329,81 +546,6 @@ export default function App() {
             </button>
           )}
         </div>
-        <button onClick={openOptionsPage}>
-          {isMobile ? "Options" : "Open Extension Options"}
-        </button>
-        {!sessionTokenExpired && (
-          <div className="sync-section">
-            <div className="sync-header">
-              <h4>Browser History Sync</h4>
-            </div>
-            
-            <div className="auto-sync-control">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={autoSyncEnabled}
-                  onChange={handleAutoSyncToggle}
-                />
-                <span>Auto-sync all browser history</span>
-              </label>
-              <p className="auto-sync-description">
-                Automatically sync all browsing history (excluding blacklisted items)
-              </p>
-            </div>
-
-            {deviceId ? (
-              <div className="device-info">
-                <p className="device-name">Device: {deviceName || 'Unknown Device'}</p>
-              </div>
-            ) : (
-              <div className="device-info">
-                <p className="device-label">Not Authenticated</p>
-                <p className="device-status">
-                  Please log in through the main application first.
-                </p>
-                <p className="device-note">
-                  This extension requires authentication to sync browser history.
-                </p>
-              </div>
-            )}
-
-            <div className="blacklist-buttons">
-              <button
-                onClick={() => setShowBlacklistManager(true)}
-                className="secondary"
-              >
-                Manage Blacklists
-              </button>
-              <div className="blacklist-counts">
-                <span className="blacklist-count">
-                  Sites: {siteBlacklist.length}
-                </span>
-                <span className="blacklist-count">
-                  Pages: {pageBlacklist.length}
-                </span>
-              </div>
-            </div>
-
-            <div className="sync-controls">
-              <button
-                onClick={triggerManualHistorySync}
-                disabled={historySyncInProgress}
-                className={historySyncInProgress ? "disabled" : "primary"}
-              >
-                {historySyncInProgress ? "Syncing..." : "Sync Last 7 Days"}
-              </button>
-            </div>
-            {historySyncStatus && (
-              <div className="sync-status">{historySyncStatus}</div>
-            )}
-            {lastHistorySync && (
-              <div className="last-sync">
-                Last sync: {new Date(lastHistorySync).toLocaleString()}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Domain Scraper Status */}
         <div className="domain-scraper-status margin-top-1em">
@@ -479,6 +621,10 @@ export default function App() {
             </div>
           )}
         </div>
+        
+        <button onClick={openOptionsPage}>
+          {isMobile ? "Options" : "Open Extension Options"}
+        </button>
       </div>
     </div>
   );

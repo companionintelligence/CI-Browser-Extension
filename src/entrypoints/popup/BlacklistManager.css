@@ -8,32 +8,44 @@
 .blacklist-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
   border-bottom: 1px solid #333;
   padding-bottom: 1rem;
 }
 
 .blacklist-header h2 {
   margin: 0;
-  font-size: 1.2em;
+  font-size: 1.3em;
+  font-weight: 600;
   flex: 1;
+  color: #fff;
 }
 
 .back-button {
-  padding: 0.5em 1em;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   background-color: #444;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 0.9em;
-  min-height: auto;
-  min-width: auto;
+  font-size: 1.1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .back-button:hover {
   background-color: #555;
+  transform: translateX(-1px);
+}
+
+.back-button:active {
+  transform: translateX(0);
 }
 
 .blacklist-description {
@@ -45,34 +57,36 @@
 
 .tab-selector {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.25rem;
   margin-bottom: 1.5rem;
-  border-bottom: 2px solid #333;
+  border-bottom: 1px solid #333;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  padding: 0.25rem;
 }
 
 .tab {
   flex: 1;
-  padding: 0.7em 1em;
+  padding: 0.75em 1em;
   background-color: transparent;
   color: #888;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: -2px;
-  min-height: auto;
-  min-width: auto;
+  transition: all 0.2s ease;
   font-size: 0.9em;
+  font-weight: 500;
+  position: relative;
 }
 
 .tab:hover {
   color: #aaa;
-  background-color: rgba(100, 108, 255, 0.1);
+  background-color: rgba(75, 167, 166, 0.1);
 }
 
 .tab.active {
-  color: #646cff;
-  border-bottom-color: #646cff;
+  color: #4ba7a6;
+  background-color: rgba(75, 167, 166, 0.15);
   font-weight: 600;
 }
 
@@ -84,62 +98,80 @@
 
 .current-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.75rem;
   justify-content: center;
+  margin-bottom: 1rem;
 }
 
 .current-actions button {
   flex: 1;
-  min-height: auto;
+  padding: 0.75em 1.5em;
+  font-size: 0.9em;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.2s ease;
 }
 
 .add-entry {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 
 .adder {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  gap: 0.75rem;
+  align-items: stretch;
 }
 
 .text-input {
   flex: 1;
-  padding: 0.7em;
+  padding: 0.75em 1em;
   border: 1px solid #444;
-  border-radius: 4px;
+  border-radius: 6px;
   background-color: #1a1a1a;
   color: white;
   font-size: 0.9em;
   outline: none;
+  transition: all 0.2s ease;
 }
 
 .text-input:focus {
-  border-color: #646cff;
-  box-shadow: 0 0 0 2px rgba(100, 108, 255, 0.2);
+  border-color: #4ba7a6;
+  box-shadow: 0 0 0 3px rgba(75, 167, 166, 0.15);
+  background-color: #1f1f1f;
+}
+
+.text-input::placeholder {
+  color: #666;
 }
 
 .add-button {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  background-color: #646cff;
+  background-color: #4ba7a6;
   color: white;
   border: none;
-  border-radius: 4px;
-  font-size: 1.5em;
+  border-radius: 6px;
+  font-size: 1.4em;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: auto;
-  min-width: auto;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .add-button:hover {
-  background-color: #535bf2;
+  background-color: #2f6b7e;
+  transform: scale(1.05);
+}
+
+.add-button:active {
+  transform: scale(0.95);
 }
 
 .error {
@@ -151,64 +183,76 @@
 .blacklist-entries {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
   max-height: 300px;
   overflow-y: auto;
-  padding: 0.5rem;
-  background-color: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  border: 1px solid #333;
 }
 
 .empty-state {
   text-align: center;
   color: #666;
-  padding: 2rem;
+  padding: 2.5rem 1rem;
   font-style: italic;
+  font-size: 0.9em;
 }
 
 .entry {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.7em;
+  padding: 0.875em 1em;
   background-color: #1a1a1a;
   border: 1px solid #333;
-  border-radius: 4px;
-  gap: 0.5rem;
+  border-radius: 6px;
+  gap: 0.75rem;
+  transition: all 0.2s ease;
 }
 
 .entry:hover {
   background-color: #252525;
   border-color: #444;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .entry-text {
   flex: 1;
   word-break: break-all;
-  font-size: 0.85em;
+  font-size: 0.9em;
   text-align: left;
+  color: #e0e0e0;
+  line-height: 1.4;
 }
 
 .delete-button {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   background-color: #ff4757;
   color: white;
   border: none;
-  border-radius: 4px;
-  font-size: 1.3em;
+  border-radius: 6px;
+  font-size: 1.2em;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  min-height: auto;
-  min-width: auto;
+  transition: all 0.2s ease;
 }
 
 .delete-button:hover {
   background-color: #ff3838;
+  transform: scale(1.1);
+}
+
+.delete-button:active {
+  transform: scale(0.95);
 }
 
 /* Light mode */
@@ -217,12 +261,17 @@
     border-bottom-color: #ddd;
   }
 
+  .blacklist-header h2 {
+    color: #213547;
+  }
+
   .blacklist-description {
     color: #666;
   }
 
   .tab-selector {
     border-bottom-color: #ddd;
+    background-color: rgba(0, 0, 0, 0.05);
   }
 
   .tab {
@@ -231,11 +280,12 @@
 
   .tab:hover {
     color: #444;
-    background-color: rgba(100, 108, 255, 0.1);
+    background-color: rgba(75, 167, 166, 0.1);
   }
 
   .tab.active {
-    color: #646cff;
+    color: #4ba7a6;
+    background-color: rgba(75, 167, 166, 0.15);
   }
 
   .text-input {
@@ -245,11 +295,17 @@
   }
 
   .text-input:focus {
-    border-color: #646cff;
+    border-color: #4ba7a6;
+    background-color: #fff;
+  }
+
+  .text-input::placeholder {
+    color: #999;
   }
 
   .blacklist-entries {
     background-color: rgba(0, 0, 0, 0.03);
+    border-color: #ddd;
   }
 
   .empty-state {
@@ -262,8 +318,9 @@
   }
 
   .entry:hover {
-    background-color: #f5f5f5;
+    background-color: #f8f9fa;
     border-color: #ccc;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
   .entry-text {
@@ -283,10 +340,21 @@
 /* Mobile responsive */
 @media (max-width: 480px) {
   .blacklist-manager {
-    padding: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  .blacklist-header {
+    gap: 0.5rem;
+    margin-bottom: 1rem;
   }
 
   .blacklist-header h2 {
+    font-size: 1.1em;
+  }
+
+  .back-button {
+    width: 28px;
+    height: 28px;
     font-size: 1em;
   }
 
@@ -297,10 +365,31 @@
 
   .text-input {
     font-size: 0.85em;
+    padding: 0.6em 0.8em;
+  }
+
+  .add-button {
+    width: 40px;
+    height: 40px;
+    font-size: 1.2em;
+  }
+
+  .entry {
+    padding: 0.75em 0.875em;
   }
 
   .entry-text {
-    font-size: 0.8em;
+    font-size: 0.85em;
+  }
+
+  .delete-button {
+    width: 28px;
+    height: 28px;
+    font-size: 1em;
+  }
+
+  .blacklist-entries {
+    padding: 0.75rem;
   }
 }
 

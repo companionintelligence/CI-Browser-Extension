@@ -90,8 +90,8 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
   return (
     <div className="blacklist-manager">
       <div className="blacklist-header">
-        <button className="back-button" onClick={onBack}>
-          ← Back
+        <button className="back-button" onClick={onBack} title="Go back">
+          ←
         </button>
         <h2>Blacklist Management</h2>
       </div>

@@ -25,11 +25,11 @@
 
 a {
   font-weight: 500;
-  color: #646cff;
+  color: #4ba7a6;
   text-decoration: inherit;
 }
 a:hover {
-  color: #535bf2;
+  color: #2f6b7e;
 }
 
 body {
@@ -59,7 +59,7 @@ button {
   touch-action: manipulation;
 }
 button:hover {
-  border-color: #646cff;
+  border-color: #4ba7a6;
 }
 button:focus,
 button:focus-visible {
@@ -176,7 +176,7 @@ button:focus-visible {
 
 .historySync h3 {
   margin-bottom: 1rem;
-  color: #646cff;
+  color: #4ba7a6;
 }
 
 .sync-controls {
@@ -212,14 +212,14 @@ button:focus-visible {
 }
 
 button.primary {
-  background-color: #646cff;
+  background-color: #4ba7a6;
   color: white;
-  border-color: #646cff;
+  border-color: #4ba7a6;
 }
 
 button.primary:hover:not(:disabled) {
-  background-color: #535bf2;
-  border-color: #535bf2;
+  background-color: #2f6b7e;
+  border-color: #2f6b7e;
 }
 
 button.disabled,
@@ -235,8 +235,8 @@ button:disabled {
   margin: 1rem 0;
   padding: 1rem;
   border-radius: 4px;
-  background-color: rgba(100, 108, 255, 0.1);
-  color: #646cff;
+  background-color: rgba(75, 167, 166, 0.1);
+  color: #4ba7a6;
   text-align: center;
   font-style: italic;
 }
@@ -267,8 +267,8 @@ button:disabled {
   }
   
   .sync-status {
-    background-color: rgba(100, 108, 255, 0.1);
-    color: #535bf2;
+    background-color: rgba(75, 167, 166, 0.1);
+    color: #2f6b7e;
   }
   
   .last-sync {
@@ -319,7 +319,7 @@ button:disabled {
 
 .sync-logs-header h3 {
   margin: 0;
-  color: #646cff;
+  color: #4ba7a6;
 }
 
 .sync-logs-controls {
@@ -335,12 +335,12 @@ button:disabled {
 
 button.secondary {
   background-color: transparent;
-  color: #646cff;
-  border-color: #646cff;
+  color: #4ba7a6;
+  border-color: #4ba7a6;
 }
 
 button.secondary:hover:not(:disabled) {
-  background-color: rgba(100, 108, 255, 0.1);
+  background-color: rgba(75, 167, 166, 0.1);
 }
 
 button.danger {
@@ -491,7 +491,7 @@ button.danger:hover:not(:disabled) {
   font-size: 1.5rem;
   font-weight: 600;
   margin-bottom: 1.5rem;
-  color: #646cff;
+  color: #4ba7a6;
 }
 
 .padded {
@@ -512,7 +512,7 @@ button.danger:hover:not(:disabled) {
 
 .domainWhitelist h3,
 .pageWhitelist h3 {
-  color: #646cff;
+  color: #4ba7a6;
   margin-bottom: 1rem;
   font-size: 1.2rem;
 }
