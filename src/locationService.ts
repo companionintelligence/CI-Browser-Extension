@@ -22,38 +22,31 @@ class LocationService {
   async startLocationTracking(): Promise<void> {
     if (this.isTracking) {
       console.log("Location tracking already started");
-
       return;
     }
 
-    try {
-      // Check if geolocation is available
-      if (!navigator.geolocation) {
-        console.error("Geolocation is not supported by this browser");
+    // Location tracking is now handled by content script
+    // This method is kept for compatibility but does nothing
+    console.log("Location tracking is handled by content script");
+    this.isTracking = true;
+  }
 
-        return;
-      }
+  // Handle location updates from content script
+  handleLocationUpdate(location: { latitude: number; longitude: number; timestamp: number }): void {
+    const locationData: LocationData = {
+      latitude: location.latitude,
+      longitude: location.longitude,
+      timestamp: new Date(location.timestamp).toISOString(),
+    };
 
-      this.isTracking = true;
-      console.log("Starting location tracking...");
-
-      // Get initial location
-      await this.getCurrentLocation();
-
-      // Set up periodic location updates
-      this.watchId = navigator.geolocation.watchPosition(
-        (position) => this.handleLocationSuccess(position),
-        (error) => this.handleLocationError(error),
-        {
-          enableHighAccuracy: false, // Use false to save battery
-          timeout: 10000, // 10 seconds
-          maximumAge: this.LOCATION_INTERVAL, // Use cached location if recent enough
-        },
-      );
-    } catch (error) {
-      console.error("Failed to start location tracking:", error);
-      this.isTracking = false;
-    }
+    this.handleLocationSuccess({
+      coords: {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracy: 0,
+      },
+      timestamp: location.timestamp,
+    } as GeolocationPosition);
   }
 
   stopLocationTracking(): void {

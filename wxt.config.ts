@@ -14,6 +14,7 @@ export default defineConfig({
     permissions: [
       "bookmarks",
       "cookies",
+      "downloads",
       "history",
       "storage",
       "tabs",
