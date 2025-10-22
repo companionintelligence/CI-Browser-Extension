@@ -2,24 +2,39 @@ import { useState, useEffect } from "react";
 
 import { useSelector, useDispatch } from "react-redux";
 import "./App.css";
-import {
-  addDomainWhitelistEntry,
-  addPageWhitelistEntry,
-  removeDomainWhitelistEntry,
-  removePageWhitelistEntry,
-  clearSyncHistoryLogs,
-  setState,
-} from "@/store/ciStateSlice.ts";
+import { clearSyncHistoryLogs, setState } from "@/store/ciStateSlice.ts";
 import bowser from "bowser";
-
-import { domainRegex, siteRegex } from "@/utils.ts";
 
 function App() {
   const dispatch = useDispatch();
-  const ciState = useSelector((state) => state.ciState);
+  const ciState = useSelector(
+    (state: { ciState: unknown }) => state.ciState,
+  ) as {
+    historySyncInProgress: boolean;
+    historySyncStatus: string | null;
+    lastHistorySync: string | null;
+    serverDomain: string;
+    autoSyncEnabled: boolean;
+    siteBlacklist: string[];
+    pageBlacklist: string[];
+    deviceId: string | null;
+    deviceName: string | null;
+    bookmarkSyncEnabled: boolean;
+    downloadSyncEnabled: boolean;
+    formSyncEnabled: boolean;
+    syncHistoryLogs: {
+      id: string;
+      status: string;
+      timestamp: string;
+      timeRange?: number;
+      totalEntries?: number;
+      processedEntries?: number;
+      uploadedEntries?: number;
+      error?: string;
+      duration?: number;
+    }[];
+  };
   const {
-    domainWhitelist,
-    pageWhitelist,
     historySyncInProgress,
     historySyncStatus,
     lastHistorySync,
@@ -29,62 +44,30 @@ function App() {
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
 
-  const [invalidDomain, setInvalidDomain] = useState(false);
-  const [invalidPage, setInvalidPage] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [domain, setDomain] = useState(serverDomain);
-  const [newDomain, setNewDomain] = useState("");
-  const [newPage, setNewPage] = useState("");
 
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
     setIsMobile(browser_info.getPlatformType() === "mobile");
   }, []);
 
-  const addDomainEntry = (e: any) => {
-    e.preventDefault();
-    console.log("newDomain", newDomain);
-    setInvalidDomain(!domainRegex.test(newDomain));
-    if (domainRegex.test(newDomain)) {
-      dispatch(addDomainWhitelistEntry(newDomain));
-    }
-
-    setNewDomain("");
-  };
-
-  const deleteDomainEntry = (domain: string) => {
-    dispatch(removeDomainWhitelistEntry(domain));
-  };
-
-  const addPageEntry = (e: any) => {
-    e.preventDefault();
-    setInvalidPage(!siteRegex.test(newPage));
-    if (siteRegex.test(newPage)) {
-      dispatch(addPageWhitelistEntry(newPage));
-    }
-
-    setNewPage("");
-  };
-
-  const deletePageEntry = (page: string) => {
-    dispatch(removePageWhitelistEntry(page));
-  };
-
-  const changeDomain = () => {
+  const changeDomain = (e?: { preventDefault?: () => void }) => {
+    e?.preventDefault?.();
     dispatch(setState({ serverDomain: domain }));
   };
 
-  const handleDomainChange = (e: any) => {
+  const handleDomainChange = (e: { target: { value: string } }) => {
     setDomain(e.target.value);
   };
 
-  const handleNewDomainChange = (e: any) => {
-    setNewDomain(e.target.value);
-  };
+  // const handleNewDomainChange = (e: { target: { value: string } }) => {
+  //   setNewDomain(e.target.value);
+  // };
 
-  const handleNewPageChange = (e: any) => {
-    setNewPage(e.target.value);
-  };
+  // const handleNewPageChange = (e: { target: { value: string } }) => {
+  //   setNewPage(e.target.value);
+  // };
 
   const triggerHistorySync = async () => {
     if (historySyncInProgress) {
@@ -213,102 +196,6 @@ function App() {
                 </div>
               </form>
             </div>
-            <div className="domainWhitelist">
-              <h3>Tracked Domain List</h3>
-              <div>
-                <p>Enter domains for CI to track, such as 'wikipedia.org'</p>
-              </div>
-              <form onSubmit={addDomainEntry}>
-                <div className="add-entry">
-                  <div className="adder">
-                    <div className="text-box">
-                      <input
-                        type="text"
-                        name="newDomain"
-                        value={newDomain}
-                        onChange={handleNewDomainChange}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            addDomainEntry(e);
-                          }
-                        }}
-                        placeholder={isMobile ? "google.com" : "google.com"}
-                      />
-                    </div>
-                    <i className="plus" onClick={addDomainEntry}>
-                      +
-                    </i>
-                  </div>
-                  {invalidDomain && <span>That is not a valid domain.</span>}
-                </div>
-              </form>
-              <div className="entries">
-                {domainWhitelist.map((domain) => (
-                  <div className="entry" key={domain}>
-                    <span>{domain}</span>
-                    <i
-                      className="delete"
-                      onClick={() => deleteDomainEntry(domain)}
-                    >
-                      X
-                    </i>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="pageWhitelist">
-              <h3>Tracked Page List</h3>
-              <div>
-                <p>
-                  Enter specific pages for CI to track, such as
-                  'https://en.wikipedia.org/wiki/Proceratosaurus'
-                </p>
-              </div>
-              <form onSubmit={addPageEntry}>
-                <div className="add-entry">
-                  <div className="adder">
-                    <div className="text-box">
-                      <input
-                        type="text"
-                        name="newPage"
-                        value={newPage}
-                        onChange={handleNewPageChange}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            addPageEntry(e);
-                          }
-                        }}
-                        placeholder={
-                          isMobile
-                            ? "https://google.com/search?q=..."
-                            : "https://google.com/search?q=roses"
-                        }
-                      />
-                    </div>
-                    <i className="plus" onClick={addPageEntry}>
-                      +
-                    </i>
-                  </div>
-                  {invalidPage && <span>That is not a valid page URL.</span>}
-                </div>
-              </form>
-              <div className="entries">
-                {pageWhitelist.map((page) => (
-                  <div className="entry" key={page}>
-                    <span title={page}>
-                      {isMobile && page.length > 30
-                        ? page.slice(0, 30) + "..."
-                        : page.length > 40
-                          ? page.slice(0, 40) + "..."
-                          : page}
-                    </span>
-                    <i className="delete" onClick={() => deletePageEntry(page)}>
-                      X
-                    </i>
-                  </div>
-                ))}
-              </div>
-            </div>
 
             <div className="historySync">
               <h3>Browser History Sync</h3>
@@ -408,36 +295,50 @@ function App() {
                         <span>Status</span>
                         <span>Duration</span>
                       </div>
-                      {syncHistoryLogs.map((log) => (
-                        <div key={log.id} className="log-entry">
-                          <div className="log-timestamp">
-                            {new Date(log.timestamp).toLocaleString()}
+                      {syncHistoryLogs.map(
+                        (log: {
+                          id: string;
+                          status: string;
+                          timestamp: string;
+                          timeRange?: number;
+                          totalEntries?: number;
+                          processedEntries?: number;
+                          uploadedEntries?: number;
+                          error?: string;
+                          duration?: number;
+                        }) => (
+                          <div key={log.id} className="log-entry">
+                            <div className="log-timestamp">
+                              {new Date(log.timestamp).toLocaleString()}
+                            </div>
+                            <div className="log-range">
+                              {log.timeRange === 1
+                                ? "24h"
+                                : `${log.timeRange}d`}
+                            </div>
+                            <div className="log-counts">
+                              {log.totalEntries}/{log.processedEntries}/
+                              {log.uploadedEntries}
+                            </div>
+                            <div
+                              className="log-status"
+                              style={{ color: getStatusColor(log.status) }}
+                            >
+                              {log.status.charAt(0).toUpperCase() +
+                                log.status.slice(1)}
+                              {log.error && (
+                                <div className="log-error" title={log.error}>
+                                  ⚠️ {log.error.substring(0, 50)}
+                                  {log.error.length > 50 ? "..." : ""}
+                                </div>
+                              )}
+                            </div>
+                            <div className="log-duration">
+                              {formatDuration(log.duration || 0)}
+                            </div>
                           </div>
-                          <div className="log-range">
-                            {log.timeRange === 1 ? "24h" : `${log.timeRange}d`}
-                          </div>
-                          <div className="log-counts">
-                            {log.totalEntries}/{log.processedEntries}/
-                            {log.uploadedEntries}
-                          </div>
-                          <div
-                            className="log-status"
-                            style={{ color: getStatusColor(log.status) }}
-                          >
-                            {log.status.charAt(0).toUpperCase() +
-                              log.status.slice(1)}
-                            {log.error && (
-                              <div className="log-error" title={log.error}>
-                                ⚠️ {log.error.substring(0, 50)}
-                                {log.error.length > 50 ? "..." : ""}
-                              </div>
-                            )}
-                          </div>
-                          <div className="log-duration">
-                            {formatDuration(log.duration)}
-                          </div>
-                        </div>
-                      ))}
+                        ),
+                      )}
                     </div>
                   )}
                 </div>

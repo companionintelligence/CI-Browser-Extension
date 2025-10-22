@@ -19,7 +19,6 @@ export default defineConfig({
       "storage",
       "tabs",
       "webNavigation",
-      "geolocation",
     ],
     icons: {
       "16": "icon/favicon-16x16.png",
@@ -38,21 +37,7 @@ export default defineConfig({
   },
   srcDir: "src",
   modules: ["@wxt-dev/module-react"],
-  imports: {
-    bowser: ["default"],
-  },
   // Output configurations for different browsers including mobile
   outDir: ".output",
   // Enable mobile browser builds
-  runner: {
-    // Disable automatic opening on mobile
-    openBrowser: false,
-    // Browser-specific configurations
-    webExt: {
-      // Safari development configuration
-      safari: {
-        devtools: true,
-      },
-    },
-  },
 });

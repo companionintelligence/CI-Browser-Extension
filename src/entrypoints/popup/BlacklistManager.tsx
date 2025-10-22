@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   addSiteBlacklist,
@@ -15,8 +15,13 @@ interface BlacklistManagerProps {
 
 export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
   const dispatch = useDispatch();
-  const ciState = useSelector((state: any) => state.ciState);
-  const { siteBlacklist, pageBlacklist, url, domain } = ciState;
+  const ciState = useSelector(
+    (state: { ciState: unknown }) => state.ciState,
+  ) as {
+    siteBlacklist: string[];
+    pageBlacklist: string[];
+  };
+  const { siteBlacklist, pageBlacklist } = ciState;
 
   const [newSite, setNewSite] = useState("");
   const [newPage, setNewPage] = useState("");
@@ -24,7 +29,7 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
   const [invalidPage, setInvalidPage] = useState(false);
   const [activeTab, setActiveTab] = useState<"sites" | "pages">("sites");
 
-  const addSiteEntry = (e: any) => {
+  const addSiteEntry = (e: { preventDefault: () => void }) => {
     e.preventDefault();
     setInvalidSite(!domainRegex.test(newSite));
     if (domainRegex.test(newSite)) {
@@ -37,7 +42,7 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
     dispatch(removeSiteBlacklist(site));
   };
 
-  const addPageEntry = (e: any) => {
+  const addPageEntry = (e: { preventDefault: () => void }) => {
     e.preventDefault();
     setInvalidPage(!siteRegex.test(newPage));
     if (siteRegex.test(newPage)) {
@@ -218,4 +223,3 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
     </div>
   );
 }
-

@@ -29,7 +29,7 @@ export interface ScrapeResult {
   url: string;
   timestamp: string;
   data: {
-    [key: string]: any[];
+    [key: string]: unknown[];
   };
 }
 
@@ -153,10 +153,10 @@ export class DomainScraper {
       for (const selectorName of Object.keys(profile.dataSelectors)) {
         const selectorConfig = profile.dataSelectors[selectorName];
         const containers = document.querySelectorAll(selectorConfig.container);
-        const items: any[] = [];
+        const items: Record<string, unknown>[] = [];
 
         containers.forEach((container) => {
-          const item: any = {};
+          const item: Record<string, unknown> = {};
 
           for (const fieldName of Object.keys(selectorConfig.fields)) {
             const fieldConfig = selectorConfig.fields[fieldName];
@@ -218,6 +218,7 @@ export class DomainScraper {
       .replace(/\\\*/g, ".*");
 
     const regex = new RegExp(`^${regexPattern}$`);
+
     return regex.test(url);
   }
 

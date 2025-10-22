@@ -69,89 +69,53 @@ describe("Background Script", () => {
     });
   });
 
-  describe("Domain and Page Whitelist Matching Logic", () => {
-    it("should match domain whitelist correctly", () => {
-      const domain = "example.com";
-      const domainWhitelist = ["example.com", "google.com", "github.com"];
+  describe("Domain and Page Blacklist Matching Logic", () => {
+    it("should match domain blacklist correctly", () => {
+      const url = "https://example.com/page";
+      const siteBlacklist = ["example.com", "google.com", "github.com"];
+      // const pageBlacklist: string[] = [];
 
-      // Test domain matching logic
-      let domainWhitelistHit = false;
-      domainWhitelist.forEach((item) => {
-        const domainRegex = new RegExp(item);
-        if (domainRegex.test(domain)) {
-          domainWhitelistHit = true;
+      // Test blacklist matching logic (simplified version of isUrlBlacklisted)
+      let isBlacklisted = false;
+      try {
+        const parsedUrl = URL.parse(url);
+        if (parsedUrl && parsedUrl.hostname) {
+          // Check site blacklist
+          for (const site of siteBlacklist) {
+            if (parsedUrl.hostname.includes(site)) {
+              isBlacklisted = true;
+              break;
+            }
+          }
         }
-      });
+      } catch {
+        isBlacklisted = false;
+      }
 
-      expect(domainWhitelistHit).toBe(true);
-    });
-
-    it("should match subdomain correctly", () => {
-      const domain = "api.github.com";
-      const domainWhitelist = ["github.com"];
-
-      let domainWhitelistHit = false;
-      domainWhitelist.forEach((item) => {
-        const domainRegex = new RegExp(item);
-        if (domainRegex.test(domain)) {
-          domainWhitelistHit = true;
-        }
-      });
-
-      expect(domainWhitelistHit).toBe(true);
+      expect(isBlacklisted).toBe(true);
     });
 
     it("should not match unrelated domains", () => {
-      const domain = "unrelated.com";
-      const domainWhitelist = ["example.com", "google.com"];
+      const url = "https://unrelated.com/page";
+      const siteBlacklist = ["example.com", "google.com"];
+      // const pageBlacklist: string[] = [];
 
-      let domainWhitelistHit = false;
-      domainWhitelist.forEach((item) => {
-        const domainRegex = new RegExp(item);
-        if (domainRegex.test(domain)) {
-          domainWhitelistHit = true;
-        }
-      });
-
-      expect(domainWhitelistHit).toBe(false);
-    });
-
-    it("should match page whitelist correctly", () => {
-      // Mock URL.parse
-      (global as any).URL = {
-        ...URL,
-        parse: jest.fn().mockReturnValue({
-          hash: "",
-          toString: () => "https://example.com/page",
-        }),
-      };
-
-      const url = "https://example.com/page";
-      const pageWhitelist = ["https://example.com/page", "https://google.com"];
-
-      let pageWhitelistHit = false;
-      pageWhitelist.forEach((item) => {
-        const siteRegex = new RegExp(item.replace("?", "\\?"));
-        const parsedUrl = (global as any).URL.parse(url);
-
-        if (parsedUrl) {
-          parsedUrl.hash = "";
-          if (siteRegex.test(parsedUrl.toString())) {
-            pageWhitelistHit = true;
+      let isBlacklisted = false;
+      try {
+        const parsedUrl = URL.parse(url);
+        if (parsedUrl && parsedUrl.hostname) {
+          for (const site of siteBlacklist) {
+            if (parsedUrl.hostname.includes(site)) {
+              isBlacklisted = true;
+              break;
+            }
           }
         }
-      });
+      } catch {
+        isBlacklisted = false;
+      }
 
-      expect(pageWhitelistHit).toBe(true);
-    });
-
-    it("should handle URLs with query parameters in regex", () => {
-      const item = "https://example.com/search?q=test";
-      const escapedItem = item.replace("?", "\\?");
-      const regex = new RegExp(escapedItem);
-
-      expect(regex.test("https://example.com/search?q=test")).toBe(true);
-      expect(regex.test("https://example.com/search?q=other")).toBe(false);
+      expect(isBlacklisted).toBe(false);
     });
   });
 
@@ -172,7 +136,7 @@ describe("Background Script", () => {
 
       // Test the API call structure
       await axios.post(
-        "https://dev.companionintelligence.com/api/events",
+        "https://dev.companionintelligence.com/api/browser-activity",
         mockEvents,
         {
           headers: {
@@ -183,7 +147,7 @@ describe("Background Script", () => {
       );
 
       expect(mockedAxios.post).toHaveBeenCalledWith(
-        "https://dev.companionintelligence.com/api/events",
+        "https://dev.companionintelligence.com/api/browser-activity",
         mockEvents,
         {
           headers: {
@@ -204,7 +168,7 @@ describe("Background Script", () => {
       let errorCaught = false;
       try {
         await axios.post(
-          "https://dev.companionintelligence.com/api/events",
+          "https://dev.companionintelligence.com/api/browser-activity",
           mockEvents,
           {
             headers: {
@@ -213,7 +177,7 @@ describe("Background Script", () => {
             },
           },
         );
-      } catch (error) {
+      } catch {
         errorCaught = true;
       }
 
@@ -246,7 +210,7 @@ describe("Background Script", () => {
 
     it("should handle empty history results", () => {
       const SLICE_SIZE = 50;
-      const mockResults: any[] = [];
+      const mockResults: unknown[] = [];
 
       const slices = [];
       for (let i = 0; i < mockResults.length; i += SLICE_SIZE) {
@@ -288,7 +252,7 @@ describe("Background Script", () => {
     it("should handle null token as expired", () => {
       const mockAccessDecoded = null;
       const isAuthExpired = mockAccessDecoded
-        ? Date.now() >= mockAccessDecoded.exp * 1000
+        ? Date.now() >= (mockAccessDecoded as { exp?: number }).exp! * 1000
         : true;
       expect(isAuthExpired).toBe(true);
     });

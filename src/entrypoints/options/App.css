@@ -504,18 +504,6 @@ button.danger:hover:not(:disabled) {
   line-height: 1.6;
 }
 
-.domainWhitelist,
-.pageWhitelist {
-  margin: 2rem 0;
-  text-align: left;
-}
-
-.domainWhitelist h3,
-.pageWhitelist h3 {
-  color: #4ba7a6;
-  margin-bottom: 1rem;
-  font-size: 1.2rem;
-}
 
 .entries {
   margin-top: 1rem;

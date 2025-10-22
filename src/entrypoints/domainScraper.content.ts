@@ -1,4 +1,4 @@
-import { domainScraper, ScrapeResult } from "@/domainScraper";
+import { domainScraper } from "@/domainScraper";
 
 export default defineContentScript({
   matches: [

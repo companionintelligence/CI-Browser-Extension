@@ -6,12 +6,6 @@ export const loadUserSettings = createAsyncThunk(
     const localData = await browser.storage.local.get([
       "accessToken",
       "sessionToken",
-      "domainWhitelist",
-      "domainWhitelistPending",
-      "domainWhitelistHistory",
-      "pageWhitelist",
-      "pageWhitelistPending",
-      "pageWhitelistHistory",
       "lastHistorySync",
       "syncHistoryLogs",
       "autoSyncEnabled",
@@ -19,14 +13,11 @@ export const loadUserSettings = createAsyncThunk(
       "pageBlacklist",
       "deviceId",
       "deviceName",
-      "deviceType", 
+      "deviceType",
       "devicePlatform",
-      "includeBookmarks",
       "bookmarkSyncEnabled",
-      "includeDownloads",
       "downloadSyncEnabled",
-      "includeFormSubmissions",
-      "formSyncEnabled",
+      "historySyncEnabled",
     ]);
 
     return localData;
@@ -36,19 +27,13 @@ export const loadUserSettings = createAsyncThunk(
 interface CiState {
   accessToken: string | null;
   sessionToken: string | null;
-  domainWhitelist: string[];
-  domainWhitelistPending: Record<string, any>;
-  domainWhitelistHistory: string[];
-  pageWhitelist: string[];
-  pageWhitelistPending: Record<string, any>;
-  pageWhitelistHistory: string[];
   url: string | null;
   domain: string | null;
   lastUrl: string | null;
   historySyncInProgress: boolean;
   historySyncStatus: string | null;
   lastHistorySync: string | null;
-  syncHistoryLogs: any[];
+  syncHistoryLogs: { status: string; timestamp: string }[];
   refreshing: boolean;
   serverDomain: string;
   autoSyncEnabled: boolean;
@@ -58,12 +43,9 @@ interface CiState {
   deviceName: string | null;
   deviceType: string | null;
   devicePlatform: string | null;
-  includeBookmarks: boolean;
   bookmarkSyncEnabled: boolean;
-  includeDownloads: boolean;
   downloadSyncEnabled: boolean;
-  includeFormSubmissions: boolean;
-  formSyncEnabled: boolean;
+  historySyncEnabled: boolean;
 }
 
 export const ciStateSlice = createSlice({
@@ -71,12 +53,6 @@ export const ciStateSlice = createSlice({
   initialState: {
     accessToken: null,
     sessionToken: null,
-    domainWhitelist: [],
-    domainWhitelistPending: {},
-    domainWhitelistHistory: [],
-    pageWhitelist: [],
-    pageWhitelistPending: {},
-    pageWhitelistHistory: [],
     url: null,
     domain: null,
     lastUrl: null,
@@ -93,105 +69,15 @@ export const ciStateSlice = createSlice({
     deviceName: null,
     deviceType: null,
     devicePlatform: null,
-    includeBookmarks: false,
     bookmarkSyncEnabled: false,
-    includeDownloads: false,
     downloadSyncEnabled: false,
-    includeFormSubmissions: false,
-    formSyncEnabled: false,
+    historySyncEnabled: true, // Default to enabled since history is the main feature
   } as CiState,
   reducers: {
     setState: (state, action) => {
       const payload = action.payload as Partial<CiState>;
 
       return { ...state, ...payload };
-    },
-    addDomainWhitelistEntry(state, action) {
-      let newDomainWhitelist = state.domainWhitelist;
-      if (newDomainWhitelist.indexOf(action.payload) === -1) {
-        newDomainWhitelist = newDomainWhitelist.concat(action.payload);
-      }
-
-      const returned = { ...state, domainWhitelist: newDomainWhitelist };
-
-      if (state.domainWhitelistHistory.indexOf(action.payload) === -1) {
-        returned.domainWhitelistPending = {
-          ...state.domainWhitelistPending,
-          [action.payload]: new Date().getTime(),
-        };
-      }
-
-      return returned;
-    },
-    removeDomainWhitelistEntry(state, action) {
-      const newDomainWhitelist = state.domainWhitelist.filter(
-        (entry) => entry != null && entry !== action.payload,
-      );
-
-      const domainWhitelistPendingCopy = { ...state.domainWhitelistPending };
-      delete domainWhitelistPendingCopy[action.payload];
-
-      return {
-        ...state,
-        domainWhitelist: newDomainWhitelist,
-        domainWhitelistPending: domainWhitelistPendingCopy,
-      };
-    },
-    addPageWhitelistEntry(state, action) {
-      let newPageWhitelist = state.pageWhitelist;
-      let parsed = URL.parse(action.payload);
-      if (!parsed) {
-        parsed = URL.parse(`https://${action.payload}`);
-        action.payload = `https://${action.payload}`;
-      }
-
-      if (!parsed) {
-        return;
-      }
-
-      parsed.hash = "";
-      const parsedToString = parsed.toString();
-      if (newPageWhitelist.indexOf(parsedToString) === -1) {
-        newPageWhitelist = newPageWhitelist.concat(parsedToString);
-      }
-
-      const returned = { ...state, pageWhitelist: newPageWhitelist };
-
-      if (state.pageWhitelistHistory.indexOf(parsedToString) === -1) {
-        returned.pageWhitelistPending = {
-          ...state.pageWhitelistPending,
-          [parsedToString]: new Date().getTime(),
-        };
-      }
-
-      return returned;
-    },
-    removePageWhitelistEntry(state, action) {
-      let parsed = URL.parse(action.payload);
-      if (!parsed) {
-        parsed = URL.parse(`https://${action.payload}`);
-        action.payload = `https://${action.payload}`;
-      }
-
-      if (!parsed) {
-        return state;
-      }
-
-      parsed.hash = "";
-      const strippedUrl = parsed.toString();
-
-      const newPageWhitelist = state.pageWhitelist.filter(
-        (entry) => entry != null && entry !== strippedUrl,
-      );
-
-      const pageWhitelistPendingCopy = { ...state.pageWhitelistPending };
-      delete pageWhitelistPendingCopy[strippedUrl];
-
-      return {
-        ...state,
-        pageWhitelist: newPageWhitelist,
-        pageWhitelistPending: pageWhitelistPendingCopy,
-      };
     },
     addSyncHistoryLog(state, action) {
       const newLog = {
@@ -231,34 +117,31 @@ export const ciStateSlice = createSlice({
         bookmarkSyncEnabled: !state.bookmarkSyncEnabled,
       };
     },
-    toggleIncludeBookmarks(state) {
-      return {
-        ...state,
-        includeBookmarks: !state.includeBookmarks,
-      };
-    },
     toggleDownloadSync(state) {
       return {
         ...state,
         downloadSyncEnabled: !state.downloadSyncEnabled,
       };
     },
-    toggleIncludeDownloads(state) {
+    toggleHistorySync(state) {
+      const newHistorySyncEnabled = !state.historySyncEnabled;
+
+      // If turning history sync back on, clear the cache and set a flag
+      if (newHistorySyncEnabled) {
+        // Clear the synced history cache
+        browser.storage.local.remove("syncedHistory").catch(console.error);
+
+        // Store the current timestamp to track when history sync was re-enabled
+        browser.storage.local
+          .set({
+            historySyncReEnabledAt: Date.now(),
+          })
+          .catch(console.error);
+      }
+
       return {
         ...state,
-        includeDownloads: !state.includeDownloads,
-      };
-    },
-    toggleFormSync(state) {
-      return {
-        ...state,
-        formSyncEnabled: !state.formSyncEnabled,
-      };
-    },
-    toggleIncludeFormSubmissions(state) {
-      return {
-        ...state,
-        includeFormSubmissions: !state.includeFormSubmissions,
+        historySyncEnabled: newHistorySyncEnabled,
       };
     },
     addSiteBlacklist(state, action) {
@@ -266,12 +149,14 @@ export const ciStateSlice = createSlice({
       if (newSiteBlacklist.indexOf(action.payload) === -1) {
         newSiteBlacklist = newSiteBlacklist.concat(action.payload);
       }
+
       return { ...state, siteBlacklist: newSiteBlacklist };
     },
     removeSiteBlacklist(state, action) {
       const newSiteBlacklist = state.siteBlacklist.filter(
         (entry) => entry != null && entry !== action.payload,
       );
+
       return { ...state, siteBlacklist: newSiteBlacklist };
     },
     addPageBlacklist(state, action) {
@@ -281,14 +166,17 @@ export const ciStateSlice = createSlice({
         parsed = URL.parse(`https://${action.payload}`);
         action.payload = `https://${action.payload}`;
       }
+
       if (!parsed) {
         return state;
       }
+
       parsed.hash = "";
       const parsedToString = parsed.toString();
       if (newPageBlacklist.indexOf(parsedToString) === -1) {
         newPageBlacklist = newPageBlacklist.concat(parsedToString);
       }
+
       return { ...state, pageBlacklist: newPageBlacklist };
     },
     removePageBlacklist(state, action) {
@@ -297,14 +185,17 @@ export const ciStateSlice = createSlice({
         parsed = URL.parse(`https://${action.payload}`);
         action.payload = `https://${action.payload}`;
       }
+
       if (!parsed) {
         return state;
       }
+
       parsed.hash = "";
       const strippedUrl = parsed.toString();
       const newPageBlacklist = state.pageBlacklist.filter(
         (entry) => entry != null && entry !== strippedUrl,
       );
+
       return { ...state, pageBlacklist: newPageBlacklist };
     },
     saveUserSettings(state) {
@@ -312,12 +203,6 @@ export const ciStateSlice = createSlice({
         JSON.stringify({
           accessToken: state.accessToken,
           sessionToken: state.sessionToken,
-          domainWhitelist: state.domainWhitelist,
-          domainWhitelistPending: state.domainWhitelistPending,
-          domainWhitelistHistory: state.domainWhitelistHistory,
-          pageWhitelist: state.pageWhitelist,
-          pageWhitelistPending: state.pageWhitelistPending,
-          pageWhitelistHistory: state.pageWhitelistHistory,
           lastHistorySync: state.lastHistorySync,
           syncHistoryLogs: state.syncHistoryLogs,
           autoSyncEnabled: state.autoSyncEnabled,
@@ -327,12 +212,9 @@ export const ciStateSlice = createSlice({
           deviceName: state.deviceName,
           deviceType: state.deviceType,
           devicePlatform: state.devicePlatform,
-          includeBookmarks: state.includeBookmarks,
           bookmarkSyncEnabled: state.bookmarkSyncEnabled,
-          includeDownloads: state.includeDownloads,
           downloadSyncEnabled: state.downloadSyncEnabled,
-          includeFormSubmissions: state.includeFormSubmissions,
-          formSyncEnabled: state.formSyncEnabled,
+          historySyncEnabled: state.historySyncEnabled,
         }),
       );
       browser.storage.local.set(parsed);
@@ -343,10 +225,10 @@ export const ciStateSlice = createSlice({
   extraReducers: (builder) => {
     builder.addCase(loadUserSettings.fulfilled, (state, action) => {
       for (const [key, value] of Object.entries(
-        action.payload as Record<string, any>,
+        action.payload as Record<string, unknown>,
       )) {
         if (key in state) {
-          (state as any)[key] = value;
+          (state as Record<string, unknown>)[key] = value;
         }
       }
     });
@@ -355,20 +237,13 @@ export const ciStateSlice = createSlice({
 
 // Action creators are generated for each case reducer function
 export const {
-  addDomainWhitelistEntry,
-  removeDomainWhitelistEntry,
-  addPageWhitelistEntry,
-  removePageWhitelistEntry,
   setState,
   addSyncHistoryLog,
   clearSyncHistoryLogs,
   toggleAutoSync,
   toggleBookmarkSync,
-  toggleIncludeBookmarks,
   toggleDownloadSync,
-  toggleIncludeDownloads,
-  toggleFormSync,
-  toggleIncludeFormSubmissions,
+  toggleHistorySync,
   addSiteBlacklist,
   removeSiteBlacklist,
   addPageBlacklist,

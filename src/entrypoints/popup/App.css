@@ -576,6 +576,35 @@ button.secondary:hover:not(:disabled) {
   }
 }
 
+/* Compact sync controls */
+.compact-sync-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: rgba(75, 167, 166, 0.05);
+  border-radius: 8px;
+  border-top: 1px solid rgba(75, 167, 166, 0.2);
+}
+
+.sync-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.sync-toggle .checkbox-label {
+  margin: 0;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.sync-toggle .checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-right: 0.5rem;
+}
+
 /* Mobile adjustments */
 @media (max-width: 480px) {
   .auto-sync-control {
@@ -592,5 +621,13 @@ button.secondary:hover:not(:disabled) {
 
   .blacklist-counts {
     font-size: 0.8em;
+  }
+
+  .compact-sync-controls {
+    padding: 0.75rem;
+  }
+
+  .sync-toggle .checkbox-label {
+    font-size: 0.85em;
   }
 }
