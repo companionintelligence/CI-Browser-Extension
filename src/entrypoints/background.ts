@@ -15,7 +15,7 @@ import type { ScrapeResult } from "@/domainScraper";
 import type { SurfingRecord } from "@/indexeddb";
 import { database } from "@/indexeddb";
 
-const SLICE_SIZE = 1;
+const SLICE_SIZE = 100;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
 const DOWNLOAD_SYNC_KEY = "lastDownloadSync";
 const AUTO_SYNC_TIME_RANGE = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
@@ -147,31 +147,20 @@ const recordHit = async function (e: any) {
 
     store.dispatch(saveUserSettings());
 
-    const newEvent = await assembleContentAndEvents(state.url!);
-
-    try {
-      if (state.url && state.domain) {
-        const surfingRecord: SurfingRecord = {
-          url: state.url,
-          domain: state.domain,
-          title: newEvent.content?.[0]?.title || undefined,
-          description: newEvent.content?.[0]?.text || undefined,
-          visitTime: newEvent.start_time,
-          synced: false,
-        };
-
-        await database.insertSurfingRecord(surfingRecord);
-      }
-    } catch (dbError) {
-      console.error("Failed to store surfing record:", dbError);
-    }
+    const deviceId = await getDeviceId();
+    const date = new Date().getTime();
+    const newActivity = await convertToBrowserActivity(
+        active.url,
+        date,
+        deviceId,
+    );
 
     try {
       const { accessToken } = store.getState().ciState;
       await axios.post(
         // TODO: update to use env var
         `https://${state.serverDomain}/api/browser-activity`,
-        newEvent,
+        newActivity,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -180,19 +169,8 @@ const recordHit = async function (e: any) {
         },
       );
 
-      try {
-        const unsyncedRecords = await database.getUnsyncedSurfingRecords();
-        const latestRecord = unsyncedRecords.find(
-          (record) =>
-            record.url === state.url &&
-            record.visitTime === newEvent.start_time,
-        );
-        if (latestRecord && latestRecord.id) {
-          await database.markSurfingRecordAsSynced(latestRecord.id);
-        }
-      } catch (syncError) {
-        console.error("Failed to mark record as synced:", syncError);
-      }
+      const historyId = `${state.url}_${date}`;
+      await addSyncedItem(SYNCED_HISTORY_KEY, historyId);
     } catch (err) {
       console.error("Error posting event:", err);
     }
@@ -1122,49 +1100,47 @@ async function syncHistory(options: { timeRange?: number } = {}) {
           throw new Error("No access token available for authentication");
         }
 
-        for (let j = 0; j < browserActivities.length; j++) {
-          const activity = browserActivities[j];
-          const result = slice[j];
+        try {
+          // Log the data being sent for debugging
+          console.log(
+            "Sending history activity:",
+            JSON.stringify(activity, null, 2),
+          );
 
-          try {
-            // Log the data being sent for debugging
-            console.log(
-              "Sending history activity:",
-              JSON.stringify(activity, null, 2),
-            );
-
-            await axios.post(
-              `https://${state.serverDomain}/api/browser-activity`,
-              activity,
-              {
-                headers: {
-                  Authorization: `Bearer ${accessToken}`,
-                  "Content-Type": "application/json",
-                },
-                timeout: 300000,
+          await axios.post(
+            `https://${state.serverDomain}/api/browser-activity`,
+            browserActivities,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
               },
-            );
-            uploaded++;
+              timeout: 300000,
+            },
+          );
+          uploaded = uploaded + browserActivities.length;
 
+          for (let j = 0; j < browserActivities.length; j++) {
+            const result = slice[j];
             // Mark this specific history entry as synced only after successful upload
             const historyId = `${result.url}_${result.visitTime}`;
             await addSyncedItem(SYNCED_HISTORY_KEY, historyId);
-          } catch (error: any) {
-            console.error("Error uploading history entry:", error);
-            console.error("Failed activity:", activity);
-            console.error("Server response:", error.response?.data);
-
-            // Log detailed validation errors if available
-            if (error.response?.data?.errors) {
-              console.error(
-                "Server validation errors:",
-                JSON.stringify(error.response.data.errors, null, 2),
-              );
-            }
-
-            // Continue with other entries even if one fails
-            // Don't mark as synced if upload failed
           }
+        } catch (error: any) {
+          console.error("Error uploading history entry:", error);
+          console.error("Failed activities:", browserActivities);
+          console.error("Server response:", error.response?.data);
+
+          // Log detailed validation errors if available
+          if (error.response?.data?.errors) {
+            console.error(
+              "Server validation errors:",
+              JSON.stringify(error.response.data.errors, null, 2),
+            );
+          }
+
+          // Continue with other entries even if one fails
+          // Don't mark as synced if upload failed
         }
 
         store.dispatch(
@@ -1536,26 +1512,6 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
   } catch (error) {
     console.error("Error uploading scraped data:", error);
   }
-}
-
-async function assembleContentAndEvents(url: string, time?: string) {
-  // Simplified function without iframely dependency
-  const newContent = [
-    {
-      type: "Web Page",
-      mimetype: "text/html",
-      url: url,
-      title: undefined as string | undefined,
-      text: undefined as string | undefined,
-    },
-  ];
-
-  return {
-    name: "Visited " + url,
-    start_time: time || new Date().toJSON(),
-    type: "View",
-    content: newContent,
-  };
 }
 
 async function getAllBookmarks(): Promise<any[]> {
