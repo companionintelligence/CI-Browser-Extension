@@ -12,7 +12,6 @@ import {
 import { siteRegex } from "@/utils.ts";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
-import type { SurfingRecord } from "@/indexeddb";
 import { database } from "@/indexeddb";
 
 const SLICE_SIZE = 100;
@@ -150,9 +149,9 @@ const recordHit = async function (e: any) {
     const deviceId = await getDeviceId();
     const date = new Date().getTime();
     const newActivity = await convertToBrowserActivity(
-        active.url,
-        date,
-        deviceId,
+      active.url,
+      date,
+      deviceId,
     );
 
     try {
@@ -1102,10 +1101,10 @@ async function syncHistory(options: { timeRange?: number } = {}) {
 
         try {
           // Log the data being sent for debugging
-          console.log(
-            "Sending history activity:",
-            JSON.stringify(activity, null, 2),
-          );
+          // console.log(
+          //   "Sending history activity:",
+          //   JSON.stringify(browserActivities, null, 2),
+          // );
 
           await axios.post(
             `https://${state.serverDomain}/api/browser-activity`,
