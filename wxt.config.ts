@@ -6,6 +6,7 @@ export default defineConfig({
     name: "Companion Intelligence",
     host_permissions: [
       "*://*.companionintelligence.com/",
+      "*://*.companionintel.com/",
       "*://*.netflix.com/*",
       "*://*.hulu.com/*",
       "*://secure.hulu.com/*",

@@ -1955,71 +1955,240 @@ export default defineBackground({
       }
     };
 
-    setInterval(async () => {
-      browser.cookies
-        .getAll({ url: `https://${serverDomain}` })
-        .then(async (result) => {
-          const accessTokenCookie = result.find(
-            (cookie) => cookie.name === "CI_accessToken",
-          );
-          const sessionTokenCookie = result.find(
-            (cookie) => cookie.name === "CI_sessionToken",
-          );
-          let { accessToken, sessionToken } = store.getState().ciState;
-          if (accessTokenCookie && accessTokenCookie.value !== accessToken) {
-            store.dispatch(setState({ accessToken: accessTokenCookie.value }));
-          }
+    // Authentication state listener - checks cookies and manages auth state
+    async function checkAuthenticationState() {
+      try {
+        const currentState = store.getState().ciState;
+        const { serverDomain } = currentState;
+        console.log("Checking authentication for server domain:", serverDomain);
 
-          if (sessionTokenCookie && sessionTokenCookie.value !== sessionToken) {
-            const cookieDecoded = jwtDecode(sessionTokenCookie.value) as any;
-            const cookieExpires = new Date(cookieDecoded.exp * 1000);
-            const stateDecoded = sessionToken
-              ? (jwtDecode(sessionToken) as any)
-              : null;
-            const stateExpired = stateDecoded
-              ? new Date(stateDecoded.exp * 1000)
-              : null;
-            if (
-              !stateExpired ||
-              cookieExpires.getTime() > stateExpired.getTime()
-            ) {
-              store.dispatch(
-                setState({ sessionToken: sessionTokenCookie.value }),
-              );
-            }
-          }
+        const result = await browser.cookies.getAll({
+          url: `https://${serverDomain}`,
+        });
+        console.log(
+          "Found cookies:",
+          result.map((c) => ({
+            name: c.name,
+            domain: c.domain,
+            value: c.value?.substring(0, 20) + "...",
+          })),
+        );
 
-          ({ accessToken, sessionToken } = store.getState().ciState);
-          const accessDecoded = accessToken
-            ? (jwtDecode(accessToken) as any)
-            : null;
-          // We want to refresh the access token before it actually expires.
-          // Otherwise, it can expire in the middle of a batch of upload requests
-          const isAuthExpired = accessDecoded
-            ? Date.now() >= (accessDecoded.exp - 5) * 1000
-            : true;
-          const sessionDecoded = sessionToken
+        // Also check for cookies on the main domain without subdomain
+        const mainDomain = serverDomain.replace(/^[^.]+\./, "");
+        console.log("Also checking main domain:", mainDomain);
+        const mainDomainResult = await browser.cookies.getAll({
+          url: `https://${mainDomain}`,
+        });
+        console.log(
+          "Found cookies on main domain:",
+          mainDomainResult.map((c) => ({
+            name: c.name,
+            domain: c.domain,
+            value: c.value?.substring(0, 20) + "...",
+          })),
+        );
+
+        // Check for CI cookies in both results
+        const allCookies = [...result, ...mainDomainResult];
+        const accessTokenCookie = allCookies.find(
+          (cookie) => cookie.name === "CI_accessToken",
+        );
+        const sessionTokenCookie = allCookies.find(
+          (cookie) => cookie.name === "CI_sessionToken",
+        );
+
+        console.log(
+          "All CI cookies found:",
+          allCookies
+            .filter((c) => c.name.startsWith("CI_"))
+            .map((c) => ({ name: c.name, domain: c.domain })),
+        );
+
+        // Also check for any cookies on companionintelligence.com
+        const companionResult = await browser.cookies.getAll({
+          url: "https://companionintelligence.com",
+        });
+        console.log(
+          "Found cookies on companionintelligence.com:",
+          companionResult.map((c) => ({
+            name: c.name,
+            domain: c.domain,
+            value: c.value?.substring(0, 20) + "...",
+          })),
+        );
+
+        // Check for cookies on the exact server domain you're using
+        console.log(
+          "Checking for cookies on your exact server domain:",
+          `https://${serverDomain}`,
+        );
+        const exactDomainResult = await browser.cookies.getAll({
+          url: `https://${serverDomain}`,
+        });
+        console.log(
+          "Found cookies on exact server domain:",
+          exactDomainResult.map((c) => ({
+            name: c.name,
+            domain: c.domain,
+            value: c.value?.substring(0, 20) + "...",
+          })),
+        );
+
+        // Check if we can access cookies at all
+        try {
+          const allCookiesTest = await browser.cookies.getAll({});
+          console.log(
+            "Total cookies accessible by extension:",
+            allCookiesTest.length,
+          );
+          console.log(
+            "Sample cookies:",
+            allCookiesTest
+              .slice(0, 5)
+              .map((c) => ({ name: c.name, domain: c.domain })),
+          );
+
+          // Look for any cookies that might be related to companion
+          const companionCookies = allCookiesTest.filter(
+            (c) =>
+              c.name.includes("CI_") ||
+              c.domain.includes("companion") ||
+              c.name.includes("access") ||
+              c.name.includes("session"),
+          );
+          console.log(
+            "Potential companion-related cookies:",
+            companionCookies.map((c) => ({
+              name: c.name,
+              domain: c.domain,
+              value: c.value?.substring(0, 20) + "...",
+            })),
+          );
+        } catch (error) {
+          console.error("Error accessing cookies:", error);
+        }
+
+        console.log("Access token cookie found:", !!accessTokenCookie);
+        console.log("Session token cookie found:", !!sessionTokenCookie);
+
+        let { accessToken, sessionToken, deviceId } = currentState;
+        let authStateChanged = false;
+
+        // Check for access token changes
+        if (accessTokenCookie && accessTokenCookie.value !== accessToken) {
+          store.dispatch(setState({ accessToken: accessTokenCookie.value }));
+          accessToken = accessTokenCookie.value;
+          authStateChanged = true;
+          console.log("Access token updated from cookies");
+        }
+
+        // Check for session token changes
+        if (sessionTokenCookie && sessionTokenCookie.value !== sessionToken) {
+          const cookieDecoded = jwtDecode(sessionTokenCookie.value) as any;
+          const cookieExpires = new Date(cookieDecoded.exp * 1000);
+          const stateDecoded = sessionToken
             ? (jwtDecode(sessionToken) as any)
             : null;
-          const isSessionExpired = sessionDecoded
-            ? Date.now() >= sessionDecoded.exp * 1000
-            : true;
+          const stateExpired = stateDecoded
+            ? new Date(stateDecoded.exp * 1000)
+            : null;
           if (
-            (!accessTokenCookie && sessionTokenCookie) ||
-            (isAuthExpired && !isSessionExpired)
+            !stateExpired ||
+            cookieExpires.getTime() > stateExpired.getTime()
           ) {
-            await refreshAccessToken();
+            store.dispatch(
+              setState({ sessionToken: sessionTokenCookie.value }),
+            );
+            sessionToken = sessionTokenCookie.value;
+            authStateChanged = true;
+            console.log("Session token updated from cookies");
           }
+        }
 
+        // Get updated state after potential changes
+        ({ accessToken, sessionToken, deviceId } = store.getState().ciState);
+
+        // Check if authentication is valid
+        const accessDecoded = accessToken
+          ? (jwtDecode(accessToken) as any)
+          : null;
+        const isAuthExpired = accessDecoded
+          ? Date.now() >= (accessDecoded.exp - 5) * 1000
+          : true;
+        const sessionDecoded = sessionToken
+          ? (jwtDecode(sessionToken) as any)
+          : null;
+        const isSessionExpired = sessionDecoded
+          ? Date.now() >= sessionDecoded.exp * 1000
+          : true;
+
+        const isAuthenticated = !isAuthExpired && !isSessionExpired;
+
+        console.log("Authentication state check:");
+        console.log("- Access token expired:", isAuthExpired);
+        console.log("- Session token expired:", isSessionExpired);
+        console.log("- Is authenticated:", isAuthenticated);
+        console.log("- Device ID exists:", !!deviceId);
+        console.log(
+          "- Current access token:",
+          accessToken ? "exists" : "missing",
+        );
+        console.log(
+          "- Current session token:",
+          sessionToken ? "exists" : "missing",
+        );
+
+        // Handle token refresh if needed
+        if (
+          (!accessTokenCookie && sessionTokenCookie) ||
+          (isAuthExpired && !isSessionExpired)
+        ) {
+          console.log("Refreshing access token...");
+          await refreshAccessToken();
+          authStateChanged = true;
+        }
+
+        // Check if we have valid authentication but no device ID
+        if (isAuthenticated && !deviceId) {
+          console.log(
+            "Authentication detected but no device ID, setting up device...",
+          );
+          try {
+            await setupDevice();
+            authStateChanged = true;
+            console.log("Device setup completed");
+
+            // Get updated state after device setup
+            const updatedState = store.getState().ciState;
+            deviceId = updatedState.deviceId;
+            console.log("Updated device ID after setup:", deviceId);
+          } catch (error) {
+            console.error(
+              "Failed to setup device after authentication:",
+              error,
+            );
+          }
+        }
+
+        // Recalculate authentication status after potential device setup
+        const finalIsAuthenticated = isAuthenticated && !!deviceId;
+
+        // Update isAuthenticated field in Redux state
+        store.dispatch(setState({ isAuthenticated: finalIsAuthenticated }));
+
+        // Save settings if auth state changed
+        if (authStateChanged) {
           store.dispatch(saveUserSettings());
+          console.log("Authentication state updated");
+        }
+      } catch (error) {
+        console.error("Error checking authentication state:", error);
+      }
+    }
 
-          // Sync location data periodically - disabled in service worker
-          // try {
-          // } catch (error) {
-          //   console.error("Error syncing location data:", error);
-          // }
-        });
-    }, 1000);
+    // Set up periodic authentication checking
+    setInterval(checkAuthenticationState, 1000);
 
     store.dispatch(loadUserSettings());
 
@@ -2128,6 +2297,20 @@ export default defineBackground({
           })
           .catch((error) => {
             console.error("Background sync failed:", error);
+            sendResponse({ success: false, error: error.message });
+          });
+
+        return true;
+      }
+
+      if (message.action === "checkAuthStatus") {
+        console.log("Checking authentication status from popup");
+        checkAuthenticationState()
+          .then(() => {
+            sendResponse({ success: true });
+          })
+          .catch((error) => {
+            console.error("Error checking auth status:", error);
             sendResponse({ success: false, error: error.message });
           });
 

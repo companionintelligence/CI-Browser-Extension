@@ -1,5 +1,4 @@
-import { useMemo, useEffect, useState } from "react";
-import { jwtDecode } from "jwt-decode";
+import { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   toggleAutoSync,
@@ -31,9 +30,9 @@ export default function App() {
     bookmarkSyncEnabled: boolean;
     downloadSyncEnabled: boolean;
     historySyncEnabled: boolean;
+    isAuthenticated: boolean;
   };
   const {
-    sessionToken,
     historySyncInProgress,
     historySyncStatus,
     lastHistorySync,
@@ -46,6 +45,7 @@ export default function App() {
     bookmarkSyncEnabled,
     downloadSyncEnabled,
     historySyncEnabled,
+    isAuthenticated,
   } = ciState;
 
   const [showBlacklistManager, setShowBlacklistManager] = useState(false);
@@ -53,6 +53,21 @@ export default function App() {
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
     setIsMobile(browser_info.getPlatformType() === "mobile");
+
+    // Check authentication status every time popup opens
+    const checkAuthStatus = async () => {
+      try {
+        // Send message to background to refresh auth status
+        await browser.runtime.sendMessage({
+          action: "checkAuthStatus",
+        });
+      } catch (error) {
+        console.error("Error checking auth status:", error);
+      }
+    };
+
+    // Check auth status immediately when popup opens
+    checkAuthStatus();
 
     // Reload user settings when popup opens to get latest auth state
     dispatch({ type: "loadUserSettings" });
@@ -74,25 +89,10 @@ export default function App() {
     setIsMobile(browser_info.getPlatformType() === "mobile");
   }, []);
 
-  const sessionTokenExpired = useMemo(() => {
-    if (!sessionToken) {
-      return true;
-    }
+  // Authentication state is now managed by background script and stored in Redux
 
-    try {
-      const decoded = jwtDecode(sessionToken) as { exp?: number };
-
-      return decoded.exp ? Date.now() >= decoded.exp * 1000 : true;
-    } catch (error) {
-      console.error("Error decoding session token:", error);
-
-      return true;
-    }
-  }, [sessionToken]);
-
-  const isAuthenticated = useMemo(() => {
-    return !sessionTokenExpired && ciState.deviceId;
-  }, [sessionTokenExpired, ciState.deviceId]);
+  // Use isAuthenticated directly from Redux state (updated by background script)
+  console.log("Popup authentication state:", isAuthenticated);
 
   const openOptionsPage = async function () {
     if (browser.runtime.openOptionsPage) {

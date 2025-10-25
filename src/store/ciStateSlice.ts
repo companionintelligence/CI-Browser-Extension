@@ -18,6 +18,7 @@ export const loadUserSettings = createAsyncThunk(
       "bookmarkSyncEnabled",
       "downloadSyncEnabled",
       "historySyncEnabled",
+      "isAuthenticated",
     ]);
 
     return localData;
@@ -46,6 +47,7 @@ interface CiState {
   bookmarkSyncEnabled: boolean;
   downloadSyncEnabled: boolean;
   historySyncEnabled: boolean;
+  isAuthenticated: boolean;
 }
 
 export const ciStateSlice = createSlice({
@@ -72,6 +74,7 @@ export const ciStateSlice = createSlice({
     bookmarkSyncEnabled: false,
     downloadSyncEnabled: false,
     historySyncEnabled: true, // Default to enabled since history is the main feature
+    isAuthenticated: false,
   } as CiState,
   reducers: {
     setState: (state, action) => {
@@ -215,6 +218,7 @@ export const ciStateSlice = createSlice({
           bookmarkSyncEnabled: state.bookmarkSyncEnabled,
           downloadSyncEnabled: state.downloadSyncEnabled,
           historySyncEnabled: state.historySyncEnabled,
+          isAuthenticated: state.isAuthenticated,
         }),
       );
       browser.storage.local.set(parsed);
