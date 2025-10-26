@@ -6,14 +6,19 @@ export const loadUserSettings = createAsyncThunk(
     const localData = await browser.storage.local.get([
       "accessToken",
       "sessionToken",
-      "domainWhitelist",
-      "domainWhitelistPending",
-      "domainWhitelistHistory",
-      "pageWhitelist",
-      "pageWhitelistPending",
-      "pageWhitelistHistory",
       "lastHistorySync",
       "syncHistoryLogs",
+      "autoSyncEnabled",
+      "siteBlacklist",
+      "pageBlacklist",
+      "deviceId",
+      "deviceName",
+      "deviceType",
+      "devicePlatform",
+      "bookmarkSyncEnabled",
+      "downloadSyncEnabled",
+      "historySyncEnabled",
+      "isAuthenticated",
     ]);
 
     return localData;
@@ -23,31 +28,33 @@ export const loadUserSettings = createAsyncThunk(
 interface CiState {
   accessToken: string | null;
   sessionToken: string | null;
-  domainWhitelist: string[];
-  domainWhitelistPending: Record<string, any>;
-  domainWhitelistHistory: string[];
-  pageWhitelist: string[];
-  pageWhitelistPending: Record<string, any>;
-  pageWhitelistHistory: string[];
   url: string | null;
   domain: string | null;
   lastUrl: string | null;
+  historySyncInProgress: boolean;
+  historySyncStatus: string | null;
+  lastHistorySync: string | null;
+  syncHistoryLogs: { status: string; timestamp: string }[];
   refreshing: boolean;
   serverDomain: string;
+  autoSyncEnabled: boolean;
+  siteBlacklist: string[];
+  pageBlacklist: string[];
+  deviceId: string | null;
+  deviceName: string | null;
+  deviceType: string | null;
+  devicePlatform: string | null;
+  bookmarkSyncEnabled: boolean;
+  downloadSyncEnabled: boolean;
+  historySyncEnabled: boolean;
+  isAuthenticated: boolean;
 }
 
-// Removed incomplete duplicate ciStateSlice declaration and reducer
 export const ciStateSlice = createSlice({
   name: "ciState",
   initialState: {
     accessToken: null,
     sessionToken: null,
-    domainWhitelist: [],
-    domainWhitelistPending: {},
-    domainWhitelistHistory: [],
-    pageWhitelist: [],
-    pageWhitelistPending: {},
-    pageWhitelistHistory: [],
     url: null,
     domain: null,
     lastUrl: null,
@@ -57,99 +64,23 @@ export const ciStateSlice = createSlice({
     syncHistoryLogs: [],
     refreshing: false,
     serverDomain: "dev.companionintelligence.com",
+    autoSyncEnabled: false,
+    siteBlacklist: [],
+    pageBlacklist: [],
+    deviceId: null,
+    deviceName: null,
+    deviceType: null,
+    devicePlatform: null,
+    bookmarkSyncEnabled: false,
+    downloadSyncEnabled: false,
+    historySyncEnabled: true, // Default to enabled since history is the main feature
+    isAuthenticated: false,
   } as CiState,
   reducers: {
     setState: (state, action) => {
       const payload = action.payload as Partial<CiState>;
 
       return { ...state, ...payload };
-    },
-    addDomainWhitelistEntry(state, action) {
-      let newDomainWhitelist = state.domainWhitelist;
-      if (newDomainWhitelist.indexOf(action.payload) === -1) {
-        newDomainWhitelist = newDomainWhitelist.concat(action.payload);
-      }
-
-      const returned = { ...state, domainWhitelist: newDomainWhitelist };
-
-      if (state.domainWhitelistHistory.indexOf(action.payload) === -1) {
-        returned.domainWhitelistPending = {
-          ...state.domainWhitelistPending,
-          [action.payload]: new Date().getTime(),
-        };
-      }
-
-      return returned;
-    },
-    removeDomainWhitelistEntry(state, action) {
-      const newDomainWhitelist = state.domainWhitelist.filter(
-        (entry) => entry != null && entry !== action.payload,
-      );
-
-      const domainWhitelistPendingCopy = { ...state.domainWhitelistPending };
-      delete domainWhitelistPendingCopy[action.payload];
-
-      return {
-        ...state,
-        domainWhitelist: newDomainWhitelist,
-        domainWhitelistPending: domainWhitelistPendingCopy,
-      };
-    },
-    addPageWhitelistEntry(state, action) {
-      let newPageWhitelist = state.pageWhitelist;
-      let parsed = URL.parse(action.payload);
-      if (!parsed) {
-        parsed = URL.parse(`https://${action.payload}`);
-        action.payload = `https://${action.payload}`;
-      }
-
-      if (!parsed) {
-        return;
-      }
-
-      parsed.hash = "";
-      const parsedToString = parsed.toString();
-      if (newPageWhitelist.indexOf(parsedToString) === -1) {
-        newPageWhitelist = newPageWhitelist.concat(parsedToString);
-      }
-
-      const returned = { ...state, pageWhitelist: newPageWhitelist };
-
-      if (state.pageWhitelistHistory.indexOf(parsedToString) === -1) {
-        returned.pageWhitelistPending = {
-          ...state.pageWhitelistPending,
-          [parsedToString]: new Date().getTime(),
-        };
-      }
-
-      return returned;
-    },
-    removePageWhitelistEntry(state, action) {
-      let parsed = URL.parse(action.payload);
-      if (!parsed) {
-        parsed = URL.parse(`https://${action.payload}`);
-        action.payload = `https://${action.payload}`;
-      }
-
-      if (!parsed) {
-        return state;
-      }
-
-      parsed.hash = "";
-      const strippedUrl = parsed.toString();
-
-      const newPageWhitelist = state.pageWhitelist.filter(
-        (entry) => entry != null && entry !== strippedUrl,
-      );
-
-      const pageWhitelistPendingCopy = { ...state.pageWhitelistPending };
-      delete pageWhitelistPendingCopy[strippedUrl];
-
-      return {
-        ...state,
-        pageWhitelist: newPageWhitelist,
-        pageWhitelistPending: pageWhitelistPendingCopy,
-      };
     },
     addSyncHistoryLog(state, action) {
       const newLog = {
@@ -177,19 +108,117 @@ export const ciStateSlice = createSlice({
         syncHistoryLogs: [],
       };
     },
+    toggleAutoSync(state) {
+      return {
+        ...state,
+        autoSyncEnabled: !state.autoSyncEnabled,
+      };
+    },
+    toggleBookmarkSync(state) {
+      return {
+        ...state,
+        bookmarkSyncEnabled: !state.bookmarkSyncEnabled,
+      };
+    },
+    toggleDownloadSync(state) {
+      return {
+        ...state,
+        downloadSyncEnabled: !state.downloadSyncEnabled,
+      };
+    },
+    toggleHistorySync(state) {
+      const newHistorySyncEnabled = !state.historySyncEnabled;
+
+      // If turning history sync back on, clear the cache and set a flag
+      if (newHistorySyncEnabled) {
+        // Clear the synced history cache
+        browser.storage.local.remove("syncedHistory").catch(console.error);
+
+        // Store the current timestamp to track when history sync was re-enabled
+        browser.storage.local
+          .set({
+            historySyncReEnabledAt: Date.now(),
+          })
+          .catch(console.error);
+      }
+
+      return {
+        ...state,
+        historySyncEnabled: newHistorySyncEnabled,
+      };
+    },
+    addSiteBlacklist(state, action) {
+      let newSiteBlacklist = state.siteBlacklist;
+      if (newSiteBlacklist.indexOf(action.payload) === -1) {
+        newSiteBlacklist = newSiteBlacklist.concat(action.payload);
+      }
+
+      return { ...state, siteBlacklist: newSiteBlacklist };
+    },
+    removeSiteBlacklist(state, action) {
+      const newSiteBlacklist = state.siteBlacklist.filter(
+        (entry) => entry != null && entry !== action.payload,
+      );
+
+      return { ...state, siteBlacklist: newSiteBlacklist };
+    },
+    addPageBlacklist(state, action) {
+      let newPageBlacklist = state.pageBlacklist;
+      let parsed = URL.parse(action.payload);
+      if (!parsed) {
+        parsed = URL.parse(`https://${action.payload}`);
+        action.payload = `https://${action.payload}`;
+      }
+
+      if (!parsed) {
+        return state;
+      }
+
+      parsed.hash = "";
+      const parsedToString = parsed.toString();
+      if (newPageBlacklist.indexOf(parsedToString) === -1) {
+        newPageBlacklist = newPageBlacklist.concat(parsedToString);
+      }
+
+      return { ...state, pageBlacklist: newPageBlacklist };
+    },
+    removePageBlacklist(state, action) {
+      let parsed = URL.parse(action.payload);
+      if (!parsed) {
+        parsed = URL.parse(`https://${action.payload}`);
+        action.payload = `https://${action.payload}`;
+      }
+
+      if (!parsed) {
+        return state;
+      }
+
+      parsed.hash = "";
+      const strippedUrl = parsed.toString();
+      const newPageBlacklist = state.pageBlacklist.filter(
+        (entry) => entry != null && entry !== strippedUrl,
+      );
+
+      return { ...state, pageBlacklist: newPageBlacklist };
+    },
     saveUserSettings(state) {
       const parsed = JSON.parse(
         JSON.stringify({
           accessToken: state.accessToken,
           sessionToken: state.sessionToken,
-          domainWhitelist: state.domainWhitelist,
-          domainWhitelistPending: state.domainWhitelistPending,
-          domainWhitelistHistory: state.domainWhitelistHistory,
-          pageWhitelist: state.pageWhitelist,
-          pageWhitelistPending: state.pageWhitelistPending,
-          pageWhitelistHistory: state.pageWhitelistHistory,
           lastHistorySync: state.lastHistorySync,
           syncHistoryLogs: state.syncHistoryLogs,
+          autoSyncEnabled: state.autoSyncEnabled,
+          siteBlacklist: state.siteBlacklist,
+          pageBlacklist: state.pageBlacklist,
+          deviceId: state.deviceId,
+          deviceName: state.deviceName,
+          deviceType: state.deviceType,
+          devicePlatform: state.devicePlatform,
+          bookmarkSyncEnabled: state.bookmarkSyncEnabled,
+          downloadSyncEnabled: state.downloadSyncEnabled,
+          historySyncEnabled: state.historySyncEnabled,
+          isAuthenticated: state.isAuthenticated,
         }),
       );
       browser.storage.local.set(parsed);
@@ -200,10 +229,10 @@ export const ciStateSlice = createSlice({
   extraReducers: (builder) => {
     builder.addCase(loadUserSettings.fulfilled, (state, action) => {
       for (const [key, value] of Object.entries(
-        action.payload as Record<string, any>,
+        action.payload as Record<string, unknown>,
       )) {
         if (key in state) {
-          (state as any)[key] = value;
+          (state as Record<string, unknown>)[key] = value;
         }
       }
     });
@@ -212,13 +241,17 @@ export const ciStateSlice = createSlice({
 
 // Action creators are generated for each case reducer function
 export const {
-  addDomainWhitelistEntry,
-  removeDomainWhitelistEntry,
-  addPageWhitelistEntry,
-  removePageWhitelistEntry,
   setState,
   addSyncHistoryLog,
   clearSyncHistoryLogs,
+  toggleAutoSync,
+  toggleBookmarkSync,
+  toggleDownloadSync,
+  toggleHistorySync,
+  addSiteBlacklist,
+  removeSiteBlacklist,
+  addPageBlacklist,
+  removePageBlacklist,
   saveUserSettings,
 } = ciStateSlice.actions;
 

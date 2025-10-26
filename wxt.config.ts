@@ -6,6 +6,7 @@ export default defineConfig({
     name: "Companion Intelligence",
     host_permissions: [
       "*://*.companionintelligence.com/",
+      "*://*.companionintel.com/",
       "*://*.netflix.com/*",
       "*://*.hulu.com/*",
       "*://secure.hulu.com/*",
@@ -14,11 +15,11 @@ export default defineConfig({
     permissions: [
       "bookmarks",
       "cookies",
+      "downloads",
       "history",
       "storage",
       "tabs",
       "webNavigation",
-      "geolocation",
     ],
     icons: {
       "16": "icon/favicon-16x16.png",
@@ -37,21 +38,7 @@ export default defineConfig({
   },
   srcDir: "src",
   modules: ["@wxt-dev/module-react"],
-  imports: {
-    bowser: ["default"],
-  },
   // Output configurations for different browsers including mobile
   outDir: ".output",
   // Enable mobile browser builds
-  runner: {
-    // Disable automatic opening on mobile
-    openBrowser: false,
-    // Browser-specific configurations
-    webExt: {
-      // Safari development configuration
-      safari: {
-        devtools: true,
-      },
-    },
-  },
 });

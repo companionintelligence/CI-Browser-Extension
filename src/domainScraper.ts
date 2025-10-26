@@ -29,14 +29,15 @@ export interface ScrapeResult {
   url: string;
   timestamp: string;
   data: {
-    [key: string]: any[];
+    [key: string]: unknown[];
   };
 }
 
-// Import all profiles statically
 import netflixProfileData from "./scrapeProfiles/netflix.json";
 import huluProfileData from "./scrapeProfiles/hulu.json";
 import disneyProfileData from "./scrapeProfiles/disney.json";
+import slashdotProfileData from "./scrapeProfiles/slashdot.json";
+import githubProfileData from "./scrapeProfiles/github.json";
 
 export class DomainScraper {
   private profiles: { [key: string]: ScrapeProfile } = {};
@@ -48,7 +49,6 @@ export class DomainScraper {
   }
 
   private loadProfiles() {
-    // Load Netflix profile
     try {
       this.profiles["netflix.com"] = netflixProfileData as ScrapeProfile;
       this.profileNames["netflix.com"] = netflixProfileData.name;
@@ -56,7 +56,6 @@ export class DomainScraper {
       console.warn("Failed to load Netflix scrape profile:", error);
     }
 
-    // Load Hulu profile
     try {
       this.profiles["hulu.com"] = huluProfileData as ScrapeProfile;
       this.profileNames["hulu.com"] = huluProfileData.name;
@@ -64,12 +63,25 @@ export class DomainScraper {
       console.warn("Failed to load Hulu scrape profile:", error);
     }
 
-    // Load Disney+ profile
     try {
       this.profiles["disneyplus.com"] = disneyProfileData as ScrapeProfile;
       this.profileNames["disneyplus.com"] = disneyProfileData.name;
     } catch (error) {
       console.warn("Failed to load Disney+ scrape profile:", error);
+    }
+
+    try {
+      this.profiles["slashdot.org"] = slashdotProfileData as ScrapeProfile;
+      this.profileNames["slashdot.org"] = slashdotProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Slashdot scrape profile:", error);
+    }
+
+    try {
+      this.profiles["github.com"] = githubProfileData as ScrapeProfile;
+      this.profileNames["github.com"] = githubProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load GitHub scrape profile:", error);
     }
   }
 
@@ -106,7 +118,6 @@ export class DomainScraper {
         return undefined;
       }
 
-      // Check if URL matches any of the target patterns
       if (this.urlMatchesProfile(url, profile)) {
         return profile;
       }
@@ -127,7 +138,6 @@ export class DomainScraper {
         return null;
       }
 
-      // Check if URL matches target pattern(s)
       if (!this.urlMatchesProfile(url, profile)) {
         return null;
       }
@@ -140,14 +150,13 @@ export class DomainScraper {
         data: {},
       };
 
-      // Process each data selector
       for (const selectorName of Object.keys(profile.dataSelectors)) {
         const selectorConfig = profile.dataSelectors[selectorName];
         const containers = document.querySelectorAll(selectorConfig.container);
-        const items: any[] = [];
+        const items: Record<string, unknown>[] = [];
 
         containers.forEach((container) => {
-          const item: any = {};
+          const item: Record<string, unknown> = {};
 
           for (const fieldName of Object.keys(selectorConfig.fields)) {
             const fieldConfig = selectorConfig.fields[fieldName];
@@ -171,7 +180,6 @@ export class DomainScraper {
                   value = element.textContent || "";
               }
 
-              // Apply transforms
               if (fieldConfig.transform) {
                 value = this.applyTransform(value, fieldConfig.transform, url);
               }
@@ -205,10 +213,9 @@ export class DomainScraper {
   }
 
   private urlMatches(url: string, pattern: string): boolean {
-    // Convert pattern to regex (simple wildcard support)
     const regexPattern = pattern
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // Escape special regex chars
-      .replace(/\\\*/g, ".*"); // Convert * to .*
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\\\*/g, ".*");
 
     const regex = new RegExp(`^${regexPattern}$`);
 
@@ -231,12 +238,10 @@ export class DomainScraper {
         }
 
       case "parseDate":
-        // Handle Netflix date format (e.g., "6/25/25")
         try {
           const dateParts = value.trim().split("/");
           if (dateParts.length === 3) {
             const [month, day, year] = dateParts;
-            // Dynamically determine century for two-digit years using current year as pivot
             let fullYear = year;
             if (year.length === 2) {
               const currentYear = new Date().getFullYear() % 100;
@@ -257,5 +262,4 @@ export class DomainScraper {
   }
 }
 
-// Export singleton instance
 export const domainScraper = new DomainScraper();

@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom";
 
 // Mock browser APIs
-(global as any).browser = {
+(global as { browser?: unknown }).browser = {
   tabs: {
     query: jest.fn(),
   },
@@ -24,7 +24,7 @@ import "@testing-library/jest-dom";
 const originalURL = global.URL;
 
 // Create a proper URL constructor mock
-(global as any).URL = class MockURL {
+(global as { URL?: unknown }).URL = class MockURL {
   href: string;
 
   hash: string = "";
@@ -44,7 +44,7 @@ const originalURL = global.URL;
 };
 
 // Ensure the original URL is available for actual URL parsing needs
-(global as any).URL.originalURL = originalURL;
+(global as { URL?: { originalURL?: unknown } }).URL!.originalURL = originalURL;
 
 // Mock console methods to reduce noise in tests
 global.console = {
