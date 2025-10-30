@@ -940,7 +940,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
         if (processed % 100 === 0) {
           const statusMessage =
             blacklistedCount > 0
-              ? `Processed ${processed}/${allHistoryResults.length} entries (${blacklistedCount} blacklisted)...`
+              ? `Processed ${processed}/${allHistoryResults.length} entries (${blacklistedCount} ignored)...`
               : `Processed ${processed}/${allHistoryResults.length} entries...`;
           store.dispatch(
             setState({
@@ -957,7 +957,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
       const duration = Date.now() - startTime;
       const statusMessage =
         blacklistedCount > 0
-          ? `No visits to sync (${blacklistedCount} blacklisted entries excluded).`
+          ? `No visits to sync (${blacklistedCount} ignored entries excluded).`
           : "No visits found for the selected time range.";
       store.dispatch(
         setState({
@@ -1028,7 +1028,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
       const duration = Date.now() - startTime;
       const statusMessage =
         blacklistedCount > 0
-          ? `No new visits to sync (${blacklistedCount} blacklisted entries excluded).`
+          ? `No new visits to sync (${blacklistedCount} ignored entries excluded).`
           : "No new history entries to sync.";
       console.log("No unsynced results found:", statusMessage);
       store.dispatch(
@@ -1062,7 +1062,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
 
     const statusMessage =
       blacklistedCount > 0
-        ? `Uploading ${unsyncedResults.length} new visits to CI-Server (${blacklistedCount} blacklisted entries excluded)...`
+        ? `Uploading ${unsyncedResults.length} new visits to CI-Server (${blacklistedCount} ignored entries excluded)...`
         : `Uploading ${unsyncedResults.length} new visits to CI-Server...`;
     store.dispatch(
       setState({
@@ -1180,7 +1180,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     if (failed) {
       const failureMessage =
         blacklistedCount > 0
-          ? `History sync failed after uploading ${uploaded} visits (${blacklistedCount} blacklisted entries excluded). Please try again.`
+          ? `History sync failed after uploading ${uploaded} visits (${blacklistedCount} ignored entries excluded). Please try again.`
           : `History sync failed after uploading ${uploaded} visits. Please try again.`;
       store.dispatch(
         setState({
@@ -1191,7 +1191,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     } else {
       const successMessage =
         blacklistedCount > 0
-          ? `Successfully synced ${uploaded} visits to CI-Server (${blacklistedCount} blacklisted entries excluded).`
+          ? `Successfully synced ${uploaded} visits to CI-Server (${blacklistedCount} ignored entries excluded).`
           : `Successfully synced ${uploaded} visits to CI-Server.`;
       store.dispatch(
         setState({

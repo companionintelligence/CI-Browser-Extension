@@ -196,8 +196,8 @@ export default function App() {
               <span>Auto-sync all browser history</span>
             </label>
             <p className="auto-sync-description">
-              Automatically sync all browsing history (excluding blacklisted
-              items)
+              Automatically sync all browsing history (excluding ignored sites
+              and pages)
             </p>
           </div>
 
@@ -282,7 +282,7 @@ export default function App() {
               className="secondary"
               style={{ width: "100%" }}
             >
-              Manage Blacklists
+              Ignored Pages and Sites
             </button>
             <div className="blacklist-counts">
               <span className="blacklist-count">
