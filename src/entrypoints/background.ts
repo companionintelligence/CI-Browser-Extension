@@ -1915,9 +1915,57 @@ export default defineBackground({
         return;
       }
 
+      // Check for session token cookie first (most reliable source)
+      const cookies = await browser.cookies.getAll({
+        url: `https://${serverDomain}`,
+      });
+      const sessionTokenCookie = cookies.find(
+        (cookie) => cookie.name === "CI_sessionToken",
+      );
+
+      // Also check main domain
+      const mainDomain = serverDomain.replace(/^[^.]+\./, "");
+      const mainDomainCookies = await browser.cookies.getAll({
+        url: `https://${mainDomain}`,
+      });
+      const mainDomainSessionCookie = mainDomainCookies.find(
+        (cookie) => cookie.name === "CI_sessionToken",
+      );
+
+      // Use cookie if available, otherwise fall back to storage
+      let sessionToken =
+        sessionTokenCookie?.value || mainDomainSessionCookie?.value;
+      if (!sessionToken) {
+        const storage = await browser.storage.local.get("sessionToken");
+        sessionToken = storage.sessionToken;
+      }
+
+      // Validate session token exists and is not expired
+      if (!sessionToken) {
+        console.log("No session token available, skipping refresh");
+
+        return;
+      }
+
+      // Check if session token is expired
+      try {
+        const sessionDecoded = jwtDecode(sessionToken) as any;
+        const isSessionExpired = sessionDecoded?.exp
+          ? Date.now() >= sessionDecoded.exp * 1000
+          : true;
+
+        if (isSessionExpired) {
+          console.log("Session token expired, skipping refresh");
+
+          return;
+        }
+      } catch (err) {
+        console.error("Error decoding session token:", err);
+
+        return;
+      }
+
       store.dispatch(setState({ refreshing: true }));
-      const sessionToken = (await browser.storage.local.get("sessionToken"))
-        .sessionToken;
       try {
         const data: AuthResponse = await fetchJson(
           `https://${serverDomain}/api/authenticate/refresh`,
@@ -2140,13 +2188,29 @@ export default defineBackground({
         );
 
         // Handle token refresh if needed
-        if (
-          (!accessTokenCookie && sessionTokenCookie) ||
-          (isAuthExpired && !isSessionExpired)
-        ) {
-          console.log("Refreshing access token...");
-          await refreshAccessToken();
-          authStateChanged = true;
+        // Only refresh if:
+        // 1. We have a valid session token cookie (not expired)
+        // 2. Either we don't have an access token cookie OR the access token is expired
+        if (sessionTokenCookie) {
+          const sessionCookieDecoded = jwtDecode(
+            sessionTokenCookie.value,
+          ) as any;
+          const isSessionCookieExpired = sessionCookieDecoded?.exp
+            ? Date.now() >= sessionCookieDecoded.exp * 1000
+            : true;
+
+          if (
+            !isSessionCookieExpired &&
+            (!accessTokenCookie || isAuthExpired)
+          ) {
+            console.log("Refreshing access token...");
+            await refreshAccessToken();
+            authStateChanged = true;
+          } else if (isSessionCookieExpired) {
+            console.log("Session token cookie expired, not attempting refresh");
+          }
+        } else {
+          console.log("No session token cookie found, not attempting refresh");
         }
 
         // Check if we have valid authentication but no device ID
