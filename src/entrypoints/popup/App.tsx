@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
+  setState,
   toggleAutoSync,
   toggleBookmarkSync,
   toggleDownloadSync,
@@ -47,6 +48,17 @@ export default function App() {
     historySyncEnabled,
     isAuthenticated,
   } = ciState;
+
+  const [domain, setDomain] = useState(serverDomain);
+
+  const changeDomain = (e?: { preventDefault?: () => void }) => {
+    e?.preventDefault?.();
+    dispatch(setState({ serverDomain: domain }));
+  };
+
+  const handleDomainChange = (e: { target: { value: string } }) => {
+    setDomain(e.target.value);
+  };
 
   const [showBlacklistManager, setShowBlacklistManager] = useState(false);
 
@@ -276,6 +288,35 @@ export default function App() {
               </label>
             </div>
           </div>
+
+          <div className="server-domain">
+            <h3>CI Server URL</h3>
+            <div>
+              <p>Enter the domain of your CI server</p>
+            </div>
+            <form onSubmit={changeDomain}>
+              <div className="add-entry">
+                <div className="adder">
+                  <div className="text-box">
+                    <input
+                      value={domain}
+                      onChange={handleDomainChange}
+                      className="text-input"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          changeDomain(e);
+                        }
+                      }}
+                    />
+                  </div>
+                  <button className="primary" onClick={changeDomain}>
+                    Save Server URL
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+
           <div className="blacklist-buttons" style={{ marginTop: "1rem" }}>
             <button
               onClick={() => setShowBlacklistManager(true)}

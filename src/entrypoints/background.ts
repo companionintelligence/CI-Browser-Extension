@@ -1905,7 +1905,7 @@ export default defineBackground({
       accessToken: null,
       sessionToken: null,
       refreshing: false,
-      serverDomain: "dev.companionintelligence.com",
+      serverDomain: "beta-1.companionintel.com",
     };
     const state = store.getState().ciState;
     const { serverDomain, refreshing } = state;

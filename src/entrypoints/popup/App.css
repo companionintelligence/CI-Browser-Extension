@@ -83,7 +83,6 @@ button:active {
     font-size: 1.1em;
     min-height: 48px;
     width: 100%;
-    margin-bottom: 0.5rem;
   }
 }
 
@@ -501,7 +500,7 @@ button:disabled {
 }
 
 .auto-sync-description {
-  margin: 0.5rem 0 0 1.75rem;
+  margin: 0.5rem 0 0 0;
   font-size: 0.8em;
   color: #888;
   line-height: 1.4;
@@ -630,5 +629,18 @@ button.secondary:hover:not(:disabled) {
 
   .sync-toggle .checkbox-label {
     font-size: 0.85em;
+  }
+}
+
+.server-domain {
+  .adder {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .text-input {
+    box-sizing: border-box;
+    width: 100%;
+    height: 2rem;
   }
 }
