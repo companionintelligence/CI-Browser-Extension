@@ -9,6 +9,7 @@ import {
 import "./App.css";
 import bowser from "bowser";
 import BlacklistManager from "./BlacklistManager";
+import { Button } from '../../../packages/shadcn'
 
 export default function App() {
   const dispatch = useDispatch();
@@ -172,13 +173,13 @@ export default function App() {
 
   return (
     <div className={`body ${isMobile ? "mobile" : ""}`}>
-      <div className="login-status">
-        <a href={`https://${serverDomain}`} target="_blank">
-          {!isAuthenticated
+      <Button className="login-status" onClick={
+        window.open(`https://serverDomain`, '_blank')
+      }>
+        {!isAuthenticated
             ? "Log in to continue"
             : "Logged in to Companion Intelligence"}
-        </a>
-      </div>
+      </Button>
 
       {isAuthenticated && (
         <div className="sync-section">

@@ -1,9 +1,10 @@
 {
   "name": "ci-browser-extension",
   "description": "Companion Intelligence browser extension for Chrome and Firefox",
-  "private": true,
-  "version": "1.0.1",
-  "type": "module",
+  "version": "1.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
@@ -43,6 +44,7 @@
     "check:types": "tsc --noEmit --skipLibCheck"
   },
   "dependencies": {
+    "@ci/shadcn": "workspace:*",
     "@reduxjs/toolkit": "^2.8.2",
     "axios": "^1.11.0",
     "bowser": "^2.11.0",
@@ -62,7 +64,7 @@
     "@types/jest": "^30.0.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.3",
-    "@wxt-dev/module-react": "^1.1.3",
+    "@wxt-dev/module-react": "^1.1.5",
     "eslint": "^9.33.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.4",
@@ -79,16 +81,5 @@
     "typescript-eslint": "^8.40.0",
     "wxt": "^0.20.6"
   },
-  "pnpm": {
-    "overrides": {
-      "@wxt-dev/browser": "^0.1.4",
-      "@wxt-dev/storage": "^1.2.5"
-    },
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "spawn-sync",
-      "unrs-resolver"
-    ]
-  },
-  "packageManager": "pnpm@10.22.0+sha512.bf049efe995b28f527fd2b41ae0474ce29186f7edcb3bf545087bd61fbbebb2bf75362d1307fda09c2d288e1e499787ac12d4fcb617a974718a6051f2eee741c"
+  "packageManager": "yarn@4.9.1"
 }
