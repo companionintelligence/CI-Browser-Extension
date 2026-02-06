@@ -1,4 +1,8 @@
+import path from 'node:path';
 import { defineConfig } from "wxt";
+
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react-swc';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -41,4 +45,21 @@ export default defineConfig({
   // Output configurations for different browsers including mobile
   outDir: ".output",
   // Enable mobile browser builds
+  alias: {
+    "shadcn": 'packages/shadcn/src'
+  },
+  vite: () => ({
+    build: {
+      minify: false
+    },
+    plugins: [
+      react(),
+      tailwindcss(),
+    ],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
+    },
+  }),
 });

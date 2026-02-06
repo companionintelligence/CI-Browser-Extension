@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
-
 import { useSelector, useDispatch } from "react-redux";
-import "./App.css";
 import { clearSyncHistoryLogs, setState } from "@/store/ciStateSlice.ts";
 import bowser from "bowser";
+import { Button, Input, Select, Card, Alert } from '@ci/shadcn';
 
 function App() {
   const dispatch = useDispatch();
@@ -136,218 +135,231 @@ function App() {
   };
 
   return (
-    <>
-      <div className={`page ${isMobile ? "mobile" : ""}`}>
-        <div className="boxed-group">
-          <div className="title">
-            Companion Intelligence Browser Extension Options
+    <div className={`w-full min-h-screen p-4 box-border ${isMobile ? "p-2" : ""}`}>
+      <Card className={`bg-white/5 rounded-xl p-8 mx-auto max-w-[800px] ${isMobile ? "p-3" : ""}`}>
+        <h1 className={`text-2xl font-semibold mb-6 text-[#4ba7a6] ${isMobile ? "text-xl text-center" : ""}`}>
+          Companion Intelligence Browser Extension Options
+        </h1>
+
+        <div className="p-4 space-y-4 text-left">
+          <p className="mb-4 leading-relaxed">
+            CI can help you organize and search your time on the web. This can
+            be done by navigating to a site, clicking the CI extension icon in
+            the upper right, and selecting either 'Start tracking this domain'
+            or 'Start tracking this URL'. You can also manually add the domain
+            or URL to the list below.
+          </p>
+          <p className="mb-4 leading-relaxed">
+            When you add a domain or URL to the whitelist, all visits to that
+            domain or URL will be indexed from your browser.
+          </p>
+          <p className="mb-4 leading-relaxed">
+            Deleting an item from the list will stop tracking it, but it will{" "}
+            <u>not</u> delete visits already recorded for that domain or URL.
+          </p>
+          <p className="mb-4 leading-relaxed">
+            At this time, there is no option for selectively deleting data
+            gathered using this extension, but you can delete all indexed web
+            visits from that browser in the CI app.
+          </p>
+
+          <div className="mt-8">
+            <h3 className="text-xl mb-4 text-[#4ba7a6]">CI Server URL</h3>
+            <p className="mb-4">Enter the domain that your CI server is accessible at</p>
+            <form onSubmit={changeDomain} className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex-1 min-w-[200px]">
+                  <Input
+                    value={domain}
+                    onChange={handleDomainChange}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        changeDomain(e);
+                      }
+                    }}
+                    className="w-full min-h-[44px] text-base"
+                  />
+                </div>
+                <Button
+                  onClick={changeDomain}
+                  className="bg-[#4ba7a6] text-white border-[#4ba7a6] hover:bg-[#2f6b7e] hover:border-[#2f6b7e] min-h-[44px] active:translate-y-[1px] transition-all"
+                >
+                  Save
+                </Button>
+              </div>
+            </form>
           </div>
 
-          <div className="padded paragraphed mobile-margin">
-            <p>
-              CI can help you organize and search your time on the web. This can
-              be done by navigating to a site, clicking the CI extension icon in
-              the upper right, and selecting either 'Start tracking this domain'
-              or 'Start tracking this URL'. You can also manually add the domain
-              or URL to the list below.
+          <div className="mt-8 pt-8 border-t border-[#333] dark:border-[#333] light:border-[#ddd]">
+            <h3 className="text-xl mb-4 text-[#4ba7a6]">Browser History Sync</h3>
+            <p className="mb-4 leading-relaxed">
+              Manually sync your browser history to the CI-Server. This will
+              sync all browsing history (not just whitelisted sites) for the
+              selected time period.
             </p>
-            <p>
-              When you add a domain or URL to the whitelist, all visits to that
-              domain or URL will be indexed from your browser.
-            </p>
-            {/*    /!*<p v-else-if="browserName === 'Microsoft Edge'">*!/*/}
-            {/*    /!*    Microsoft Edge unfortunately does not let us access your browser history at this time.*!/*/}
-            {/*    /!*    We therefore cannot retrieve any previous visits to domains or URLs that you have approved,*!/*/}
-            {/*    /!*    and can only track future visits.*!/*/}
-            {/*    /!*    Note that you must be logged into LifeScope on that device for future visits to be recorded.*!/*/}
-            {/*    /!*</p>*!/*/}
-            <p>
-              Deleting an item from the list will stop tracking it, but it will{" "}
-              <u>not</u> delete visits already recorded for that domain or URL.
-            </p>
-            <p>
-              At this time, there is no option for selectively deleting data
-              gathered using this extension, but you can delete all indexed web
-              visits from that browser in the CI app.
-            </p>
-            <div className="serverDomain">
-              <h3>CI Server URL</h3>
-              <div>
-                <p>Enter the domain that your CI server is accessible at</p>
-              </div>
-              <form onSubmit={changeDomain}>
-                <div className="add-entry">
-                  <div className="adder">
-                    <div className="text-box">
-                      <input
-                        value={domain}
-                        onChange={handleDomainChange}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            changeDomain(e);
-                          }
-                        }}
-                      />
-                    </div>
-                    <button className="primary" onClick={changeDomain}>
-                      Save
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>
+            <Alert className="mb-4 bg-[rgba(75,167,166,0.1)]">
+              <p className="text-sm">
+                <strong>Note:</strong> Large time ranges may take several
+                minutes to process. The sync runs in the background and you'll
+                see progress updates.
+              </p>
+            </Alert>
 
-            <div className="historySync">
-              <h3>Browser History Sync</h3>
-              <div>
-                <p>
-                  Manually sync your browser history to the CI-Server. This will
-                  sync all browsing history (not just whitelisted sites) for the
-                  selected time period.
-                </p>
-                <p>
-                  <strong>Note:</strong> Large time ranges may take several
-                  minutes to process. The sync runs in the background and you'll
-                  see progress updates.
-                </p>
-              </div>
-              <div className="sync-controls">
-                <div className="time-range-selector">
-                  <label htmlFor="syncTimeRange">Sync time range:</label>
-                  <select
-                    id="syncTimeRange"
-                    value={syncTimeRange}
-                    onChange={(e) => setSyncTimeRange(e.target.value)}
-                    disabled={historySyncInProgress}
-                  >
-                    <option value="1">Last 24 hours</option>
-                    <option value="7">Last 7 days</option>
-                    <option value="30">Last 30 days</option>
-                    <option value="90">Last 90 days</option>
-                    <option value="365">Last year</option>
-                  </select>
-                </div>
-                <button
-                  onClick={triggerHistorySync}
+            <div className="my-6 flex flex-col items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label htmlFor="syncTimeRange" className="font-medium">Sync time range:</label>
+                <Select
+                  value={syncTimeRange}
+                  onValueChange={(value) => setSyncTimeRange(value)}
                   disabled={historySyncInProgress}
-                  className={historySyncInProgress ? "disabled" : "primary"}
                 >
-                  {historySyncInProgress ? "Syncing..." : "Start History Sync"}
-                </button>
+                  <Select.Trigger className="w-[180px] min-h-[44px]">
+                    <Select.Value />
+                  </Select.Trigger>
+                  <Select.Content>
+                    <Select.Item value="1">Last 24 hours</Select.Item>
+                    <Select.Item value="7">Last 7 days</Select.Item>
+                    <Select.Item value="30">Last 30 days</Select.Item>
+                    <Select.Item value="90">Last 90 days</Select.Item>
+                    <Select.Item value="365">Last year</Select.Item>
+                  </Select.Content>
+                </Select>
               </div>
-              {historySyncStatus && (
-                <div className="sync-status">{historySyncStatus}</div>
-              )}
-              {lastHistorySync && (
-                <div className="last-sync">
-                  Last successful sync:{" "}
-                  {new Date(lastHistorySync).toLocaleString()}
-                </div>
-              )}
+
+              <Button
+                onClick={triggerHistorySync}
+                disabled={historySyncInProgress}
+                className={`min-h-[44px] rounded-lg px-6 py-3 text-base font-medium transition-all ${
+                  historySyncInProgress 
+                    ? "opacity-60 cursor-not-allowed bg-[#333] text-[#888] border-[#333]" 
+                    : "bg-[#4ba7a6] text-white border-[#4ba7a6] hover:bg-[#2f6b7e] hover:border-[#2f6b7e] active:translate-y-[1px]"
+                }`}
+              >
+                {historySyncInProgress ? "Syncing..." : "Start History Sync"}
+              </Button>
             </div>
 
-            <div className="syncHistoryLogs">
-              <div className="sync-logs-header">
-                <h3>Sync History & Logs</h3>
-                <div className="sync-logs-controls">
-                  <button
-                    onClick={() => setShowSyncLogs(!showSyncLogs)}
-                    className="secondary"
-                  >
-                    {showSyncLogs
-                      ? "Hide Logs"
-                      : `Show Logs (${syncHistoryLogs.length})`}
-                  </button>
-                  {syncHistoryLogs.length > 0 && (
-                    <>
-                      <button
-                        onClick={exportSyncLogs}
-                        className="secondary"
-                        title="Export logs as JSON file"
-                      >
-                        Export Logs
-                      </button>
-                      <button
-                        onClick={clearSyncLogs}
-                        className="danger"
-                        title="Clear all sync logs"
-                      >
-                        Clear Logs
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+            {historySyncStatus && (
+              <Alert className="my-4 p-4 rounded bg-[rgba(75,167,166,0.1)] text-[#4ba7a6] text-center italic">
+                {historySyncStatus}
+              </Alert>
+            )}
 
-              {showSyncLogs && (
-                <div className="sync-logs-list">
-                  {syncHistoryLogs.length === 0 ? (
-                    <div className="no-logs">
-                      No sync operations recorded yet. Start a history sync to
-                      see logs here.
+            {lastHistorySync && (
+              <div className="text-sm text-[#888] dark:text-[#888] light:text-[#666] text-center mt-4">
+                Last successful sync:{" "}
+                {new Date(lastHistorySync).toLocaleString()}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-8 pt-8 border-t border-[#333] dark:border-[#333] light:border-[#ddd]">
+            <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
+              <h3 className="text-xl m-0 text-[#4ba7a6]">Sync History & Logs</h3>
+              <div className="flex gap-2 items-center flex-wrap">
+                <Button
+                  onClick={() => setShowSyncLogs(!showSyncLogs)}
+                  variant="outline"
+                  className="text-sm px-3 py-2 bg-transparent text-[#4ba7a6] border-[#4ba7a6] hover:bg-[rgba(75,167,166,0.1)] min-h-[44px]"
+                >
+                  {showSyncLogs
+                    ? "Hide Logs"
+                    : `Show Logs (${syncHistoryLogs.length})`}
+                </Button>
+                {syncHistoryLogs.length > 0 && (
+                  <>
+                    <Button
+                      onClick={exportSyncLogs}
+                      variant="outline"
+                      className="text-sm px-3 py-2 bg-transparent text-[#4ba7a6] border-[#4ba7a6] hover:bg-[rgba(75,167,166,0.1)] min-h-[44px]"
+                      title="Export logs as JSON file"
+                    >
+                      Export Logs
+                    </Button>
+                    <Button
+                      onClick={clearSyncLogs}
+                      variant="destructive"
+                      className="text-sm px-3 py-2 bg-[#dc3545] text-white border-[#dc3545] hover:bg-[#c82333] hover:border-[#c82333] min-h-[44px]"
+                      title="Clear all sync logs"
+                    >
+                      Clear Logs
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {showSyncLogs && (
+              <div className="mt-4">
+                {syncHistoryLogs.length === 0 ? (
+                  <div className="text-center p-8 text-[#888] italic bg-white/5 border border-dashed border-[#333] rounded-lg">
+                    No sync operations recorded yet. Start a history sync to
+                    see logs here.
+                  </div>
+                ) : (
+                  <Card className="bg-[#1a1a1a] dark:bg-[#1a1a1a] light:bg-[#f9f9f9] rounded-lg border border-[#333] dark:border-[#333] light:border-[#ddd] overflow-hidden">
+                    <div className={`grid gap-4 p-4 bg-[#333] dark:bg-[#333] light:bg-[#f0f0f0] font-semibold text-sm text-white dark:text-white light:text-[#213547] ${isMobile ? "grid-cols-1" : "grid-cols-[2fr_1fr_2fr_1.5fr_1fr]"}`}>
+                      <span>Date & Time</span>
+                      <span>Range</span>
+                      <span>Total/Processed/Uploaded</span>
+                      <span>Status</span>
+                      <span>Duration</span>
                     </div>
-                  ) : (
-                    <div className="logs-table">
-                      <div className="logs-header">
-                        <span>Date & Time</span>
-                        <span>Range</span>
-                        <span>Total/Processed/Uploaded</span>
-                        <span>Status</span>
-                        <span>Duration</span>
-                      </div>
-                      {syncHistoryLogs.map(
-                        (log: {
-                          id: string;
-                          status: string;
-                          timestamp: string;
-                          timeRange?: number;
-                          totalEntries?: number;
-                          processedEntries?: number;
-                          uploadedEntries?: number;
-                          error?: string;
-                          duration?: number;
-                        }) => (
-                          <div key={log.id} className="log-entry">
-                            <div className="log-timestamp">
-                              {new Date(log.timestamp).toLocaleString()}
-                            </div>
-                            <div className="log-range">
-                              {log.timeRange === 1
-                                ? "24h"
-                                : `${log.timeRange}d`}
-                            </div>
-                            <div className="log-counts">
-                              {log.totalEntries}/{log.processedEntries}/
-                              {log.uploadedEntries}
-                            </div>
-                            <div
-                              className="log-status"
-                              style={{ color: getStatusColor(log.status) }}
-                            >
-                              {log.status.charAt(0).toUpperCase() +
-                                log.status.slice(1)}
-                              {log.error && (
-                                <div className="log-error" title={log.error}>
-                                  ⚠️ {log.error.substring(0, 50)}
-                                  {log.error.length > 50 ? "..." : ""}
-                                </div>
-                              )}
-                            </div>
-                            <div className="log-duration">
-                              {formatDuration(log.duration || 0)}
-                            </div>
+                    {syncHistoryLogs.map(
+                      (log: {
+                        id: string;
+                        status: string;
+                        timestamp: string;
+                        timeRange?: number;
+                        totalEntries?: number;
+                        processedEntries?: number;
+                        uploadedEntries?: number;
+                        error?: string;
+                        duration?: number;
+                      }) => (
+                        <div
+                          key={log.id}
+                          className={`grid gap-4 p-3 border-b border-[#333] dark:border-[#333] light:border-[#e0e0e0] text-sm items-center last:border-b-0 even:bg-white/[0.02] dark:even:bg-white/[0.02] light:even:bg-[#f7f7f7] ${isMobile ? "grid-cols-1" : "grid-cols-[2fr_1fr_2fr_1.5fr_1fr]"}`}
+                        >
+                          <div className="font-mono text-sm">
+                            {new Date(log.timestamp).toLocaleString()}
                           </div>
-                        ),
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                          <div className="text-center font-medium">
+                            {log.timeRange === 1
+                              ? "24h"
+                              : `${log.timeRange}d`}
+                          </div>
+                          <div className="font-mono text-center">
+                            {log.totalEntries}/{log.processedEntries}/
+                            {log.uploadedEntries}
+                          </div>
+                          <div
+                            className="font-medium text-center"
+                            style={{ color: getStatusColor(log.status) }}
+                          >
+                            {log.status.charAt(0).toUpperCase() +
+                              log.status.slice(1)}
+                            {log.error && (
+                              <div className="text-xs text-[#dc3545] mt-1 italic" title={log.error}>
+                                ⚠️ {log.error.substring(0, 50)}
+                                {log.error.length > 50 ? "..." : ""}
+                              </div>
+                            )}
+                          </div>
+                          <div className="font-mono text-center text-[#888]">
+                            {formatDuration(log.duration || 0)}
+                          </div>
+                        </div>
+                      ),
+                    )}
+                  </Card>
+                )}
+              </div>
+            )}
           </div>
         </div>
-      </div>
-    </>
+      </Card>
+    </div>
   );
 }
 
