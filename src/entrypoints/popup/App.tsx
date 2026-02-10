@@ -265,8 +265,8 @@ export default function App() {
         <div className="mt-6 pt-4 border-t border-[#333] dark:border-[#333] light:border-[#ddd]">
           {/* CI Server URL Section */}
           <div className="mb-6">
-            <h4 className="m-0 mb-2 text-[#4ba7a6] text-[0.95em] font-semibold">CI Server URL</h4>
-            <p className="mb-3 text-[0.85em] text-[#888]">Enter the domain that your CI server is accessible at</p>
+            <h4 className="m-0 mb-2 text-[#4ba7a6] text-[1.25em] font-semibold">CI Server URL</h4>
+            <p className="mb-3 text-[1em] text-[#888]">Enter the domain of your CI server</p>
             <form onSubmit={changeDomain} className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex-1 min-w-[150px]">
@@ -292,7 +292,7 @@ export default function App() {
           </div>
 
           <div className="mb-4">
-            <h4 className="m-0 mb-4 text-[#666] text-[1.5em]">Browser History Sync</h4>
+            <h4 className="m-0 mb-2 text-[#4ba7a6] text-[1.25em] font-semibold pt-4 border-t border-[#333] dark:border-[#333] light:border-[#ddd]">Browser History Sync</h4>
           </div>
 
           <Field className="mb-4 p-4 bg-[rgba(75,167,166,0.05)] dark:bg-[rgba(75,167,166,0.05)] light:bg-[rgba(75,167,166,0.08)] rounded-lg text-left">
@@ -304,11 +304,10 @@ export default function App() {
                 onCheckedChange={handleAutoSyncToggle}
                 className="w-[18px] h-[18px] cursor-pointer accent-[#4ba7a6]"
               />
-              <Field.Label htmlFor="history-sync-enabled" className="text-[1em]">Auto-sync all browser history</Field.Label>
+              <Field.Label htmlFor="history-sync-enabled" className="text-[1.2em]">Auto-sync all browser history</Field.Label>
             </Field>
-            <Field.Description className="mt-2 ml-7 text-[#888] dark:text-[#888] light:text-[#666] leading-[1.4]">
-              Automatically sync all browsing history (excluding blacklisted
-              items)
+            <Field.Description className="mt-2 ml-7 text-[#888] dark:text-[#888] light:text-[#666] leading-[1.4] text-[0.9em]">
+              Excludes blacklisted items
             </Field.Description>
           </Field>
 
@@ -470,7 +469,7 @@ export default function App() {
                       }) => (
                         <div
                           key={log.id}
-                          className="grid gap-2 p-2 border-b border-[#333] dark:border-[#333] light:border-[#e0e0e0] text-xs items-center last:border-b-0 even:bg-white/[0.02] dark:even:bg-white/[0.02] light:even:bg-[#f7f7f7] grid-cols-[2fr_1fr_1fr]"
+                          className="grid gap-2 p-2 text-background border-b border-[#333] dark:border-[#333] light:border-[#e0e0e0] text-xs items-center last:border-b-0 even:bg-white/[0.02] dark:even:bg-white/[0.02] light:even:bg-[#f7f7f7] grid-cols-[2fr_1fr_1fr]"
                         >
                           <div className="font-mono text-xs truncate">
                             {new Date(log.timestamp).toLocaleString()}
