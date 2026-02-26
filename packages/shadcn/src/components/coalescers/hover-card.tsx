@@ -1,4 +1,8 @@
-import { HoverCard, HoverCardTrigger, HoverCardContent } from '../ui/hover-card';
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from "../ui/hover-card";
 
 type HoverCardComponent = typeof HoverCard & {
   Trigger: typeof HoverCardTrigger;

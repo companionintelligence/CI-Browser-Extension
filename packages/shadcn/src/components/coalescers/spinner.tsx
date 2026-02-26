@@ -1,1 +1,1 @@
-export { Spinner } from '../ui/shadcn-io/spinner';
+export { Spinner } from "../ui/shadcn-io/spinner";

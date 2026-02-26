@@ -1905,7 +1905,7 @@ export default defineBackground({
       accessToken: null,
       sessionToken: null,
       refreshing: false,
-      serverDomain: "dev.companionintelligence.com",
+      serverDomain: "",
     };
     const state = store.getState().ciState;
     const { serverDomain, refreshing } = state;
@@ -2046,82 +2046,18 @@ export default defineBackground({
           (cookie) => cookie.name === "CI_sessionToken",
         );
 
-        console.log(
-          "All CI cookies found:",
-          allCookies
-            .filter((c) => c.name.startsWith("CI_"))
-            .map((c) => ({ name: c.name, domain: c.domain })),
-        );
-
-        // Also check for any cookies on companionintelligence.com
-        const companionResult = await browser.cookies.getAll({
-          url: "https://companionintelligence.com",
-        });
-        console.log(
-          "Found cookies on companionintelligence.com:",
-          companionResult.map((c) => ({
-            name: c.name,
-            domain: c.domain,
-            value: c.value?.substring(0, 20) + "...",
-          })),
-        );
-
-        // Check for cookies on the exact server domain you're using
-        console.log(
-          "Checking for cookies on your exact server domain:",
-          `https://${serverDomain}`,
-        );
-        const exactDomainResult = await browser.cookies.getAll({
-          url: `https://${serverDomain}`,
-        });
-        console.log(
-          "Found cookies on exact server domain:",
-          exactDomainResult.map((c) => ({
-            name: c.name,
-            domain: c.domain,
-            value: c.value?.substring(0, 20) + "...",
-          })),
-        );
-
-        // Check if we can access cookies at all
-        try {
-          const allCookiesTest = await browser.cookies.getAll({});
-          console.log(
-            "Total cookies accessible by extension:",
-            allCookiesTest.length,
-          );
-          console.log(
-            "Sample cookies:",
-            allCookiesTest
-              .slice(0, 5)
-              .map((c) => ({ name: c.name, domain: c.domain })),
-          );
-
-          // Look for any cookies that might be related to companion
-          const companionCookies = allCookiesTest.filter(
-            (c) =>
-              c.name.includes("CI_") ||
-              c.domain.includes("companion") ||
-              c.name.includes("access") ||
-              c.name.includes("session"),
-          );
-          console.log(
-            "Potential companion-related cookies:",
-            companionCookies.map((c) => ({
-              name: c.name,
-              domain: c.domain,
-              value: c.value?.substring(0, 20) + "...",
-            })),
-          );
-        } catch (error) {
-          console.error("Error accessing cookies:", error);
-        }
-
         console.log("Access token cookie found:", !!accessTokenCookie);
         console.log("Session token cookie found:", !!sessionTokenCookie);
 
         let { accessToken, sessionToken, deviceId } = currentState;
         let authStateChanged = false;
+
+        //If the user has logged out, or switches domains, and no cookies are found,
+        //then clear state so that they aren't shown as logged in, and to avoid
+        //making requests with an invalid token
+        if (!accessTokenCookie && !sessionTokenCookie) {
+          store.dispatch(setState({ accessToken: null, sessionToken: null }));
+        }
 
         // Check for access token changes
         if (accessTokenCookie && accessTokenCookie.value !== accessToken) {

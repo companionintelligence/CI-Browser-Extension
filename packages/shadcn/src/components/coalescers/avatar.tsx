@@ -1,4 +1,4 @@
-import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 
 type AvatarComponent = typeof Avatar & {
   Image: typeof AvatarImage;

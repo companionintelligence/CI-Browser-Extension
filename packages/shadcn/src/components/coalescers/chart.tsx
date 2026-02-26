@@ -5,7 +5,7 @@ import {
   ChartStyle,
   ChartTooltip,
   ChartTooltipContent,
-} from '../ui/chart';
+} from "../ui/chart";
 
 type ChartComponent = typeof ChartContainer & {
   Legend: typeof ChartLegend;

@@ -1,4 +1,4 @@
-import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
+import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 
 type ToggleGroupComponent = typeof ToggleGroup & {
   Item: typeof ToggleGroupItem;

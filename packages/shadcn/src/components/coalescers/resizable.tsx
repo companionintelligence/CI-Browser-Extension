@@ -1,4 +1,8 @@
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '../ui/resizable';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "../ui/resizable";
 
 type ResizableComponent = typeof ResizablePanelGroup & {
   Panel: typeof ResizablePanel;

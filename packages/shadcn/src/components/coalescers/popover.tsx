@@ -1,4 +1,9 @@
-import { Popover, PopoverTrigger, PopoverContent, PopoverAnchor } from '../ui/popover';
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverAnchor,
+} from "../ui/popover";
 
 type PopoverComponent = typeof Popover & {
   Trigger: typeof PopoverTrigger;

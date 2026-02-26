@@ -1,16 +1,17 @@
-import path from 'node:path';
+import path from "node:path";
 import { defineConfig } from "wxt";
 
-import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react-swc';
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react-swc";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   manifest: {
     name: "Companion Intelligence",
     host_permissions: [
-      "*://*.companionintelligence.com/",
-      "*://*.companionintel.com/",
+      "*://*.companionintelligence.com/*",
+      "*://*.companionintel.com/*",
+      "*://*.ci.computer/*",
       "*://*.netflix.com/*",
       "*://*.hulu.com/*",
       "*://secure.hulu.com/*",
@@ -25,6 +26,19 @@ export default defineConfig({
       "tabs",
       "webNavigation",
     ],
+    browser_specific_settings: {
+      gecko: {
+        id: "@ci-browser-extension",
+        data_collection_permissions: {
+          required: [
+            "bookmarksInfo",
+            "websiteActivity",
+            "websiteContent",
+            "browsingActivity",
+          ],
+        },
+      },
+    },
     icons: {
       "16": "icon/favicon-16x16.png",
       "32": "icon/favicon-32x32.png",
@@ -46,19 +60,16 @@ export default defineConfig({
   outDir: ".output",
   // Enable mobile browser builds
   alias: {
-    "shadcn": 'packages/shadcn/src'
+    shadcn: "packages/shadcn/src",
   },
   vite: () => ({
     build: {
-      minify: false
+      minify: false,
     },
-    plugins: [
-      react(),
-      tailwindcss(),
-    ],
+    plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
+        "@": path.resolve(__dirname, "./src"),
       },
     },
   }),

@@ -6,7 +6,7 @@ import {
   PaginationPrevious,
   PaginationNext,
   PaginationEllipsis,
-} from '../ui/pagination';
+} from "../ui/pagination";
 
 type PaginationComponent = typeof Pagination & {
   Content: typeof PaginationContent;

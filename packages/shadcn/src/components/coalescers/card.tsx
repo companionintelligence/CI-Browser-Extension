@@ -6,7 +6,7 @@ import {
   CardAction,
   CardDescription,
   CardContent,
-} from '../ui/card';
+} from "../ui/card";
 
 type CardComponent = typeof Card & {
   Header: typeof CardHeader;

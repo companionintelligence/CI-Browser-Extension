@@ -7,7 +7,7 @@ import {
   TableRow,
   TableCell,
   TableCaption,
-} from '../ui/table';
+} from "../ui/table";
 
 type TableComponent = typeof Table & {
   Header: typeof TableHeader;

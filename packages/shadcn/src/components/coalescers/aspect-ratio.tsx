@@ -1,1 +1,1 @@
-export { AspectRatio } from '../ui/aspect-ratio';
+export { AspectRatio } from "../ui/aspect-ratio";

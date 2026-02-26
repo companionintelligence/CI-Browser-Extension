@@ -14,7 +14,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
-} from '../ui/dropdown-menu';
+} from "../ui/dropdown-menu";
 
 type DropdownMenuComponent = typeof DropdownMenu & {
   Portal: typeof DropdownMenuPortal;

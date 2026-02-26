@@ -63,7 +63,7 @@ export const ciStateSlice = createSlice({
     lastHistorySync: null,
     syncHistoryLogs: [],
     refreshing: false,
-    serverDomain: "dev.companionintelligence.com",
+    serverDomain: "",
     autoSyncEnabled: false,
     siteBlacklist: [],
     pageBlacklist: [],

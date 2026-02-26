@@ -1,4 +1,4 @@
-import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 
 type RadioGroupComponent = typeof RadioGroup & {
   Item: typeof RadioGroupItem;

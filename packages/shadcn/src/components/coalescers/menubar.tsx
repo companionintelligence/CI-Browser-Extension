@@ -15,7 +15,7 @@ import {
   MenubarSub,
   MenubarSubTrigger,
   MenubarSubContent,
-} from '../ui/menubar';
+} from "../ui/menubar";
 
 type MenubarComponent = typeof Menubar & {
   Portal: typeof MenubarPortal;

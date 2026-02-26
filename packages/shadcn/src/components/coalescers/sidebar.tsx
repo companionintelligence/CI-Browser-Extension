@@ -23,7 +23,7 @@ import {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
-} from '../ui/sidebar';
+} from "../ui/sidebar";
 
 type SidebarComponent = typeof Sidebar & {
   Content: typeof SidebarContent;

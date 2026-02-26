@@ -1,4 +1,4 @@
-import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
+import { Alert, AlertTitle, AlertDescription } from "../ui/alert";
 
 type AlertComponent = typeof Alert & {
   Title: typeof AlertTitle;

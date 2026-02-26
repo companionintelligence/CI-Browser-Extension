@@ -7,7 +7,7 @@ import {
   SheetFooter,
   SheetTitle,
   SheetDescription,
-} from '../ui/sheet';
+} from "../ui/sheet";
 
 type SheetComponent = typeof Sheet & {
   Trigger: typeof SheetTrigger;
