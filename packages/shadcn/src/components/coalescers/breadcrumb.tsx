@@ -6,7 +6,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
   BreadcrumbEllipsis,
-} from '../ui/breadcrumb';
+} from "../ui/breadcrumb";
 
 type BreadcrumbComponent = typeof Breadcrumb & {
   List: typeof BreadcrumbList;

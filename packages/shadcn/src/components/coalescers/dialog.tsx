@@ -9,7 +9,7 @@ import {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
-} from '../ui/dialog';
+} from "../ui/dialog";
 
 type DialogComponent = typeof Dialog & {
   Close: typeof DialogClose;

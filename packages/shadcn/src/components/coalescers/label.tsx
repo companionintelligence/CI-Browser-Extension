@@ -1,1 +1,1 @@
-export { Label } from '../ui/label';
+export { Label } from "../ui/label";

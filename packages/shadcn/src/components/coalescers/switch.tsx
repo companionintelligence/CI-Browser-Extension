@@ -1,1 +1,1 @@
-export { Switch } from '../ui/switch';
+export { Switch } from "../ui/switch";

@@ -1,4 +1,9 @@
-import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from '../ui/input-otp';
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+  InputOTPSeparator,
+} from "../ui/input-otp";
 
 type InputOTPComponent = typeof InputOTP & {
   Group: typeof InputOTPGroup;

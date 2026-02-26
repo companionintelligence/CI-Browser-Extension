@@ -8,7 +8,7 @@ import {
   NavigationMenuIndicator,
   NavigationMenuViewport,
   navigationMenuTriggerStyle,
-} from '../ui/navigation-menu';
+} from "../ui/navigation-menu";
 
 type NavigationMenuComponent = typeof NavigationMenu & {
   List: typeof NavigationMenuList;

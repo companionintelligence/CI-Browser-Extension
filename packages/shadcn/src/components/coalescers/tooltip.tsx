@@ -1,4 +1,9 @@
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../ui/tooltip';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "../ui/tooltip";
 
 type TooltipComponent = typeof Tooltip & {
   Trigger: typeof TooltipTrigger;

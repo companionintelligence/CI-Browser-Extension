@@ -5,7 +5,7 @@ import {
   CarouselNext,
   CarouselPrevious,
   type CarouselApi,
-} from '../ui/carousel';
+} from "../ui/carousel";
 
 type CarouselComponent = typeof Carousel & {
   Content: typeof CarouselContent;

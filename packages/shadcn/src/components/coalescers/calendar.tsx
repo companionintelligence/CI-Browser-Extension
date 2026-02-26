@@ -1,4 +1,4 @@
-import { Calendar, CalendarDayButton } from '../ui/calendar';
+import { Calendar, CalendarDayButton } from "../ui/calendar";
 
 type CalendarComponent = typeof Calendar & {
   DayButton: typeof CalendarDayButton;

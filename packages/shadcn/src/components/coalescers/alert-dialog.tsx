@@ -10,7 +10,7 @@ import {
   AlertDialogDescription,
   AlertDialogAction,
   AlertDialogCancel,
-} from '../ui/alert-dialog';
+} from "../ui/alert-dialog";
 
 type AlertDialogComponent = typeof AlertDialog & {
   Portal: typeof AlertDialogPortal;

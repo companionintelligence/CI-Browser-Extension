@@ -1,1 +1,1 @@
-export { Badge } from '../ui/badge';
+export { Badge } from "../ui/badge";

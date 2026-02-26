@@ -14,7 +14,7 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuRadioGroup,
-} from '../ui/context-menu';
+} from "../ui/context-menu";
 
 type ContextMenuComponent = typeof ContextMenu & {
   Trigger: typeof ContextMenuTrigger;

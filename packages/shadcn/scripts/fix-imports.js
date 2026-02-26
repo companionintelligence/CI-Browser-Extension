@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 // scripts/fix-imports.js
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 // Find project root (one level up from scripts)
-const PROJECT_ROOT = path.resolve(__dirname, '..');
-const SRC_DIR = path.join(PROJECT_ROOT, 'src');
-const ALIAS = '@/';
+const PROJECT_ROOT = path.resolve(__dirname, "..");
+const SRC_DIR = path.join(PROJECT_ROOT, "src");
+const ALIAS = "@/";
 
 function walk(dir, fileList = []) {
   const files = fs.readdirSync(dir);
@@ -18,7 +18,7 @@ function walk(dir, fileList = []) {
 
     if (stat.isDirectory()) {
       walk(filepath, fileList);
-    } else if (file.endsWith('.ts') || file.endsWith('.tsx')) {
+    } else if (file.endsWith(".ts") || file.endsWith(".tsx")) {
       fileList.push(filepath);
     }
   });
@@ -35,16 +35,16 @@ function aliasToRelative(fromFile, importPath) {
   const target = path.join(SRC_DIR, importPath.slice(ALIAS.length));
   let rel = path.relative(fromDir, target);
 
-  if (!rel.startsWith('.')) {
-    rel = './' + rel;
+  if (!rel.startsWith(".")) {
+    rel = "./" + rel;
   }
 
-  return rel.replace(/\\/g, '/');
+  return rel.replace(/\\/g, "/");
 }
 
 function processFile(filePath) {
   let changed = false;
-  let content = fs.readFileSync(filePath, 'utf8');
+  let content = fs.readFileSync(filePath, "utf8");
 
   content = content.replace(
     /(import\s.+?from\s+['"])(@\/[^'"]+)(['"]\s*;?)/g,
@@ -57,8 +57,8 @@ function processFile(filePath) {
   );
 
   if (changed) {
-    fs.writeFileSync(filePath, content, 'utf8');
-    console.log('Rewrote:', path.relative(PROJECT_ROOT, filePath));
+    fs.writeFileSync(filePath, content, "utf8");
+    console.log("Rewrote:", path.relative(PROJECT_ROOT, filePath));
   }
 }
 

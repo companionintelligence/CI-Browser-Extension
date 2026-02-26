@@ -9,20 +9,7 @@ import {
   FieldSet,
   FieldContent,
   FieldTitle,
-} from '../ui/field';
-
-type SidebarComponent = typeof Sidebar & {
-  Field: typeof Field;
-  FieldLabel: typeof FieldLabel;
-  FieldDescription: typeof FieldDescription;
-  FieldError: typeof FieldError;
-  FieldGroup: typeof FieldGroup;
-  FieldLegend: typeof FieldLegend;
-  FieldSeparator: typeof FieldSeparator;
-  FieldSet: typeof FieldSet;
-  FieldContent: typeof FieldContent;
-  FieldTitle: typeof FieldTitle;
-};
+} from "../ui/field";
 
 const AugmentedField = Field as FieldComponent;
 

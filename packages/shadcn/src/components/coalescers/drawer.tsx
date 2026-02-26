@@ -9,7 +9,7 @@ import {
   DrawerFooter,
   DrawerTitle,
   DrawerDescription,
-} from '../ui/drawer';
+} from "../ui/drawer";
 
 type DrawerComponent = typeof Drawer & {
   Portal: typeof DrawerPortal;

@@ -8,7 +8,7 @@ import {
   CommandItem,
   CommandShortcut,
   CommandSeparator,
-} from '../ui/command';
+} from "../ui/command";
 
 type CommandComponent = typeof Command & {
   Dialog: typeof CommandDialog;
