@@ -3,9 +3,8 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 export const loadUserSettings = createAsyncThunk(
   "ciState/loadUserSettings",
   async () => {
-    const localData = await browser.storage.local.get([
+    return await browser.storage.local.get([
       "accessToken",
-      "sessionToken",
       "lastHistorySync",
       "syncHistoryLogs",
       "autoSyncEnabled",
@@ -18,16 +17,13 @@ export const loadUserSettings = createAsyncThunk(
       "bookmarkSyncEnabled",
       "downloadSyncEnabled",
       "historySyncEnabled",
-      "isAuthenticated",
+      "serverDomain",
     ]);
-
-    return localData;
   },
 );
 
 interface CiState {
   accessToken: string | null;
-  sessionToken: string | null;
   url: string | null;
   domain: string | null;
   lastUrl: string | null;
@@ -47,14 +43,12 @@ interface CiState {
   bookmarkSyncEnabled: boolean;
   downloadSyncEnabled: boolean;
   historySyncEnabled: boolean;
-  isAuthenticated: boolean;
 }
 
 export const ciStateSlice = createSlice({
   name: "ciState",
   initialState: {
     accessToken: null,
-    sessionToken: null,
     url: null,
     domain: null,
     lastUrl: null,
@@ -74,7 +68,6 @@ export const ciStateSlice = createSlice({
     bookmarkSyncEnabled: false,
     downloadSyncEnabled: false,
     historySyncEnabled: true, // Default to enabled since history is the main feature
-    isAuthenticated: false,
   } as CiState,
   reducers: {
     setState: (state, action) => {
@@ -202,10 +195,9 @@ export const ciStateSlice = createSlice({
       return { ...state, pageBlacklist: newPageBlacklist };
     },
     saveUserSettings(state) {
+      console.log("saving user settings", state);
       const parsed = JSON.parse(
         JSON.stringify({
-          accessToken: state.accessToken,
-          sessionToken: state.sessionToken,
           lastHistorySync: state.lastHistorySync,
           syncHistoryLogs: state.syncHistoryLogs,
           autoSyncEnabled: state.autoSyncEnabled,
@@ -218,7 +210,7 @@ export const ciStateSlice = createSlice({
           bookmarkSyncEnabled: state.bookmarkSyncEnabled,
           downloadSyncEnabled: state.downloadSyncEnabled,
           historySyncEnabled: state.historySyncEnabled,
-          isAuthenticated: state.isAuthenticated,
+          serverDomain: state.serverDomain,
         }),
       );
       browser.storage.local.set(parsed);
