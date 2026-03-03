@@ -1844,7 +1844,7 @@ export default defineBackground({
         url: `https://${serverDomain}`,
       });
       const sessionTokenCookie = cookies.find(
-        (cookie) => cookie.name === `CI_${SESSION_TOKEN_KEY}`,
+        (cookie) => cookie.name === SESSION_TOKEN_KEY,
       );
       const xsrfTokenCookie = cookies.find(
         (cookie) => cookie.name === XSRF_COOKIE_NAME,
@@ -1919,7 +1919,7 @@ export default defineBackground({
         });
 
         const sessionToken = result.find(
-          (cookie) => cookie.name === `CI_${SESSION_TOKEN_KEY}`,
+          (cookie) => cookie.name === SESSION_TOKEN_KEY,
         );
 
         let authStateChanged = false;
