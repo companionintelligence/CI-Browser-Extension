@@ -63,8 +63,6 @@ export default function App() {
     syncHistoryLogs,
   } = ciState;
 
-  console.log("accessToken", accessToken);
-
   const [showBlacklistManager, setShowBlacklistManager] = useState(false);
   const [domain, setDomain] = useState(serverDomain);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
@@ -78,7 +76,6 @@ export default function App() {
     // Check authentication status every time popup opens
     const checkAuthStatus = async () => {
       try {
-        console.log("sending checkAuthStatus");
         // Send message to background to refresh auth status
         await browser.runtime.sendMessage({
           type: "CHECK_AUTH_STATUS",

@@ -195,7 +195,6 @@ export const ciStateSlice = createSlice({
       return { ...state, pageBlacklist: newPageBlacklist };
     },
     saveUserSettings(state) {
-      console.log("saving user settings", state);
       const parsed = JSON.parse(
         JSON.stringify({
           lastHistorySync: state.lastHistorySync,
