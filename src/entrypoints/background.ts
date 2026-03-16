@@ -20,7 +20,7 @@ const DOWNLOAD_SYNC_KEY = "lastDownloadSync";
 const AUTO_SYNC_TIME_RANGE = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
 const SESSION_TOKEN_KEY = "sessionToken";
-const XSRF_COOKIE_NAME = "xsrfToken";
+const CSRF_COOKIE_NAME = "csrfToken";
 
 // Helper function to ensure proper ISO time format with milliseconds
 function ensureISOTimeFormat(
@@ -1846,8 +1846,8 @@ export default defineBackground({
       const sessionTokenCookie = cookies.find(
         (cookie) => cookie.name === SESSION_TOKEN_KEY,
       );
-      const xsrfTokenCookie = cookies.find(
-        (cookie) => cookie.name === XSRF_COOKIE_NAME,
+      const csrfTokenCookie = cookies.find(
+        (cookie) => cookie.name === CSRF_COOKIE_NAME,
       );
 
       // Use cookie if available, otherwise fall back to storage
@@ -1885,7 +1885,7 @@ export default defineBackground({
           {
             method: "POST",
             headers: {
-              "X-XSRF-Token": xsrfTokenCookie.value,
+              "X-CSRF-Token": csrfTokenCookie.value,
             },
             credentials: "include",
           },
@@ -1966,29 +1966,37 @@ export default defineBackground({
             authStateChanged = true;
           } else if (isSessionTokenExpired) {
             console.log("Session token expired, not attempting refresh");
-            browser.runtime.sendMessage({
+            browser.runtime
+              .sendMessage({
+                action: "AUTH_STATE_UPDATED",
+                payload: {
+                  accessToken,
+                  deviceId,
+                },
+              })
+              .catch((error) => {
+                console.log(
+                  "No receiver for message, probably because popup not open",
+                );
+                console.log(error);
+              });
+          }
+        } else {
+          console.log("No session token found, not attempting refresh");
+          browser.runtime
+            .sendMessage({
               action: "AUTH_STATE_UPDATED",
               payload: {
                 accessToken,
                 deviceId,
               },
-            }).catch((error) => {
-              console.log('No receiver for message, probably because popup not open');
-              console.log(error)
+            })
+            .catch((error) => {
+              console.log(
+                "No receiver for message, probably because popup not open",
+              );
+              console.log(error);
             });
-          }
-        } else {
-          console.log("No session token found, not attempting refresh");
-          browser.runtime.sendMessage({
-            action: "AUTH_STATE_UPDATED",
-            payload: {
-              accessToken,
-              deviceId,
-            },
-          }).catch((error) => {
-            console.log('No receiver for message, probably because popup not open');
-            console.log(error)
-          });
         }
 
         // Check if we have valid authentication but no device ID
@@ -2019,16 +2027,20 @@ export default defineBackground({
 
           // Get updated state after potential changes
           ({ accessToken } = store.getState().ciState);
-          browser.runtime.sendMessage({
-            action: "AUTH_STATE_UPDATED",
-            payload: {
-              accessToken,
-              deviceId,
-            },
-          }).catch((error) => {
-            console.log('No receiver for message, probably because popup not open');
-            console.log(error)
-          });
+          browser.runtime
+            .sendMessage({
+              action: "AUTH_STATE_UPDATED",
+              payload: {
+                accessToken,
+                deviceId,
+              },
+            })
+            .catch((error) => {
+              console.log(
+                "No receiver for message, probably because popup not open",
+              );
+              console.log(error);
+            });
         }
       } catch (error) {
         console.error("Error checking authentication state:", error);
@@ -2083,99 +2095,95 @@ export default defineBackground({
     });
     browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
 
-    browser.runtime.onMessage.addListener(
-      async (message, sender, sendResponse) => {
-        console.log("Background received message:", message);
+    browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      console.log("Background received message:", message);
 
-        try {
-          if (message && message.action === "SETUP_DEVICE") {
-            try {
-              await setupDevice();
+      try {
+        if (message && message.action === "SETUP_DEVICE") {
+          try {
+            setupDevice().then(() => {
               sendResponse({ success: true });
-            } catch (error: any) {
-              const errorMessage =
-                error?.message || error?.toString() || "Unknown error occurred";
-              sendResponse({ success: false, error: errorMessage });
-            }
-
-            return true;
+            });
+          } catch (error: any) {
+            const errorMessage =
+              error?.message || error?.toString() || "Unknown error occurred";
+            sendResponse({ success: false, error: errorMessage });
           }
 
-          if (message.action === "triggerManualSync") {
-            console.log(
-              "Triggering manual sync with options:",
-              message.options,
-            );
-            triggerManualSync(message.options || {})
-              .then(() => {
-                console.log("Manual sync completed successfully");
-                sendResponse({ success: true });
-              })
-              .catch((error) => {
-                console.error("Manual sync failed:", error);
-                sendResponse({ success: false, error: error.message });
-              });
-
-            return true;
-          }
-
-          if (message.action === "TRIGGER_MANUAL_HISTORY_SYNC") {
-            triggerManualHistorySync(message.options || {})
-              .then(() => {
-                sendResponse({ success: true });
-              })
-              .catch((error) => {
-                console.error("Manual history sync failed:", error);
-                sendResponse({ success: false, error: error.message });
-              });
-
-            return true;
-          }
-
-          if (message.action === "triggerBackgroundSync") {
-            // Trigger the background periodic sync logic
-            triggerBackgroundSync()
-              .then(() => {
-                sendResponse({ success: true });
-              })
-              .catch((error) => {
-                console.error("Background sync failed:", error);
-                sendResponse({ success: false, error: error.message });
-              });
-
-            return true;
-          }
-
-          if (message.action === "CHECK_AUTH_STATUS") {
-            checkAuthenticationState()
-              .then(() => {
-                sendResponse({ success: true });
-              })
-              .catch((error) => {
-                console.error("Error checking auth status:", error);
-                sendResponse({ success: false, error: error.message });
-              });
-
-            return true;
-          }
-
-          if (message.action === "DOMAIN_SCRAPE_DATA") {
-            handleScrapedData(message.data)
-              .then(() => {
-                sendResponse({ success: true });
-              })
-              .catch((error) => {
-                console.error("Error handling scraped data:", error);
-                sendResponse({ success: false, error: error.message });
-              });
-
-            return true;
-          }
-        } catch (error) {
-          console.error("Error checking authentication state:", error);
+          return true;
         }
-      },
-    );
+
+        if (message.action === "triggerManualSync") {
+          console.log("Triggering manual sync with options:", message.options);
+          triggerManualSync(message.options || {})
+            .then(() => {
+              console.log("Manual sync completed successfully");
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Manual sync failed:", error);
+              sendResponse({ success: false, error: error.message });
+            });
+
+          return true;
+        }
+
+        if (message.action === "TRIGGER_MANUAL_HISTORY_SYNC") {
+          triggerManualHistorySync(message.options || {})
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Manual history sync failed:", error);
+              sendResponse({ success: false, error: error.message });
+            });
+
+          return true;
+        }
+
+        if (message.action === "triggerBackgroundSync") {
+          // Trigger the background periodic sync logic
+          triggerBackgroundSync()
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Background sync failed:", error);
+              sendResponse({ success: false, error: error.message });
+            });
+
+          return true;
+        }
+
+        if (message.action === "CHECK_AUTH_STATUS") {
+          checkAuthenticationState()
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Error checking auth status:", error);
+              sendResponse({ success: false, error: error.message });
+            });
+
+          return true;
+        }
+
+        if (message.action === "DOMAIN_SCRAPE_DATA") {
+          handleScrapedData(message.data)
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Error handling scraped data:", error);
+              sendResponse({ success: false, error: error.message });
+            });
+
+          return true;
+        }
+      } catch (error) {
+        console.error("Error checking authentication state:", error);
+      }
+    });
 
     const AUTO_SYNC_INTERVAL = 10 * 60 * 1000; // 10 minutes
     const AUTO_SYNC_TIME_RANGE = 24 * 60 * 60 * 1000;

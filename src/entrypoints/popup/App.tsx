@@ -107,7 +107,7 @@ export default function App() {
     const browser_info = bowser.getParser(window.navigator.userAgent);
     setIsMobile(browser_info.getPlatformType() === "mobile");
 
-    browser.runtime.onMessage.addListener(async (message) => {
+    browser.runtime.onMessage.addListener((message) => {
       if (message.action === "AUTH_STATE_UPDATED") {
         setToken(message.payload.accessToken);
       }
