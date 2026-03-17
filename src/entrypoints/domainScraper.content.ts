@@ -21,7 +21,7 @@ export default defineContentScript({
         if (result && result.data) {
           browser.runtime
             .sendMessage({
-              type: "DOMAIN_SCRAPE_DATA",
+              action: "DOMAIN_SCRAPE_DATA",
               data: result,
             })
             .catch((error) => {

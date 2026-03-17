@@ -7,6 +7,7 @@ import {
   toggleHistorySync,
   clearSyncHistoryLogs,
   setState,
+  saveUserSettings,
 } from "@/store/ciStateSlice";
 import "@/theme.css";
 import bowser from "bowser";
@@ -18,7 +19,7 @@ export default function App() {
   const ciState = useSelector(
     (state: { ciState: unknown }) => state.ciState,
   ) as {
-    sessionToken: string | null;
+    accessToken: string | null;
     domain: string | null;
     url: string | null;
     historySyncInProgress: boolean;
@@ -33,7 +34,6 @@ export default function App() {
     bookmarkSyncEnabled: boolean;
     downloadSyncEnabled: boolean;
     historySyncEnabled: boolean;
-    isAuthenticated: boolean;
     syncHistoryLogs: {
       id: string;
       status: string;
@@ -47,6 +47,7 @@ export default function App() {
     }[];
   };
   const {
+    accessToken,
     historySyncInProgress,
     historySyncStatus,
     lastHistorySync,
@@ -59,7 +60,6 @@ export default function App() {
     bookmarkSyncEnabled,
     downloadSyncEnabled,
     historySyncEnabled,
-    isAuthenticated,
     syncHistoryLogs,
   } = ciState;
 
@@ -67,6 +67,7 @@ export default function App() {
   const [domain, setDomain] = useState(serverDomain);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
+  const [token, setToken] = useState(accessToken);
 
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
@@ -77,7 +78,7 @@ export default function App() {
       try {
         // Send message to background to refresh auth status
         await browser.runtime.sendMessage({
-          action: "checkAuthStatus",
+          type: "CHECK_AUTH_STATUS",
         });
       } catch (error) {
         console.error("Error checking auth status:", error);
@@ -105,12 +106,13 @@ export default function App() {
     // Mobile detection
     const browser_info = bowser.getParser(window.navigator.userAgent);
     setIsMobile(browser_info.getPlatformType() === "mobile");
+
+    browser.runtime.onMessage.addListener((message) => {
+      if (message.action === "AUTH_STATE_UPDATED") {
+        setToken(message.payload.accessToken);
+      }
+    });
   }, []);
-
-  // Authentication state is now managed by background script and stored in Redux
-
-  // Use isAuthenticated directly from Redux state (updated by background script)
-  console.log("Popup authentication state:", isAuthenticated);
 
   // const triggerManualSync = async function () {
   //   console.log(
@@ -129,7 +131,7 @@ export default function App() {
   //     if (autoSyncEnabled) {
   //       console.log("Auto-sync enabled, triggering background sync");
   //       const response = await browser.runtime.sendMessage({
-  //         action: "triggerBackgroundSync",
+  //         action: "TRIGGER_BACKGROUND_SYNC",
   //       });
   //
   //       console.log("Background sync response:", response);
@@ -140,7 +142,7 @@ export default function App() {
   //       // If auto-sync is disabled, do a full manual sync
   //       console.log("Auto-sync disabled, triggering manual sync");
   //       const response = await browser.runtime.sendMessage({
-  //         action: "triggerManualSync",
+  //         action: "TRIGGER_MANUAL_SYNC",
   //         options: {
   //           timeRange: 7 * 24 * 60 * 60 * 1000, // Last 7 days
   //         },
@@ -175,6 +177,7 @@ export default function App() {
   const changeDomain = (e?: { preventDefault?: () => void }) => {
     e?.preventDefault?.();
     dispatch(setState({ serverDomain: domain }));
+    dispatch(saveUserSettings());
   };
 
   const handleDomainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -189,7 +192,7 @@ export default function App() {
     try {
       const timeRangeMs = parseInt(syncTimeRange) * 24 * 60 * 60 * 1000;
       const response = await browser.runtime.sendMessage({
-        action: "triggerManualHistorySync",
+        action: "TRIGGER_MANUAL_HISTORY_SYNC",
         options: {
           timeRange: timeRangeMs,
         },
@@ -286,14 +289,14 @@ export default function App() {
             window.open(`https://${serverDomain}`, "_blank");
           }}
         >
-          {!isAuthenticated
+          {!token
             ? "Log in to continue"
             : "Logged in to Companion Intelligence"}
         </Button>
       )}
 
-      {isAuthenticated && (
-        <div className="mt-6 pt-4 border-t border-[#333] dark:border-[#333] light:border-[#ddd]">
+      {token && (
+        <div className="mt-6 pt-4">
           <div className="mb-4">
             <h4 className="m-0 mb-2 text-[#4ba7a6] text-[1.25em] font-semibold pt-4 border-t border-[#333] dark:border-[#333] light:border-[#ddd]">
               Browser History Sync
