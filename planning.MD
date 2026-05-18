@@ -128,3 +128,31 @@ This is a refactor with no behavior change, unblocks the rest of the roadmap, an
 ## 6. Tracking
 
 Each Phase 1–3 item should become a GitHub issue with a `roadmap` label and link back to this file. Phase 4 items belong under the existing EPIC #27. Phase 5 deserves its own EPIC once the CI-Server side of Browser-Use is scoped.
+
+## 7. Detailed sub-plans
+
+Each major area is expanded into its own document with problem statement, proposed approach, risks, and acceptance criteria. See [planning/00-index.md](planning/00-index.md) for the full index.
+
+**Phase 1 — Stabilize the foundation**
+- [01 — Background script modularization](planning/01-background-modularization.md) — break the 2.3k-line `background.ts` into testable modules.
+- [02 — MV3 lifecycle: alarms and event-driven auth](planning/02-mv3-lifecycle.md) — replace `setInterval` with `chrome.alarms`; drive auth from `cookies.onChanged`.
+- [03 — Configurable server URL & first-run setup](planning/03-configurable-server.md) — env switcher, health probe, remove hardcoded domains.
+- [04 — Logging and observability](planning/04-logging-observability.md) — structured logger, redaction, in-popup diagnostics.
+- [05 — Testing strategy](planning/05-testing.md) — three-layer test pyramid, browser-API stub, Playwright E2E.
+
+**Phase 2 — Land in-flight features**
+- [07 — Scrape profile system](planning/07-scrape-profiles.md) — rebase PR #30, dynamic profile loading, DSL v2 with `prerequisites`.
+- [08 — Highlight-to-save](planning/08-highlight-capture.md) — finish PR #26 with Shadow-DOM UI and outbox integration.
+- [09 — Media capture + OAuth split](planning/09-media-capture-oauth.md) — split PR #14 into screenshot / webcam / OAuth / scheduled.
+- [10 — Device service alignment](planning/10-device-service.md) — land PR #37, add `last_seen` heartbeat, fix duplicate-device matching.
+
+**Phase 3 — Reliability**
+- [06 — Local-first sync via IndexedDB outbox](planning/06-local-first-sync.md) — single outbox abstraction, kills the dead IndexedDB layer.
+
+**Phase 5 — Bidirectional**
+- [11 — Browser-Use bidirectional command channel](planning/11-browser-use.md) — SSE transport, command vocabulary, consent model, audit log.
+
+**Cross-cutting**
+- [12 — Privacy, incognito, sensitive-content detection](planning/12-privacy.md) — incognito skip, sensitive-host allowlist, purge UX.
+- [13 — Distribution & release pipeline](planning/13-distribution.md) — Changesets, CI build matrix, store submission automation.
+- [14 — Internationalization & accessibility](planning/14-i18n-a11y.md) — `_locales/`, axe-Playwright, WCAG AA targets.
