@@ -28,6 +28,10 @@ Order roughly matches the phase sequencing in `planning.MD` § 3.
 - [13 — Distribution & release pipeline](13-distribution.md)
 - [14 — i18n & accessibility](14-i18n-a11y.md)
 
+## OAuth & UI/UX (added in iteration)
+- [15 — OAuth integration with CI-Server cloud proxy](15-oauth-integration.md) — Path A (outbound provider connections) + Path B (extension→server OAuth), aligned with CI-Server PRs #1295/#1388/#1407.
+- [16 — UI/UX testing & concrete findings](16-ui-ux-testing.md) — current build/lint/test state, popup-specific issues, recommended test infrastructure.
+
 ## How to use these docs
 
 Each file is structured the same way:

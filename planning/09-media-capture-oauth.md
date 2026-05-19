@@ -68,6 +68,8 @@ UX requirements:
 
 ### PR-C: OAuth flow (independent)
 
+> **See [15 — OAuth integration](15-oauth-integration.md) for the full design** (Path B specifically). The summary below is preserved for context.
+
 This is a major auth change and deserves its own design doc. Key questions:
 
 - **Why?** What does OAuth give us that the current session-cookie flow doesn't? Possible answer: per-scope consent (read-history vs. read-bookmarks vs. write-content). If yes, define the scopes.

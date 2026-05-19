@@ -2,6 +2,8 @@
 
 ## Problem
 
+> **See [16 — UI/UX testing & concrete findings](16-ui-ux-testing.md) for popup-specific test plans and the live build/lint/test results** that motivated raising the bar.
+
 Current coverage:
 
 - [src/store/ciStateSlice.test.ts](../src/store/ciStateSlice.test.ts) (193 LOC) — reducer tests.

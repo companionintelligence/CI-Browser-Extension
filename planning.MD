@@ -156,3 +156,7 @@ Each major area is expanded into its own document with problem statement, propos
 - [12 — Privacy, incognito, sensitive-content detection](planning/12-privacy.md) — incognito skip, sensitive-host allowlist, purge UX.
 - [13 — Distribution & release pipeline](planning/13-distribution.md) — Changesets, CI build matrix, store submission automation.
 - [14 — Internationalization & accessibility](planning/14-i18n-a11y.md) — `_locales/`, axe-Playwright, WCAG AA targets.
+
+**OAuth & UI/UX iteration**
+- [15 — OAuth integration with CI-Server cloud proxy](planning/15-oauth-integration.md) — Path A (outbound provider connections via `CloudOAuthProxyService` from CI-Server PRs #1295/#1407) + Path B (extension→server OAuth replacing cookie+JWT, evolving PR #14).
+- [16 — UI/UX testing & concrete findings](planning/16-ui-ux-testing.md) — live build/lint/test pass results (24 TS errors, 1 failing test, 1.05 MB popup), popup-specific punch list, component/axe/visual test plan.
