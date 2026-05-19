@@ -64,6 +64,7 @@ describe("ciStateSlice", () => {
         syncHistoryLogs: [],
         refreshing: false,
         serverDomain: "",
+        serverEnvironmentId: null,
         autoSyncEnabled: false,
         siteBlacklist: [],
         pageBlacklist: [],
@@ -185,6 +186,7 @@ describe("ciStateSlice", () => {
         "downloadSyncEnabled",
         "historySyncEnabled",
         "serverDomain",
+        "serverEnvironmentId",
       ]);
     });
   });

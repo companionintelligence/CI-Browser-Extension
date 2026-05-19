@@ -1,17 +1,17 @@
 /**
- * Shared local cache for content payloads we'd like to send to
- * `POST /api/content` once the endpoint is reachable.
+ * Compatibility wrapper around the IndexedDB outbox.
  *
- * Used by both the active-tab screenshot path and the highlight-to-save
- * path. Once planning/06 (IndexedDB outbox) lands, this should be folded
- * into the outbox abstraction so we have one drain loop, one retry policy,
- * and one quota story.
+ * Older callers (`capture.ts`, `highlight.ts`) and older builds wrote
+ * captures into a `pendingCaptures` array in `browser.storage.local`.
+ * Now we enqueue into the outbox (`src/background/outbox.ts`) instead.
+ * The legacy storage-local array is migrated to the outbox on startup
+ * via `migrateLegacyPendingCaptures()`.
+ *
+ * The `ContentPayload` shape is shared with the outbox and the
+ * `/api/content` contract — see docs/api/content.md.
  */
 
-import { logger } from "@/lib/log";
-
-const STORAGE_KEY = "pendingCaptures";
-const MAX_ENTRIES = 20;
+import { enqueue } from "./outbox";
 
 export interface ContentPayload {
   device_id: string | null;
@@ -29,29 +29,22 @@ export interface ContentPayload {
   metadata?: Record<string, unknown>;
 }
 
-export async function readPending(): Promise<ContentPayload[]> {
-  const result = await browser.storage.local.get(STORAGE_KEY);
+/**
+ * Queue a content payload for eventual upload. Idempotent on a derived
+ * `dedupKey`. Returns the outbox row id, or null if dedup'd / failed.
+ */
+export async function pushPending(
+  payload: ContentPayload,
+): Promise<string | null> {
+  const dedupKey = makeDedupKey(payload);
+  const row = await enqueue(payload, { dedupKey });
 
-  return (result[STORAGE_KEY] as ContentPayload[] | undefined) ?? [];
+  return row?.id ?? null;
 }
 
-export async function pushPending(payload: ContentPayload): Promise<number> {
-  const pending = await readPending();
-  pending.push(payload);
-  if (pending.length > MAX_ENTRIES) {
-    pending.splice(0, pending.length - MAX_ENTRIES);
-  }
-
-  await browser.storage.local.set({ [STORAGE_KEY]: pending });
-  logger.debug("contentCache.queued", {
-    kind: payload.kind,
-    pending: pending.length,
-  });
-
-  return pending.length;
-}
-
-export async function clearPending(): Promise<void> {
-  await browser.storage.local.remove(STORAGE_KEY);
-  logger.info("contentCache.cleared");
+function makeDedupKey(payload: ContentPayload): string {
+  // For screenshots the captured_at + source_url is unique-enough.
+  // For highlights we'd want a body hash too; defer until a Web Crypto
+  // helper lands.
+  return `${payload.kind}:${payload.source_url ?? ""}:${payload.captured_at}`;
 }

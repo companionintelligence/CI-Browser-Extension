@@ -36,6 +36,7 @@ Order roughly matches the phase sequencing in `planning.MD` § 3.
 - [17 — Branch & PR audit](17-branch-audit.md) — line-by-line tour of every open branch (PRs #14/#26/#30/#32/#36/#37/#34) with landability ratings and recommended landing order. The first six steps of that landing order are landed on this branch.
 - [18 — Iteration 2 (implementation snapshot)](18-iteration-2.md) — captures the second implementation pass: scrape profile reorganization with `import.meta.glob`, structured logger module, active-tab screenshot with `Alt+Shift+C`, and several popup UX wins from the [16](16-ui-ux-testing.md) punch list.
 - [19 — Iteration 3 (implementation snapshot)](19-iteration-3.md) — first slice of [01 — modularization](01-background-modularization.md) (`background/{capture,device,content-cache,highlight}.ts`), highlight-to-save with Shadow-DOM toolbar + `Alt+Shift+H`, and a Diagnostics tab in the popup.
+- [20 — Iteration 4 (implementation snapshot)](20-iteration-4.md) — sync subsystem extraction with `runSync<TItem>`, `chrome.alarms` migration, IndexedDB outbox replacing `pendingCaptures`, `/api/content` contract doc, and first-run setup wizard.
 
 ## How to use these docs
 

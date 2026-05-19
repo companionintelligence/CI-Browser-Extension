@@ -165,3 +165,4 @@ Each major area is expanded into its own document with problem statement, propos
 - [17 — Branch & PR audit](planning/17-branch-audit.md) — per-branch contributions, landability ratings, recommended landing order. Steps 1–6 of that order have landed on this branch.
 - [18 — Iteration 2 (implementation snapshot)](planning/18-iteration-2.md) — second implementation pass: scrape-profile reorganization with `import.meta.glob`, structured logger, active-tab screenshot with `Alt+Shift+C`, popup UX wins.
 - [19 — Iteration 3 (implementation snapshot)](planning/19-iteration-3.md) — first modularization slice (`background/{capture,device,content-cache,highlight}.ts`), highlight-to-save with Shadow-DOM toolbar + `Alt+Shift+H`, Diagnostics tab.
+- [20 — Iteration 4 (implementation snapshot)](planning/20-iteration-4.md) — sync extraction with `runSync<TItem>`, `chrome.alarms` migration, IndexedDB outbox, `/api/content` contract, setup wizard.

@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { Button } from "@ci/shadcn";
 import type { LogEntry, LogLevel } from "@/lib/log";
+import {
+  counts as readOutboxCounts,
+  type OutboxCounts,
+} from "@/background/outbox";
 
 interface DiagnosticsProps {
   onBack: () => void;
@@ -18,6 +22,7 @@ export default function Diagnostics({ onBack }: DiagnosticsProps) {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState<LogLevel | "all">("all");
   const [pendingCount, setPendingCount] = useState<number>(0);
+  const [outbox, setOutbox] = useState<OutboxCounts | null>(null);
 
   // Esc returns to the main popup.
   useEffect(() => {
@@ -48,6 +53,15 @@ export default function Diagnostics({ onBack }: DiagnosticsProps) {
       setEntries(ring.slice().reverse());
       const pending = (data.pendingCaptures as unknown[] | undefined) ?? [];
       setPendingCount(pending.length);
+
+      try {
+        const c = await readOutboxCounts();
+        if (!cancelled) {
+          setOutbox(c);
+        }
+      } catch {
+        // IndexedDB unavailable (e.g. private window); leave outbox null.
+      }
     };
 
     void refresh();
@@ -106,10 +120,28 @@ export default function Diagnostics({ onBack }: DiagnosticsProps) {
         <span>
           Logs: <strong className="text-[#4ba7a6]">{entries.length}</strong>
         </span>
-        <span>
-          Pending captures:{" "}
-          <strong className="text-[#4ba7a6]">{pendingCount}</strong>
-        </span>
+        {outbox && (
+          <>
+            <span title="Pending IndexedDB outbox rows waiting to drain">
+              Outbox pending:{" "}
+              <strong className="text-[#4ba7a6]">{outbox.pending}</strong>
+            </span>
+            <span title="Rows currently being uploaded">
+              In flight:{" "}
+              <strong className="text-[#4ba7a6]">{outbox.inFlight}</strong>
+            </span>
+            <span title="Rows that hit max attempts">
+              Failed:{" "}
+              <strong className="text-[#dc3545]">{outbox.failed}</strong>
+            </span>
+          </>
+        )}
+        {pendingCount > 0 && (
+          <span title="Pre-outbox storage.local cache (migrating)">
+            Legacy pending:{" "}
+            <strong className="text-[#ffc107]">{pendingCount}</strong>
+          </span>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">

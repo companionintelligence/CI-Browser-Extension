@@ -13,6 +13,7 @@ import "@/theme.css";
 import bowser from "bowser";
 import BlacklistManager from "./BlacklistManager";
 import Diagnostics from "./Diagnostics";
+import SetupWizard from "./SetupWizard";
 import { Button, Checkbox, Field, Label, Input, Card } from "@ci/shadcn";
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
     historySyncStatus: string | null;
     lastHistorySync: string | null;
     serverDomain: string;
+    serverEnvironmentId: string | null;
     autoSyncEnabled: boolean;
     siteBlacklist: string[];
     pageBlacklist: string[];
@@ -53,6 +55,7 @@ export default function App() {
     historySyncStatus,
     lastHistorySync,
     serverDomain,
+    serverEnvironmentId,
     autoSyncEnabled,
     siteBlacklist,
     pageBlacklist,
@@ -66,6 +69,11 @@ export default function App() {
 
   const [showBlacklistManager, setShowBlacklistManager] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  // Show the setup wizard when the user hasn't picked an environment yet
+  // *and* hasn't dismissed it this session. Existing users (who already
+  // have a serverDomain saved) skip straight to the main view.
+  const [setupDismissed, setSetupDismissed] = useState(false);
+  const needsSetup = !serverEnvironmentId && !serverDomain && !setupDismissed;
   const [domain, setDomain] = useState(serverDomain);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
@@ -246,6 +254,19 @@ export default function App() {
         return "#6c757d";
     }
   };
+
+  if (needsSetup) {
+    return (
+      <div
+        className={`min-w-[300px] ${isMobile ? "w-full max-w-full" : "max-w-[420px]"} mx-auto p-4 box-border`}
+      >
+        <SetupWizard
+          onComplete={() => setSetupDismissed(true)}
+          onSkip={() => setSetupDismissed(true)}
+        />
+      </div>
+    );
+  }
 
   if (showBlacklistManager) {
     return (

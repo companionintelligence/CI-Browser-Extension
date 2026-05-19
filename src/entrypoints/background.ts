@@ -20,10 +20,20 @@ import {
   updateDeviceLastSeen,
 } from "@/background/device";
 import { saveHighlight } from "@/background/highlight";
+import {
+  syncBookmarks as runBookmarksSync,
+  createBookmarkEvent,
+} from "@/background/sync/bookmarks";
+import {
+  syncDownloads as runDownloadsSync,
+  createDownloadEvent,
+} from "@/background/sync/downloads";
+import { schedulePeriodic, watchCookies } from "@/background/schedule";
+import { drainContentOutbox } from "@/background/outbox-drain";
+import { migrateLegacyPendingCaptures } from "@/background/outbox";
 
 const SLICE_SIZE = 100;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
-const DOWNLOAD_SYNC_KEY = "lastDownloadSync";
 const AUTO_SYNC_TIME_RANGE = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
 const SESSION_TOKEN_KEY = "sessionToken";
@@ -52,9 +62,8 @@ function ensureISOTimeFormat(
   return new Date(time).toISOString();
 }
 
-// Keys for tracking synced items
-const SYNCED_BOOKMARKS_KEY = "syncedBookmarks";
-const SYNCED_DOWNLOADS_KEY = "syncedDownloads";
+// Keys for tracking synced items. Bookmarks/downloads moved into their
+// per-module sync engines; only history still uses this in-file path.
 const SYNCED_HISTORY_KEY = "syncedHistory";
 
 // Helper functions for managing synced items
@@ -952,35 +961,13 @@ async function syncHistory(options: { timeRange?: number } = {}) {
 }
 
 async function syncBookmarks() {
-  store.dispatch(
-    setState({
-      historySyncStatus: "Syncing bookmarks...",
-    }),
-  );
-
-  try {
-    await syncBookmarksToServer();
-    console.log("Bookmark sync completed successfully");
-  } catch (error) {
-    console.error("Bookmark sync failed:", error);
-    throw error;
-  }
+  store.dispatch(setState({ historySyncStatus: "Syncing bookmarks..." }));
+  await runBookmarksSync();
 }
 
 async function syncDownloads() {
-  store.dispatch(
-    setState({
-      historySyncStatus: "Syncing downloads...",
-    }),
-  );
-
-  try {
-    await syncDownloadsToServer();
-    console.log("Download sync completed successfully");
-  } catch (error) {
-    console.error("Download sync failed:", error);
-    throw error;
-  }
+  store.dispatch(setState({ historySyncStatus: "Syncing downloads..." }));
+  await runDownloadsSync();
 }
 
 // Legacy function for backward compatibility
@@ -997,153 +984,6 @@ async function triggerBackgroundSync() {
 }
 
 // Download sync functions
-async function createDownloadEvent(
-  download: any,
-  eventType: "create" | "update" | "sync" = "sync",
-): Promise<{
-  time: string;
-  device_id: string;
-  url: string;
-  title?: string;
-  action_type:
-    | "visit"
-    | "reload"
-    | "bookmark"
-    | "search"
-    | "download"
-    | "form_submit";
-  properties?: Record<string, any>;
-  duration_seconds?: number;
-  scroll_depth_percent?: number;
-  is_incognito?: boolean;
-  contains_sensitive?: boolean;
-}> {
-  const state = store.getState().ciState;
-  const { deviceId } = state;
-
-  // Validate required fields and provide defaults
-  if (!deviceId) {
-    throw new Error("Device ID is required for download sync");
-  }
-
-  if (!download.url) {
-    throw new Error("Download URL is required");
-  }
-
-  return {
-    time: ensureISOTimeFormat(download.startTime),
-    device_id: deviceId || "",
-    url: download.url,
-    title: download.filename || "Unknown Download",
-    action_type: "download" as const,
-    properties: {
-      download_id: download.id.toString(),
-      event_type: eventType,
-      filename: download.filename,
-      total_bytes: download.totalBytes,
-      state: download.state,
-    },
-    is_incognito: false,
-    contains_sensitive: false,
-  };
-}
-
-async function syncDownloadsToServer() {
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain } = state;
-
-  if (!accessToken) {
-    return;
-  }
-
-  try {
-    const downloads = await browser.downloads.search({});
-
-    // Filter out already synced downloads and invalid URLs
-    const unsyncedDownloads = [];
-    for (const download of downloads) {
-      // Skip downloads with invalid URLs
-      if (!download.url || !isValidUrl(download.url)) {
-        continue;
-      }
-
-      const isAlreadySynced = await isItemSynced(
-        SYNCED_DOWNLOADS_KEY,
-        download.id.toString(),
-      );
-      if (!isAlreadySynced) {
-        unsyncedDownloads.push(download);
-      }
-    }
-
-    if (unsyncedDownloads.length === 0) {
-      console.log("No new downloads to sync");
-
-      return;
-    }
-
-    console.log(`Syncing ${unsyncedDownloads.length} new downloads`);
-
-    // Process unsynced downloads in batches
-    for (let i = 0; i < unsyncedDownloads.length; i += SLICE_SIZE) {
-      const slice = unsyncedDownloads.slice(i, i + SLICE_SIZE);
-      const downloadEvents = await Promise.all(
-        slice.map((download) => createDownloadEvent(download, "sync")),
-      );
-
-      // Send each download event individually (server expects single object, not array)
-      for (let j = 0; j < downloadEvents.length; j++) {
-        const event = downloadEvents[j];
-        const download = slice[j];
-
-        try {
-          // Log the data being sent for debugging
-          console.log(
-            "Sending download event:",
-            JSON.stringify(event, null, 2),
-          );
-
-          await axios.post(
-            `https://${serverDomain}/api/browser-activity`,
-            event, // Send individual object, not array
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-            },
-          );
-          console.log("Successfully sent download event:", event.url);
-
-          // Mark this specific download as synced only after successful upload
-          await addSyncedItem(SYNCED_DOWNLOADS_KEY, download.id.toString());
-        } catch (eventError: any) {
-          console.error("Error sending individual download event:", eventError);
-          console.error("Failed event:", event);
-          console.error("Server response:", eventError.response?.data);
-
-          // Log detailed validation errors if available
-          if (eventError.response?.data?.errors) {
-            console.error(
-              "Server validation errors:",
-              JSON.stringify(eventError.response.data.errors, null, 2),
-            );
-          }
-
-          // Continue with other events even if one fails
-          // Don't mark as synced if upload failed
-        }
-      }
-    }
-
-    // Update last sync time
-    await browser.storage.local.set({
-      [DOWNLOAD_SYNC_KEY]: Date.now(),
-    });
-  } catch (error) {
-    console.error("Error syncing downloads:", error);
-  }
-}
 
 async function handleDownloadCreated(download: any) {
   const state = store.getState().ciState;
@@ -1223,273 +1063,6 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
     });
   } catch (error) {
     console.error("Error uploading scraped data:", error);
-  }
-}
-
-async function getAllBookmarks(): Promise<any[]> {
-  const bookmarkTree = await browser.bookmarks.getTree();
-  const allBookmarks: any[] = [];
-
-  function collectBookmarks(nodes: any[]) {
-    for (const node of nodes) {
-      if (node.url && /^(http(s)?:\/\/)/.test(node.url)) {
-        // This is an actual bookmark (not a folder)
-        // Validate bookmark data before adding
-        if (node.id && node.url && node.title) {
-          allBookmarks.push(node);
-        } else {
-          console.warn("Skipping invalid bookmark:", node);
-        }
-      }
-
-      if (node.children) {
-        collectBookmarks(node.children);
-      }
-    }
-  }
-
-  collectBookmarks(bookmarkTree);
-
-  return allBookmarks;
-}
-
-async function createBookmarkEvent(
-  bookmark: any,
-  eventType: "create" | "update" | "sync" = "sync",
-): Promise<{
-  time: string;
-  device_id: string;
-  url: string;
-  title?: string;
-  action_type:
-    | "visit"
-    | "reload"
-    | "bookmark"
-    | "search"
-    | "download"
-    | "form_submit";
-  properties?: Record<string, any>;
-  duration_seconds?: number;
-  scroll_depth_percent?: number;
-  is_incognito?: boolean;
-  contains_sensitive?: boolean;
-}> {
-  const state = store.getState().ciState;
-  const { deviceId } = state;
-
-  // Validate bookmark data
-  if (!bookmark.id || !bookmark.url) {
-    throw new Error(`Invalid bookmark data: ${JSON.stringify(bookmark)}`);
-  }
-
-  // Ensure URL is valid
-  try {
-    new URL(bookmark.url);
-  } catch {
-    throw new Error(`Invalid bookmark URL: ${bookmark.url}`);
-  }
-
-  // Validate device ID
-  if (!deviceId) {
-    throw new Error("Device ID is required for bookmark sync");
-  }
-
-  return {
-    time: ensureISOTimeFormat(bookmark.dateAdded),
-    device_id: deviceId || "",
-    url: bookmark.url,
-    title: bookmark.title || "Untitled Bookmark",
-    action_type: "bookmark" as const,
-    properties: {
-      bookmark_id: bookmark.id,
-      event_type: eventType,
-    },
-    is_incognito: false,
-    contains_sensitive: false,
-  };
-}
-
-async function syncBookmarksToServer() {
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain, deviceId } = state;
-
-  if (!accessToken) {
-    console.log("No access token available for bookmark sync");
-
-    return;
-  }
-
-  if (!deviceId) {
-    console.log("No device ID available for bookmark sync");
-
-    return;
-  }
-
-  try {
-    const allBookmarks = await getAllBookmarks();
-
-    // Filter out already synced bookmarks and invalid URLs
-    const unsyncedBookmarks = [];
-    for (const bookmark of allBookmarks) {
-      // Skip bookmarks with invalid URLs
-      if (!bookmark.url || !isValidUrl(bookmark.url)) {
-        continue;
-      }
-
-      const isAlreadySynced = await isItemSynced(
-        SYNCED_BOOKMARKS_KEY,
-        bookmark.id,
-      );
-      if (!isAlreadySynced) {
-        unsyncedBookmarks.push(bookmark);
-      }
-    }
-
-    if (unsyncedBookmarks.length === 0) {
-      console.log("No new bookmarks to sync");
-
-      return;
-    }
-
-    console.log(`Syncing ${unsyncedBookmarks.length} new bookmarks`);
-
-    // Process unsynced bookmarks in batches
-    for (let i = 0; i < unsyncedBookmarks.length; i += SLICE_SIZE) {
-      const slice = unsyncedBookmarks.slice(i, i + SLICE_SIZE);
-
-      // Create bookmark events with error handling
-      const bookmarkEvents = [];
-      for (const bookmark of slice) {
-        try {
-          const event = await createBookmarkEvent(bookmark, "sync");
-          bookmarkEvents.push(event);
-        } catch (error) {
-          console.error("Error creating bookmark event:", error);
-          console.error("Problematic bookmark:", bookmark);
-          // Skip this bookmark and continue with others
-          continue;
-        }
-      }
-
-      if (bookmarkEvents.length === 0) {
-        console.log("No valid bookmark events to send for this batch");
-        continue;
-      }
-
-      // Additional validation: ensure all events have required fields
-      const validEvents = bookmarkEvents.filter((event) => {
-        const isValid =
-          event.time && event.device_id && event.url && event.action_type;
-        if (!isValid) {
-          console.warn("Filtering out invalid bookmark event:", event);
-        }
-
-        return isValid;
-      });
-
-      if (validEvents.length === 0) {
-        console.log("No valid bookmark events after filtering");
-        continue;
-      }
-
-      const { accessToken: currentAccessToken } = store.getState().ciState;
-      try {
-        console.log(
-          "Sending bookmark events:",
-          JSON.stringify(validEvents, null, 2),
-        );
-
-        // Additional validation: ensure all required fields are present
-        for (const event of validEvents) {
-          if (
-            !event.time ||
-            !event.device_id ||
-            !event.url ||
-            !event.action_type
-          ) {
-            console.error("Invalid event missing required fields:", event);
-            throw new Error("Invalid event data");
-          }
-
-          // Ensure time is in ISO format
-          if (!event.time.includes("T") || !event.time.includes("Z")) {
-            console.error("Invalid time format:", event.time);
-            throw new Error("Invalid time format");
-          }
-
-          // Ensure device_id is a valid UUID format
-          const uuidRegex =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-          if (!uuidRegex.test(event.device_id)) {
-            console.error("Invalid device_id format:", event.device_id);
-            throw new Error("Invalid device_id format");
-          }
-        }
-
-        // Validate that we have valid bookmark events
-        if (validEvents.length === 0) {
-          console.log("No bookmark events to send");
-          continue;
-        }
-
-        // Send each event individually (server expects single object, not array)
-        for (let j = 0; j < validEvents.length; j++) {
-          const event = validEvents[j];
-          const bookmark = slice[j];
-
-          try {
-            // Log the data being sent for debugging
-            console.log(
-              "Sending bookmark event:",
-              JSON.stringify(event, null, 2),
-            );
-
-            await axios.post(
-              `https://${serverDomain}/api/browser-activity`,
-              event, // Send individual object, not array
-              {
-                headers: {
-                  Authorization: `Bearer ${currentAccessToken}`,
-                  "Content-Type": "application/json",
-                },
-              },
-            );
-            console.log("Successfully sent bookmark event:", event.url);
-
-            // Mark this specific bookmark as synced only after successful upload
-            await addSyncedItem(SYNCED_BOOKMARKS_KEY, bookmark.id);
-          } catch (eventError: any) {
-            console.error(
-              "Error sending individual bookmark event:",
-              eventError,
-            );
-            console.error("Failed event:", event);
-            console.error("Server response:", eventError.response?.data);
-
-            // Log detailed validation errors if available
-            if (eventError.response?.data?.errors) {
-              console.error(
-                "Server validation errors:",
-                JSON.stringify(eventError.response.data.errors, null, 2),
-              );
-            }
-
-            // Continue with other events even if one fails
-            // Don't mark as synced if upload failed
-          }
-        }
-      } catch (batchError) {
-        console.error("Error processing bookmark batch:", batchError);
-        // Continue with next batch even if this one fails
-      }
-    }
-
-    // Update last sync timestamp
-    await browser.storage.local.set({
-      [BOOKMARK_SYNC_KEY]: Date.now(),
-    });
-  } catch (error) {
-    console.error("Error syncing bookmarks:", error);
   }
 }
 
@@ -1841,8 +1414,44 @@ export default defineBackground({
       }
     }
 
-    // Set up periodic authentication checking
-    setInterval(checkAuthenticationState, 1000);
+    // Event-driven authentication: react to cookie writes on the configured
+    // server domain (instant), with a 5-minute alarm as a safety net for
+    // any change we miss (e.g. SW was suspended at the moment).
+    let authCheckDebounce: ReturnType<typeof setTimeout> | null = null;
+    const scheduleAuthCheck = () => {
+      if (authCheckDebounce) {
+        clearTimeout(authCheckDebounce);
+      }
+
+      authCheckDebounce = setTimeout(() => {
+        authCheckDebounce = null;
+        void checkAuthenticationState();
+      }, 250);
+    };
+
+    watchCookies((cookie) => {
+      const { serverDomain } = store.getState().ciState;
+      if (!serverDomain) {
+        return false;
+      }
+
+      if (
+        cookie.name !== SESSION_TOKEN_KEY &&
+        cookie.name !== CSRF_COOKIE_NAME
+      ) {
+        return false;
+      }
+
+      return cookie.domain.endsWith(serverDomain.replace(/^\./, ""));
+    }, scheduleAuthCheck);
+    schedulePeriodic({
+      name: "authProbe",
+      intervalMs: 5 * 60 * 1000,
+      handler: checkAuthenticationState,
+    });
+    // Kick once on startup so the very first check happens before any
+    // cookie event arrives.
+    void checkAuthenticationState();
 
     store.dispatch(loadUserSettings());
 
@@ -2027,47 +1636,56 @@ export default defineBackground({
       });
     }
 
-    const AUTO_SYNC_INTERVAL = 10 * 60 * 1000; // 10 minutes
+    // Periodic tasks driven by browser.alarms (MV3) or setInterval (MV2).
+    // See src/background/schedule.ts and planning/02-mv3-lifecycle.md.
     const AUTO_SYNC_TIME_RANGE = 24 * 60 * 60 * 1000;
-
-    setInterval(async () => {
-      try {
-        await store.dispatch({
-          type: "loadUserSettings",
-        });
-
+    schedulePeriodic({
+      name: "autoSync",
+      intervalMs: 10 * 60 * 1000,
+      handler: async () => {
+        await store.dispatch({ type: "loadUserSettings" });
         const state = store.getState().ciState;
-
-        if (state.autoSyncEnabled && !state.historySyncInProgress) {
-          const { accessToken } = state;
-          const accessDecoded = accessToken
-            ? (jwtDecode(accessToken) as any)
-            : null;
-          const isAuthExpired =
-            accessDecoded && accessDecoded.exp
-              ? Date.now() >= accessDecoded.exp * 1000
-              : true;
-
-          if (!isAuthExpired) {
-            await triggerManualSync({
-              timeRange: AUTO_SYNC_TIME_RANGE,
-            });
-          }
+        if (!state.autoSyncEnabled || state.historySyncInProgress) {
+          return;
         }
-      } catch (error) {
-        console.error("Auto-sync error:", error);
-      }
-    }, AUTO_SYNC_INTERVAL);
 
-    // Periodic device last_seen heartbeat. CI-Server uses this to drive
-    // device-presence UI without us having to record activity to do it.
-    const LAST_SEEN_INTERVAL = 5 * 60 * 1000; // 5 minutes
-    setInterval(async () => {
-      const { deviceId } = store.getState().ciState;
-      if (deviceId) {
-        await updateDeviceLastSeen(deviceId);
-      }
-    }, LAST_SEEN_INTERVAL);
+        const { accessToken } = state;
+        const accessDecoded = accessToken
+          ? (jwtDecode(accessToken) as any)
+          : null;
+        const isAuthExpired =
+          accessDecoded && accessDecoded.exp
+            ? Date.now() >= accessDecoded.exp * 1000
+            : true;
+        if (!isAuthExpired) {
+          await triggerManualSync({ timeRange: AUTO_SYNC_TIME_RANGE });
+        }
+      },
+    });
+
+    schedulePeriodic({
+      name: "lastSeen",
+      intervalMs: 5 * 60 * 1000,
+      handler: async () => {
+        const { deviceId } = store.getState().ciState;
+        if (deviceId) {
+          await updateDeviceLastSeen(deviceId);
+        }
+      },
+    });
+
+    // Drain the IndexedDB outbox. POSTs queued screenshots/highlights to
+    // /api/content. While the endpoint is offline these rows accumulate
+    // and surface in the Diagnostics tab; no-op safely.
+    schedulePeriodic({
+      name: "outboxDrain",
+      intervalMs: 60 * 1000,
+      handler: drainContentOutbox,
+    });
+
+    // One-shot migration of the pre-outbox `pendingCaptures` storage key.
+    // Safe to call on every cold start — does nothing once the key is gone.
+    void migrateLegacyPendingCaptures();
 
     // Set up bookmark listeners based on settings
     const setupBookmarkListeners = () => {
@@ -2115,7 +1733,7 @@ export default defineBackground({
       if (state.bookmarkSyncEnabled) {
         const lastSync = await browser.storage.local.get(BOOKMARK_SYNC_KEY);
         if (!lastSync[BOOKMARK_SYNC_KEY]) {
-          await syncBookmarksToServer();
+          await runBookmarksSync();
         }
       }
     }, 5000);

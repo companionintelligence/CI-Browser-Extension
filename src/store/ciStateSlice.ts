@@ -15,6 +15,7 @@ const USER_SETTINGS_KEYS = [
   "downloadSyncEnabled",
   "historySyncEnabled",
   "serverDomain",
+  "serverEnvironmentId",
 ] as const;
 
 export const loadUserSettings = createAsyncThunk(
@@ -39,6 +40,11 @@ interface CiState {
   syncHistoryLogs: { status: string; timestamp: string }[];
   refreshing: boolean;
   serverDomain: string;
+  /**
+   * Which curated environment the user picked, or "custom" / null if they
+   * haven't been through the wizard yet. See src/lib/environments.ts.
+   */
+  serverEnvironmentId: string | null;
   autoSyncEnabled: boolean;
   siteBlacklist: string[];
   pageBlacklist: string[];
@@ -64,6 +70,7 @@ export const ciStateSlice = createSlice({
     syncHistoryLogs: [],
     refreshing: false,
     serverDomain: "",
+    serverEnvironmentId: null,
     autoSyncEnabled: false,
     siteBlacklist: [],
     pageBlacklist: [],
@@ -216,6 +223,7 @@ export const ciStateSlice = createSlice({
           downloadSyncEnabled: state.downloadSyncEnabled,
           historySyncEnabled: state.historySyncEnabled,
           serverDomain: state.serverDomain,
+          serverEnvironmentId: state.serverEnvironmentId,
         }),
       );
       browser.storage.local.set(parsed);

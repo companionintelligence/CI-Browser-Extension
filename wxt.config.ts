@@ -42,6 +42,7 @@ export default defineConfig({
     ],
     permissions: [
       "activeTab",
+      "alarms",
       "bookmarks",
       "cookies",
       "downloads",
