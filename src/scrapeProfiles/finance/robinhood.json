@@ -1,0 +1,124 @@
+{
+  "domain": "robinhood.com",
+  "name": "Robinhood Data Scraper",
+  "description": "Scrapes Robinhood trading activity, portfolio, and investment data",
+  "targetUrl": [
+    "https://www.robinhood.com/account/*",
+    "https://www.robinhood.com/portfolio/*",
+    "https://www.robinhood.com/orders/*"
+  ],
+  "dataSelectors": {
+    "portfolio": {
+      "container": "[data-testid='portfolio-item'], .portfolio-item, .holding",
+      "fields": {
+        "symbol": {
+          "selector": "[data-testid='symbol'], .symbol, .ticker",
+          "type": "text",
+          "transform": "trim"
+        },
+        "companyName": {
+          "selector": "[data-testid='company-name'], .company-name, .name",
+          "type": "text",
+          "transform": "trim"
+        },
+        "shares": {
+          "selector": "[data-testid='shares'], .shares, .quantity",
+          "type": "text",
+          "transform": "trim"
+        },
+        "currentPrice": {
+          "selector": "[data-testid='current-price'], .current-price, .price",
+          "type": "text",
+          "transform": "trim"
+        },
+        "marketValue": {
+          "selector": "[data-testid='market-value'], .market-value, .value",
+          "type": "text",
+          "transform": "trim"
+        },
+        "totalReturn": {
+          "selector": "[data-testid='total-return'], .total-return, .return",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "orders": {
+      "container": "[data-testid='order'], .order, .transaction",
+      "fields": {
+        "symbol": {
+          "selector": "[data-testid='symbol'], .symbol, .ticker",
+          "type": "text",
+          "transform": "trim"
+        },
+        "orderType": {
+          "selector": "[data-testid='order-type'], .order-type, .type",
+          "type": "text",
+          "transform": "trim"
+        },
+        "quantity": {
+          "selector": "[data-testid='quantity'], .quantity, .shares",
+          "type": "text",
+          "transform": "trim"
+        },
+        "price": {
+          "selector": "[data-testid='price'], .price, .execution-price",
+          "type": "text",
+          "transform": "trim"
+        },
+        "orderDate": {
+          "selector": "[data-testid='order-date'], .order-date, .date",
+          "type": "text",
+          "transform": "trim"
+        },
+        "status": {
+          "selector": "[data-testid='status'], .status, .order-status",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "watchlist": {
+      "container": "[data-testid='watchlist-item'], .watchlist-item, .watched-stock",
+      "fields": {
+        "symbol": {
+          "selector": "[data-testid='symbol'], .symbol, .ticker",
+          "type": "text",
+          "transform": "trim"
+        },
+        "companyName": {
+          "selector": "[data-testid='company-name'], .company-name, .name",
+          "type": "text",
+          "transform": "trim"
+        },
+        "currentPrice": {
+          "selector": "[data-testid='current-price'], .current-price, .price",
+          "type": "text",
+          "transform": "trim"
+        },
+        "priceChange": {
+          "selector": "[data-testid='price-change'], .price-change, .change",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "investment_portfolio",
+      "description": "Stock holdings and investment positions",
+      "personalDataType": "financial_data"
+    },
+    {
+      "name": "trading_activity",
+      "description": "Buy/sell orders and trading history",
+      "personalDataType": "financial_data"
+    },
+    {
+      "name": "investment_interests",
+      "description": "Watchlist and stocks of interest",
+      "personalDataType": "financial_interests"
+    }
+  ]
+}

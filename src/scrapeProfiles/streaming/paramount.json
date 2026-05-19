@@ -1,0 +1,83 @@
+{
+  "domain": "paramountplus.com",
+  "name": "Paramount+ Data Scraper",
+  "description": "Scrapes Paramount+ watchlist, viewing history, and profile data",
+  "targetUrl": [
+    "https://www.paramountplus.com/watchlist*",
+    "https://www.paramountplus.com/account*",
+    "https://www.paramountplus.com/movies/*",
+    "https://www.paramountplus.com/shows/*"
+  ],
+  "dataSelectors": {
+    "watchlist": {
+      "container": "[data-testid='watchlist-tile'], .watchlist-tile, .content-tile, .show-tile",
+      "fields": {
+        "title": {
+          "selector": "[data-testid='title'], .title, .show-title, h3",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "imageUrl": {
+          "selector": "img, .thumbnail",
+          "type": "attribute",
+          "attribute": "src",
+          "transform": "absoluteUrl"
+        },
+        "showType": {
+          "selector": "[data-testid='show-type'], .show-type, .content-type",
+          "type": "text",
+          "transform": "trim"
+        },
+        "description": {
+          "selector": "[data-testid='description'], .description, .synopsis",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "continueWatching": {
+      "container": "[data-testid='continue-watching-item'], .continue-watching-item, .progress-tile",
+      "fields": {
+        "title": {
+          "selector": "[data-testid='title'], .title, h3",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "progress": {
+          "selector": "[data-testid='progress'], .progress-bar, .watch-progress",
+          "type": "text",
+          "transform": "trim"
+        },
+        "timeRemaining": {
+          "selector": "[data-testid='time-remaining'], .time-remaining",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "watchlist",
+      "description": "Paramount+ saved watchlist items",
+      "personalDataType": "entertainment_preferences"
+    },
+    {
+      "name": "viewing_history", 
+      "description": "Paramount+ continue watching and viewing progress",
+      "personalDataType": "entertainment_preferences"
+    }
+  ]
+}

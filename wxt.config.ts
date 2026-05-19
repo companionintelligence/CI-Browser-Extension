@@ -10,20 +10,38 @@ export default defineConfig({
     name: "Companion Intelligence",
     description:
       "Privately archive your browsing history, bookmarks, and downloads to your personal CI Server. Your data stays yours.",
+    // Kept in lock-step with `matches` in src/entrypoints/domainScraper.content.ts
+    // and with the profiles in src/scrapeProfiles/<category>/*.json.
     host_permissions: [
       "*://*.companionintelligence.com/*",
       "*://*.companionintel.com/*",
       "*://*.ci.computer/*",
+      // Streaming
       "*://*.netflix.com/*",
       "*://*.hulu.com/*",
       "*://secure.hulu.com/*",
       "*://*.disneyplus.com/*",
+      "*://*.max.com/*",
+      "*://*.primevideo.com/*",
+      "*://*.amazon.com/gp/video/*",
+      "*://*.paramountplus.com/*",
+      // Community
       "*://*.slashdot.org/*",
       "*://slashdot.org/*",
       "*://*.github.com/*",
       "*://github.com/*",
+      // Social
+      "*://*.quora.com/*",
+      // News
+      "*://*.cnn.com/*",
+      "*://*.wsj.com/*",
+      // Travel
+      "*://*.airbnb.com/*",
+      // Finance
+      "*://*.robinhood.com/*",
     ],
     permissions: [
+      "activeTab",
       "bookmarks",
       "cookies",
       "downloads",
@@ -32,6 +50,14 @@ export default defineConfig({
       "tabs",
       "webNavigation",
     ],
+    commands: {
+      "capture-active-tab": {
+        suggested_key: {
+          default: "Alt+Shift+C",
+        },
+        description: "Capture a snapshot of the active tab to CI",
+      },
+    },
     browser_specific_settings: {
       gecko: {
         id: "@ci-browser-extension",

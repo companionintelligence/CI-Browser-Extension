@@ -34,6 +34,7 @@ Order roughly matches the phase sequencing in `planning.MD` § 3.
 
 ## Branch audit & re-implementation
 - [17 — Branch & PR audit](17-branch-audit.md) — line-by-line tour of every open branch (PRs #14/#26/#30/#32/#36/#37/#34) with landability ratings and recommended landing order. The first six steps of that landing order are landed on this branch.
+- [18 — Iteration 2 (implementation snapshot)](18-iteration-2.md) — captures the second implementation pass: scrape profile reorganization with `import.meta.glob`, structured logger module, active-tab screenshot with `Alt+Shift+C`, and several popup UX wins from the [16](16-ui-ux-testing.md) punch list.
 
 ## How to use these docs
 

@@ -68,6 +68,8 @@ export default function App() {
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
   const [token, setToken] = useState(accessToken);
+  const [captureInProgress, setCaptureInProgress] = useState(false);
+  const [captureStatus, setCaptureStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
@@ -100,6 +102,31 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [dispatch]);
+
+  // Auto-dismiss the sync status banner ~10s after a terminal state so it
+  // doesn't show stale "Successfully synced N visits" forever.
+  useEffect(() => {
+    if (!historySyncStatus || historySyncInProgress) {
+      return;
+    }
+
+    const t = setTimeout(() => {
+      dispatch(setState({ historySyncStatus: null }));
+    }, 10_000);
+
+    return () => clearTimeout(t);
+  }, [historySyncStatus, historySyncInProgress, dispatch]);
+
+  // Auto-dismiss the capture toast for the same reason.
+  useEffect(() => {
+    if (!captureStatus) {
+      return;
+    }
+
+    const t = setTimeout(() => setCaptureStatus(null), 6_000);
+
+    return () => clearTimeout(t);
+  }, [captureStatus]);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -159,6 +186,32 @@ export default function App() {
       }
     } catch (error) {
       console.error("Error triggering history sync:", error);
+    }
+  };
+
+  const captureSnapshot = async () => {
+    if (captureInProgress) {
+      return;
+    }
+
+    setCaptureInProgress(true);
+    setCaptureStatus(null);
+    try {
+      const response = await browser.runtime.sendMessage({
+        action: "CAPTURE_ACTIVE_TAB",
+      });
+      if (response?.success) {
+        const kb = Math.round((response.size ?? 0) / 1024);
+        setCaptureStatus(`Captured ${response.title ?? "page"} (${kb} KB)`);
+      } else {
+        setCaptureStatus(`Capture failed: ${response?.error ?? "unknown"}`);
+      }
+    } catch (err) {
+      setCaptureStatus(
+        `Capture failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setCaptureInProgress(false);
     }
   };
 
@@ -337,7 +390,12 @@ export default function App() {
             </Button>
           </div>
           {historySyncStatus && (
-            <div className="text-[0.85em] text-[#666] dark:text-[#666] light:text-[#333] my-2 p-2 rounded bg-[rgba(75,167,166,0.1)]">
+            <div
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              className="text-[0.85em] text-[#666] dark:text-[#666] light:text-[#333] my-2 p-2 rounded bg-[rgba(75,167,166,0.1)]"
+            >
               {historySyncStatus}
             </div>
           )}
@@ -463,10 +521,13 @@ export default function App() {
                               log.status.slice(1)}
                             {log.error && (
                               <div
-                                className="text-[10px] text-[#dc3545] mt-1 italic truncate"
+                                className="text-[10px] text-[#dc3545] mt-1 italic"
                                 title={log.error}
                               >
-                                ⚠️ {log.error.substring(0, 20)}...
+                                ⚠️{" "}
+                                {log.error.length > 60
+                                  ? `${log.error.slice(0, 60)}…`
+                                  : log.error}
                               </div>
                             )}
                           </div>
@@ -480,6 +541,26 @@ export default function App() {
           </div>
 
           <div className="flex flex-col gap-2 mb-4 mt-4">
+            <Button
+              onClick={captureSnapshot}
+              disabled={captureInProgress}
+              aria-busy={captureInProgress}
+              title="Capture a PNG snapshot of the current tab (Alt+Shift+C)"
+              className="rounded-lg border border-transparent px-[1.4em] py-[0.8em] text-base font-medium cursor-pointer transition-all min-h-[44px] touch-manipulation bg-[#4ba7a6] text-white hover:bg-[#2f6b7e] hover:border-[#2f6b7e] disabled:opacity-60 disabled:cursor-not-allowed active:translate-y-[1px] w-full"
+            >
+              {captureInProgress
+                ? "Capturing…"
+                : "📸 Snapshot Current Tab (Alt+Shift+C)"}
+            </Button>
+            {captureStatus && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="text-[0.85em] text-[#666] p-2 rounded bg-[rgba(75,167,166,0.1)]"
+              >
+                {captureStatus}
+              </div>
+            )}
             <Button
               onClick={() => setShowBlacklistManager(true)}
               className="rounded-lg border border-transparent px-[1.4em] py-[0.8em] text-base font-medium font-inherit cursor-pointer transition-all min-h-[44px] min-w-[44px] touch-manipulation bg-[#555] dark:bg-[#555] light:bg-[#e0e0e0] text-white dark:text-white light:text-[#213547] border-[#555] dark:border-[#555] light:border-[#d0d0d0] hover:bg-[#666] dark:hover:bg-[#666] light:hover:bg-[#d0d0d0] hover:border-[#666] dark:hover:border-[#666] light:hover:border-[#c0c0c0] active:translate-y-[1px] w-full"

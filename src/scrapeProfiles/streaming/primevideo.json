@@ -1,0 +1,109 @@
+{
+  "domain": "primevideo.com",
+  "name": "Prime Video Data Scraper",
+  "description": "Scrapes Prime Video watchlist, viewing history, and recommendations",
+  "targetUrl": [
+    "https://www.primevideo.com/watchlist*",
+    "https://www.primevideo.com/profile*",
+    "https://www.primevideo.com/detail/*",
+    "https://www.amazon.com/gp/video/*"
+  ],
+  "dataSelectors": {
+    "watchlist": {
+      "container": "[data-testid='watchlist-item'], .av-card, .tst-hover-card, ._1Yh0O",
+      "fields": {
+        "title": {
+          "selector": "[data-testid='title'], .av-card-text h3, .card-title, ._2XJZ2",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a",
+          "type": "attribute", 
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "imageUrl": {
+          "selector": "img",
+          "type": "attribute",
+          "attribute": "src",
+          "transform": "absoluteUrl"
+        },
+        "contentType": {
+          "selector": "[data-testid='content-type'], .content-type, .badge",
+          "type": "text",
+          "transform": "trim"
+        },
+        "runtime": {
+          "selector": "[data-testid='runtime'], .runtime, .duration",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "continueWatching": {
+      "container": "[data-testid='continue-watching'], .continue-watching-card, ._3F55p",
+      "fields": {
+        "title": {
+          "selector": "[data-testid='title'], h3, .card-title",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "progress": {
+          "selector": "[data-testid='progress'], .progress-bar, ._1k3NO",
+          "type": "attribute",
+          "attribute": "style"
+        },
+        "timeRemaining": {
+          "selector": "[data-testid='time-remaining'], .time-remaining, ._3BCiw",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "recommendations": {
+      "container": ".av-card, .tst-hover-card, ._1Yh0O",
+      "fields": {
+        "title": {
+          "selector": "h3, .card-title, ._2XJZ2",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "category": {
+          "selector": "[data-testid='category'], .category-header, .row-title",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "watchlist",
+      "description": "Prime Video watchlist items",
+      "personalDataType": "entertainment_preferences"
+    },
+    {
+      "name": "viewing_history",
+      "description": "Prime Video continue watching and viewing history",
+      "personalDataType": "entertainment_preferences"
+    },
+    {
+      "name": "recommendations",
+      "description": "Prime Video personalized recommendations",
+      "personalDataType": "entertainment_preferences"
+    }
+  ]
+}

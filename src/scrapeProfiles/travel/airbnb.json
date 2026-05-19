@@ -1,0 +1,124 @@
+{
+  "domain": "airbnb.com",
+  "name": "Airbnb Data Scraper",
+  "description": "Scrapes Airbnb bookings, wishlist, and travel history",
+  "targetUrl": [
+    "https://www.airbnb.com/trips/*",
+    "https://www.airbnb.com/wishlists/*",
+    "https://www.airbnb.com/hosting/*"
+  ],
+  "dataSelectors": {
+    "trips": {
+      "container": "[data-testid='trip-card'], .trip-card, ._1h30gqq",
+      "fields": {
+        "propertyName": {
+          "selector": "[data-testid='property-name'], .property-name, ._1tanv1h",
+          "type": "text",
+          "transform": "trim"
+        },
+        "location": {
+          "selector": "[data-testid='location'], .location, ._1p3joamp",
+          "type": "text",
+          "transform": "trim"
+        },
+        "checkIn": {
+          "selector": "[data-testid='check-in'], .check-in",
+          "type": "text",
+          "transform": "trim"
+        },
+        "checkOut": {
+          "selector": "[data-testid='check-out'], .check-out",
+          "type": "text",
+          "transform": "trim"
+        },
+        "guests": {
+          "selector": "[data-testid='guests'], .guests, ._tqmy57",
+          "type": "text",
+          "transform": "trim"
+        },
+        "totalPrice": {
+          "selector": "[data-testid='total-price'], .total-price, ._1p7iugi",
+          "type": "text",
+          "transform": "trim"
+        },
+        "status": {
+          "selector": "[data-testid='status'], .status, ._1mhorg9",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "wishlist": {
+      "container": "[data-testid='wishlist-item'], .wishlist-item, ._8ssblpx",
+      "fields": {
+        "propertyName": {
+          "selector": "[data-testid='property-name'], .property-name, ._1tanv1h",
+          "type": "text",
+          "transform": "trim"
+        },
+        "location": {
+          "selector": "[data-testid='location'], .location, ._1p3joamp",
+          "type": "text",
+          "transform": "trim"
+        },
+        "price": {
+          "selector": "[data-testid='price'], .price, ._1p7iugi",
+          "type": "text",
+          "transform": "trim"
+        },
+        "rating": {
+          "selector": "[data-testid='rating'], .rating, ._10fy1f8",
+          "type": "text",
+          "transform": "trim"
+        },
+        "savedDate": {
+          "selector": "[data-testid='saved-date'], .saved-date, ._1mhorg9",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "hosting": {
+      "container": "[data-testid='listing'], .listing, ._8ssblpx",
+      "fields": {
+        "listingName": {
+          "selector": "[data-testid='listing-name'], .listing-name, ._1tanv1h",
+          "type": "text",
+          "transform": "trim"
+        },
+        "location": {
+          "selector": "[data-testid='location'], .location, ._1p3joamp",
+          "type": "text",
+          "transform": "trim"
+        },
+        "status": {
+          "selector": "[data-testid='status'], .status, ._1mhorg9",
+          "type": "text",
+          "transform": "trim"
+        },
+        "earnings": {
+          "selector": "[data-testid='earnings'], .earnings, ._1p7iugi",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "travel_bookings",
+      "description": "Airbnb trip bookings and travel history",
+      "personalDataType": "travel_history"
+    },
+    {
+      "name": "travel_preferences",
+      "description": "Airbnb wishlist and saved properties",
+      "personalDataType": "travel_preferences"
+    },
+    {
+      "name": "hosting_activity",
+      "description": "Airbnb hosting listings and earnings",
+      "personalDataType": "business_activity"
+    }
+  ]
+}

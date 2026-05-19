@@ -13,6 +13,7 @@ import { siteRegex } from "@/utils.ts";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
 import { database } from "@/indexeddb";
+import { logger, errMessage } from "@/lib/log";
 
 const SLICE_SIZE = 100;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
@@ -204,6 +205,96 @@ async function getDeviceId(): Promise<string> {
  * Sends `PATCH /api/devices/:id/last-seen`. Failure is logged but never thrown
  * since the heartbeat must not block any other work.
  */
+/**
+ * Capture a PNG snapshot of the active tab via `browser.tabs.captureVisibleTab`
+ * and POST it to CI-Server's content API. The endpoint isn't live yet
+ * (see planning/08-highlight-capture.md and planning/15-oauth-integration.md);
+ * until then the screenshot is cached in storage.local so users can audit
+ * what we'd send.
+ */
+async function captureActiveTab(): Promise<{
+  url: string | undefined;
+  title: string | undefined;
+  size: number;
+}> {
+  const [tab] = await browser.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+  if (!tab || typeof tab.windowId !== "number") {
+    throw new Error("No active tab");
+  }
+
+  const dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, {
+    format: "png",
+  });
+  const body = dataUrl.replace(/^data:image\/png;base64,/, "");
+  const size = body.length;
+
+  const state = store.getState().ciState;
+  const { accessToken, serverDomain, deviceId } = state;
+  const capturedAt = new Date().toISOString();
+
+  const payload = {
+    device_id: deviceId,
+    source_url: tab.url,
+    source_title: tab.title,
+    kind: "screenshot" as const,
+    mime_type: "image/png" as const,
+    body,
+    captured_at: capturedAt,
+  };
+
+  if (accessToken && serverDomain && deviceId) {
+    try {
+      await axios.post(`https://${serverDomain}/api/content`, payload, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      });
+      logger.info("capture.uploaded", {
+        url: tab.url,
+        size,
+      });
+    } catch (err) {
+      // /api/content isn't live yet. Cache locally and log; the outbox
+      // refactor (planning/06) will drain pending captures once the
+      // endpoint exists.
+      const pending =
+        ((await browser.storage.local.get("pendingCaptures"))
+          .pendingCaptures as Array<typeof payload> | undefined) ?? [];
+      pending.push(payload);
+      if (pending.length > 20) {
+        pending.splice(0, pending.length - 20);
+      }
+
+      await browser.storage.local.set({ pendingCaptures: pending });
+      logger.warn("capture.uploadDeferred", {
+        url: tab.url,
+        size,
+        pending: pending.length,
+        err: errMessage(err),
+      });
+    }
+  } else {
+    logger.info("capture.cachedLocal", { url: tab.url, size });
+    const pending =
+      ((await browser.storage.local.get("pendingCaptures")).pendingCaptures as
+        | Array<typeof payload>
+        | undefined) ?? [];
+    pending.push(payload);
+    if (pending.length > 20) {
+      pending.splice(0, pending.length - 20);
+    }
+
+    await browser.storage.local.set({ pendingCaptures: pending });
+  }
+
+  return { url: tab.url, title: tab.title, size };
+}
+
 async function updateDeviceLastSeen(deviceId: string): Promise<void> {
   try {
     const state = store.getState().ciState;
@@ -231,12 +322,10 @@ async function updateDeviceLastSeen(deviceId: string): Promise<void> {
         timeout: 5000,
       },
     );
-  } catch (error: any) {
+    logger.debug("device.lastSeen.updated", { deviceId });
+  } catch (err) {
     // last_seen updates are non-critical — never block on them.
-    console.debug(
-      "Failed to update device last_seen:",
-      error?.response?.data || error?.message,
-    );
+    logger.debug("device.lastSeen.failed", { deviceId, err: errMessage(err) });
   }
 }
 
@@ -2254,10 +2343,32 @@ export default defineBackground({
 
           return true;
         }
+
+        if (message.action === "CAPTURE_ACTIVE_TAB") {
+          captureActiveTab()
+            .then((result) => sendResponse({ success: true, ...result }))
+            .catch((err) =>
+              sendResponse({ success: false, error: errMessage(err) }),
+            );
+
+          return true;
+        }
       } catch (error) {
         console.error("Error checking authentication state:", error);
       }
     });
+
+    // Alt+Shift+C — capture the active tab. The command is declared in
+    // wxt.config.ts so users can rebind it via chrome://extensions/shortcuts.
+    if (browser.commands?.onCommand) {
+      browser.commands.onCommand.addListener((command) => {
+        if (command === "capture-active-tab") {
+          void captureActiveTab().catch((err) =>
+            logger.warn("capture.command.failed", { err: errMessage(err) }),
+          );
+        }
+      });
+    }
 
     const AUTO_SYNC_INTERVAL = 10 * 60 * 1000; // 10 minutes
     const AUTO_SYNC_TIME_RANGE = 24 * 60 * 60 * 1000;
