@@ -33,7 +33,6 @@ describe("ciStateSlice", () => {
     it("should have correct initial state", () => {
       const state = (store.getState() as { ciState: unknown }).ciState as {
         accessToken: string | null;
-        sessionToken: string | null;
         url: string | null;
         domain: string | null;
         lastUrl: string | null;
@@ -52,11 +51,10 @@ describe("ciStateSlice", () => {
         devicePlatform: string | null;
         bookmarkSyncEnabled: boolean;
         downloadSyncEnabled: boolean;
-        formSyncEnabled: boolean;
+        historySyncEnabled: boolean;
       };
       expect(state).toEqual({
         accessToken: null,
-        sessionToken: null,
         url: null,
         domain: null,
         lastUrl: null,
@@ -64,6 +62,8 @@ describe("ciStateSlice", () => {
         historySyncStatus: null,
         lastHistorySync: null,
         syncHistoryLogs: [],
+        refreshing: false,
+        serverDomain: "",
         autoSyncEnabled: false,
         siteBlacklist: [],
         pageBlacklist: [],
@@ -73,7 +73,7 @@ describe("ciStateSlice", () => {
         devicePlatform: null,
         bookmarkSyncEnabled: false,
         downloadSyncEnabled: false,
-        formSyncEnabled: false,
+        historySyncEnabled: true,
       });
     });
   });
@@ -122,7 +122,6 @@ describe("ciStateSlice", () => {
     it("should call browser.storage.local.set with current state", () => {
       const testState = {
         accessToken: "test-token",
-        sessionToken: "test-session",
         siteBlacklist: ["example.com"],
         pageBlacklist: ["https://example.com"],
       };
@@ -130,10 +129,9 @@ describe("ciStateSlice", () => {
       (store.dispatch as (action: unknown) => unknown)(setState(testState));
       (store.dispatch as (action: unknown) => unknown)(saveUserSettings());
 
+      // `saveUserSettings` does not persist accessToken (it's session-scoped via cookie refresh).
       expect(mockBrowserStorage.local.set).toHaveBeenCalledWith(
         expect.objectContaining({
-          accessToken: "test-token",
-          sessionToken: "test-session",
           siteBlacklist: ["example.com"],
           pageBlacklist: ["https://example.com"],
         }),
@@ -174,7 +172,6 @@ describe("ciStateSlice", () => {
 
       expect(mockBrowserStorage.local.get).toHaveBeenCalledWith([
         "accessToken",
-        "sessionToken",
         "lastHistorySync",
         "syncHistoryLogs",
         "autoSyncEnabled",
@@ -186,7 +183,8 @@ describe("ciStateSlice", () => {
         "devicePlatform",
         "bookmarkSyncEnabled",
         "downloadSyncEnabled",
-        "formSyncEnabled",
+        "historySyncEnabled",
+        "serverDomain",
       ]);
     });
   });

@@ -70,26 +70,27 @@ describe("Background Script", () => {
   });
 
   describe("Domain and Page Blacklist Matching Logic", () => {
+    const parseHostname = (url: string): string | null => {
+      try {
+        return new URL(url).hostname;
+      } catch {
+        return null;
+      }
+    };
+
     it("should match domain blacklist correctly", () => {
       const url = "https://example.com/page";
       const siteBlacklist = ["example.com", "google.com", "github.com"];
-      // const pageBlacklist: string[] = [];
 
-      // Test blacklist matching logic (simplified version of isUrlBlacklisted)
       let isBlacklisted = false;
-      try {
-        const parsedUrl = URL.parse(url);
-        if (parsedUrl && parsedUrl.hostname) {
-          // Check site blacklist
-          for (const site of siteBlacklist) {
-            if (parsedUrl.hostname.includes(site)) {
-              isBlacklisted = true;
-              break;
-            }
+      const hostname = parseHostname(url);
+      if (hostname) {
+        for (const site of siteBlacklist) {
+          if (hostname.includes(site)) {
+            isBlacklisted = true;
+            break;
           }
         }
-      } catch {
-        isBlacklisted = false;
       }
 
       expect(isBlacklisted).toBe(true);
@@ -98,21 +99,16 @@ describe("Background Script", () => {
     it("should not match unrelated domains", () => {
       const url = "https://unrelated.com/page";
       const siteBlacklist = ["example.com", "google.com"];
-      // const pageBlacklist: string[] = [];
 
       let isBlacklisted = false;
-      try {
-        const parsedUrl = URL.parse(url);
-        if (parsedUrl && parsedUrl.hostname) {
-          for (const site of siteBlacklist) {
-            if (parsedUrl.hostname.includes(site)) {
-              isBlacklisted = true;
-              break;
-            }
+      const hostname = parseHostname(url);
+      if (hostname) {
+        for (const site of siteBlacklist) {
+          if (hostname.includes(site)) {
+            isBlacklisted = true;
+            break;
           }
         }
-      } catch {
-        isBlacklisted = false;
       }
 
       expect(isBlacklisted).toBe(false);

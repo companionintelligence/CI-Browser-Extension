@@ -160,3 +160,6 @@ Each major area is expanded into its own document with problem statement, propos
 **OAuth & UI/UX iteration**
 - [15 — OAuth integration with CI-Server cloud proxy](planning/15-oauth-integration.md) — Path A (outbound provider connections via `CloudOAuthProxyService` from CI-Server PRs #1295/#1407) + Path B (extension→server OAuth replacing cookie+JWT, evolving PR #14).
 - [16 — UI/UX testing & concrete findings](planning/16-ui-ux-testing.md) — live build/lint/test pass results (24 TS errors, 1 failing test, 1.05 MB popup), popup-specific punch list, component/axe/visual test plan.
+
+**Branch audit & re-implementation**
+- [17 — Branch & PR audit](planning/17-branch-audit.md) — per-branch contributions, landability ratings, recommended landing order. Steps 1–6 of that order have landed on this branch.

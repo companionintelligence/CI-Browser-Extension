@@ -32,6 +32,9 @@ Order roughly matches the phase sequencing in `planning.MD` § 3.
 - [15 — OAuth integration with CI-Server cloud proxy](15-oauth-integration.md) — Path A (outbound provider connections) + Path B (extension→server OAuth), aligned with CI-Server PRs #1295/#1388/#1407.
 - [16 — UI/UX testing & concrete findings](16-ui-ux-testing.md) — current build/lint/test state, popup-specific issues, recommended test infrastructure.
 
+## Branch audit & re-implementation
+- [17 — Branch & PR audit](17-branch-audit.md) — line-by-line tour of every open branch (PRs #14/#26/#30/#32/#36/#37/#34) with landability ratings and recommended landing order. The first six steps of that landing order are landed on this branch.
+
 ## How to use these docs
 
 Each file is structured the same way:

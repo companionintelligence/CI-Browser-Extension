@@ -8,6 +8,8 @@ import react from "@vitejs/plugin-react-swc";
 export default defineConfig({
   manifest: {
     name: "Companion Intelligence",
+    description:
+      "Privately archive your browsing history, bookmarks, and downloads to your personal CI Server. Your data stays yours.",
     host_permissions: [
       "*://*.companionintelligence.com/*",
       "*://*.companionintel.com/*",
@@ -16,6 +18,10 @@ export default defineConfig({
       "*://*.hulu.com/*",
       "*://secure.hulu.com/*",
       "*://*.disneyplus.com/*",
+      "*://*.slashdot.org/*",
+      "*://slashdot.org/*",
+      "*://*.github.com/*",
+      "*://github.com/*",
     ],
     permissions: [
       "bookmarks",
@@ -29,14 +35,19 @@ export default defineConfig({
     browser_specific_settings: {
       gecko: {
         id: "@ci-browser-extension",
-        data_collection_permissions: {
-          required: [
-            "bookmarksInfo",
-            "websiteActivity",
-            "websiteContent",
-            "browsingActivity",
-          ],
-        },
+        // `data_collection_permissions` is required for AMO listing but not
+        // yet in the WXT manifest typings.
+        ...({
+          data_collection_permissions: {
+            required: [
+              "bookmarksInfo",
+              "websiteActivity",
+              "websiteContent",
+              "browsingActivity",
+            ],
+          },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any),
       },
     },
     icons: {

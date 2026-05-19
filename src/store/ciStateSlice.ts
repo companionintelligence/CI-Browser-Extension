@@ -1,24 +1,30 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
+const USER_SETTINGS_KEYS = [
+  "accessToken",
+  "lastHistorySync",
+  "syncHistoryLogs",
+  "autoSyncEnabled",
+  "siteBlacklist",
+  "pageBlacklist",
+  "deviceId",
+  "deviceName",
+  "deviceType",
+  "devicePlatform",
+  "bookmarkSyncEnabled",
+  "downloadSyncEnabled",
+  "historySyncEnabled",
+  "serverDomain",
+] as const;
+
 export const loadUserSettings = createAsyncThunk(
   "ciState/loadUserSettings",
   async () => {
-    return await browser.storage.local.get([
-      "accessToken",
-      "lastHistorySync",
-      "syncHistoryLogs",
-      "autoSyncEnabled",
-      "siteBlacklist",
-      "pageBlacklist",
-      "deviceId",
-      "deviceName",
-      "deviceType",
-      "devicePlatform",
-      "bookmarkSyncEnabled",
-      "downloadSyncEnabled",
-      "historySyncEnabled",
-      "serverDomain",
-    ]);
+    const keys = USER_SETTINGS_KEYS as readonly (keyof CiState)[];
+
+    return (await browser.storage.local.get(
+      keys as (keyof CiState)[],
+    )) as Partial<CiState>;
   },
 );
 
@@ -219,9 +225,8 @@ export const ciStateSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(loadUserSettings.fulfilled, (state, action) => {
-      for (const [key, value] of Object.entries(
-        action.payload as Record<string, unknown>,
-      )) {
+      const payload = (action.payload ?? {}) as Record<string, unknown>;
+      for (const [key, value] of Object.entries(payload)) {
         if (key in state) {
           (state as Record<string, unknown>)[key] = value;
         }

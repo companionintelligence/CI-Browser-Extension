@@ -55,8 +55,9 @@ let deviceSetupInProgress = false;
 // Helper functions for managing synced items
 async function getSyncedItems(key: string): Promise<Set<string>> {
   const result = await browser.storage.local.get(key);
+  const items = (result[key] as string[] | undefined) ?? [];
 
-  return new Set(result[key] || []);
+  return new Set(items);
 }
 
 // Helper function to validate URLs
@@ -189,13 +190,54 @@ async function triggerHistoryCrawl() {
 
 async function getDeviceId(): Promise<string> {
   const storage = await browser.storage.local.get("deviceId");
-  if (storage.deviceId) {
+  if (typeof storage.deviceId === "string" && storage.deviceId.length > 0) {
     return storage.deviceId;
   }
 
   throw new Error(
     "No device_id found. Please wait for device setup to complete.",
   );
+}
+
+/**
+ * Fire-and-forget heartbeat informing CI-Server that this device is alive.
+ * Sends `PATCH /api/devices/:id/last-seen`. Failure is logged but never thrown
+ * since the heartbeat must not block any other work.
+ */
+async function updateDeviceLastSeen(deviceId: string): Promise<void> {
+  try {
+    const state = store.getState().ciState;
+    const { accessToken, serverDomain } = state;
+    if (!accessToken || !serverDomain) {
+      return;
+    }
+
+    const accessDecoded = jwtDecode<{ exp?: number }>(accessToken);
+    const isAuthExpired = accessDecoded?.exp
+      ? Date.now() >= accessDecoded.exp * 1000
+      : true;
+    if (isAuthExpired) {
+      return;
+    }
+
+    await axios.patch(
+      `https://${serverDomain}/api/devices/${deviceId}/last-seen`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 5000,
+      },
+    );
+  } catch (error: any) {
+    // last_seen updates are non-critical — never block on them.
+    console.debug(
+      "Failed to update device last_seen:",
+      error?.response?.data || error?.message,
+    );
+  }
 }
 
 async function fetchDeviceFromServer(): Promise<string | null> {
@@ -228,20 +270,27 @@ async function fetchDeviceFromServer(): Promise<string | null> {
     const devices = response.data;
 
     const storage = await browser.storage.local.get("deviceId");
-    if (storage.deviceId) {
+    const storedDeviceId =
+      typeof storage.deviceId === "string" ? storage.deviceId : undefined;
+    if (storedDeviceId) {
       const matchingDevice = devices.find(
-        (d: any) => d.device_id === storage.deviceId,
+        (d: any) => d.device_id === storedDeviceId,
       );
       if (matchingDevice) {
-        return storage.deviceId;
+        return storedDeviceId;
       }
     }
 
+    // Tiered fingerprint match — server-side schema treats browser extensions
+    // as `device_type=browser`, `platform=web`. Match by name first, then by
+    // model as a fallback so OS version bumps don't fork the device row.
     const deviceInfo = getDeviceInfo();
     const matchingDevice = devices.find(
       (d: any) =>
-        d.device_name === deviceInfo.device_name &&
-        d.platform === deviceInfo.platform,
+        d.device_type === "browser" &&
+        d.platform === "web" &&
+        (d.device_name === deviceInfo.device_name ||
+          (deviceInfo.model && d.model === deviceInfo.model)),
     );
 
     if (matchingDevice) {
@@ -381,27 +430,46 @@ async function setupDevice(): Promise<string> {
 
 function getDeviceInfo() {
   const browser_info = bowser.getParser(navigator.userAgent);
-  const platform = browser_info.getOSName() || "unknown";
+  const osName = browser_info.getOSName() || "unknown";
   const browserName = browser_info.getBrowserName() || "Chrome";
+  const browserVersion = browser_info.getBrowserVersion() || undefined;
+  const osVersion = browser_info.getOSVersion() || undefined;
 
-  let device_type = "desktop";
   const platformType = browser_info.getPlatformType();
-  if (platformType === "mobile") {
-    device_type = "mobile";
-  } else if (platformType === "tablet") {
-    device_type = "tablet";
+  const formFactor =
+    platformType === "mobile"
+      ? "mobile"
+      : platformType === "tablet"
+        ? "tablet"
+        : "desktop";
+
+  const device_name = `${browserName} on ${osName}`;
+  const model = osVersion ? `${osName} ${osVersion}` : osName;
+
+  const lower = osName.toLowerCase();
+  let manufacturer: string | undefined;
+  if (lower.includes("mac") || lower.includes("ios")) {
+    manufacturer = "Apple";
+  } else if (lower.includes("windows")) {
+    manufacturer = "Microsoft";
+  } else if (lower.includes("android")) {
+    manufacturer = "Google";
+  } else if (lower.includes("linux")) {
+    manufacturer = "Linux Foundation";
   }
 
-  const device_name = `${browserName} on ${platform}`;
-  const model = browser_info.getOSVersion()
-    ? `${platform} ${browser_info.getOSVersion()}`
-    : platform;
-
+  // device_type/platform are pinned to "browser"/"web" so that CI-Server's
+  // ensureDeviceExists treats every install as one logical browser device.
+  // The user's form factor lives in `form_factor` as supplementary metadata.
   return {
-    device_name: device_name,
-    device_type: device_type,
-    platform: platform.toLowerCase(),
-    model: model,
+    device_name,
+    device_type: "browser" as const,
+    platform: "web" as const,
+    model,
+    manufacturer,
+    os_version: osVersion,
+    app_version: browserVersion,
+    form_factor: formFactor,
   };
 }
 
@@ -1878,6 +1946,12 @@ export default defineBackground({
         return;
       }
 
+      if (!csrfTokenCookie) {
+        console.log("No CSRF token cookie available, skipping refresh");
+
+        return;
+      }
+
       store.dispatch(setState({ refreshing: true }));
       try {
         const data: AuthResponse = await fetchJson(
@@ -1936,13 +2010,13 @@ export default defineBackground({
 
         // Check if authentication is valid
         const accessDecoded = accessToken
-          ? (jwtDecode(accessToken) as string)
+          ? jwtDecode<{ exp: number }>(accessToken)
           : null;
         const isAuthExpired = accessDecoded
           ? Date.now() >= (accessDecoded.exp - 5) * 1000
           : true;
         const sessionDecoded = sessionToken?.value
-          ? (jwtDecode(sessionToken.value) as string)
+          ? jwtDecode<{ exp: number }>(sessionToken.value)
           : null;
         const isSessionExpired = sessionDecoded
           ? Date.now() >= sessionDecoded.exp * 1000
@@ -2216,6 +2290,16 @@ export default defineBackground({
         console.error("Auto-sync error:", error);
       }
     }, AUTO_SYNC_INTERVAL);
+
+    // Periodic device last_seen heartbeat. CI-Server uses this to drive
+    // device-presence UI without us having to record activity to do it.
+    const LAST_SEEN_INTERVAL = 5 * 60 * 1000; // 5 minutes
+    setInterval(async () => {
+      const { deviceId } = store.getState().ciState;
+      if (deviceId) {
+        await updateDeviceLastSeen(deviceId);
+      }
+    }, LAST_SEEN_INTERVAL);
 
     // Set up bookmark listeners based on settings
     const setupBookmarkListeners = () => {

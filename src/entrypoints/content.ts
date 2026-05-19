@@ -52,7 +52,10 @@ export default defineContentScript({
         browser.storage.local
           .get("scrollDepthData")
           .then((result) => {
-            const scrollDepthData = result.scrollDepthData || [];
+            const scrollDepthData =
+              (result.scrollDepthData as
+                | Array<typeof scrollData>
+                | undefined) ?? [];
             scrollDepthData.push(scrollData);
 
             // Keep only last 1000 entries to prevent storage bloat
@@ -135,7 +138,10 @@ export default defineContentScript({
         // Store form submission locally
         const existingSubmissions =
           await browser.storage.local.get("formSubmissions");
-        const submissions = existingSubmissions.formSubmissions || [];
+        const submissions =
+          (existingSubmissions.formSubmissions as
+            | Array<typeof submissionData>
+            | undefined) ?? [];
         submissions.push(submissionData);
 
         // Keep only last 1000 form submissions to prevent storage bloat
@@ -189,7 +195,10 @@ export default defineContentScript({
           // Store AJAX form submission
           const existingSubmissions =
             await browser.storage.local.get("formSubmissions");
-          const submissions = existingSubmissions.formSubmissions || [];
+          const submissions =
+            (existingSubmissions.formSubmissions as
+              | Array<typeof submissionData>
+              | undefined) ?? [];
           submissions.push(submissionData);
 
           if (submissions.length > 1000) {

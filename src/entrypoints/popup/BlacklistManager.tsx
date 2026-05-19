@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   addSiteBlacklist,
@@ -28,6 +28,19 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
   const [invalidSite, setInvalidSite] = useState(false);
   const [invalidPage, setInvalidPage] = useState(false);
   const [activeTab, setActiveTab] = useState<"sites" | "pages">("sites");
+
+  // Esc returns to the main popup view.
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onBack();
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onBack]);
 
   const addSiteEntry = (e: { preventDefault: () => void }) => {
     e.preventDefault();
@@ -98,13 +111,13 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
         <button className="back-button" onClick={onBack} title="Go back">
           ←
         </button>
-        <h2>Blacklist Management</h2>
+        <h2>Ignored Sites and Pages</h2>
       </div>
 
       <div className="blacklist-description">
         <p>
-          Blacklisted sites and pages will be excluded from automatic browser
-          history sync.
+          Ignored sites and pages are excluded from automatic browser history
+          sync.
         </p>
       </div>
 
@@ -113,13 +126,13 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
           className={`tab ${activeTab === "sites" ? "active" : ""}`}
           onClick={() => setActiveTab("sites")}
         >
-          Blacklisted Sites ({siteBlacklist.length})
+          Ignored Sites ({siteBlacklist.length})
         </button>
         <button
           className={`tab ${activeTab === "pages" ? "active" : ""}`}
           onClick={() => setActiveTab("pages")}
         >
-          Blacklisted Pages ({pageBlacklist.length})
+          Ignored Pages ({pageBlacklist.length})
         </button>
       </div>
 
@@ -153,7 +166,7 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
 
           <div className="blacklist-entries">
             {siteBlacklist.length === 0 ? (
-              <div className="empty-state">No blacklisted sites</div>
+              <div className="empty-state">No ignored sites</div>
             ) : (
               siteBlacklist.map((site: string) => (
                 <div className="entry" key={site}>
@@ -201,7 +214,7 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
 
           <div className="blacklist-entries">
             {pageBlacklist.length === 0 ? (
-              <div className="empty-state">No blacklisted pages</div>
+              <div className="empty-state">No ignored pages</div>
             ) : (
               pageBlacklist.map((page: string) => (
                 <div className="entry" key={page}>
