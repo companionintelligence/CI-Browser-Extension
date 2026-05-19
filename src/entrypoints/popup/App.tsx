@@ -12,6 +12,7 @@ import {
 import "@/theme.css";
 import bowser from "bowser";
 import BlacklistManager from "./BlacklistManager";
+import Diagnostics from "./Diagnostics";
 import { Button, Checkbox, Field, Label, Input, Card } from "@ci/shadcn";
 
 export default function App() {
@@ -64,6 +65,7 @@ export default function App() {
   } = ciState;
 
   const [showBlacklistManager, setShowBlacklistManager] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [domain, setDomain] = useState(serverDomain);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
@@ -251,6 +253,16 @@ export default function App() {
         className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[400px]"} mx-auto p-4 box-border`}
       >
         <BlacklistManager onBack={() => setShowBlacklistManager(false)} />
+      </div>
+    );
+  }
+
+  if (showDiagnostics) {
+    return (
+      <div
+        className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[420px]"} mx-auto p-4 box-border`}
+      >
+        <Diagnostics onBack={() => setShowDiagnostics(false)} />
       </div>
     );
   }
@@ -566,6 +578,14 @@ export default function App() {
               className="rounded-lg border border-transparent px-[1.4em] py-[0.8em] text-base font-medium font-inherit cursor-pointer transition-all min-h-[44px] min-w-[44px] touch-manipulation bg-[#555] dark:bg-[#555] light:bg-[#e0e0e0] text-white dark:text-white light:text-[#213547] border-[#555] dark:border-[#555] light:border-[#d0d0d0] hover:bg-[#666] dark:hover:bg-[#666] light:hover:bg-[#d0d0d0] hover:border-[#666] dark:hover:border-[#666] light:hover:border-[#c0c0c0] active:translate-y-[1px] w-full"
             >
               Manage Ignored Sites &amp; Pages
+            </Button>
+            <Button
+              onClick={() => setShowDiagnostics(true)}
+              variant="outline"
+              className="text-xs min-h-[36px] w-full"
+              title="View logs and queued content (for debugging)"
+            >
+              🩺 Diagnostics
             </Button>
             <div className="flex justify-around p-2 bg-[rgba(0,0,0,0.2)] dark:bg-[rgba(0,0,0,0.2)] light:bg-[rgba(0,0,0,0.05)] rounded text-[0.85em]">
               <span className="text-[#888] dark:text-[#888] light:text-[#666]">

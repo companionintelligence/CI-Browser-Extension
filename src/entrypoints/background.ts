@@ -10,10 +10,16 @@ import {
   addSyncHistoryLog,
 } from "@/store/ciStateSlice";
 import { siteRegex } from "@/utils.ts";
-import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
 import { database } from "@/indexeddb";
 import { logger, errMessage } from "@/lib/log";
+import { captureActiveTab } from "@/background/capture";
+import {
+  getDeviceId,
+  setupDevice,
+  updateDeviceLastSeen,
+} from "@/background/device";
+import { saveHighlight } from "@/background/highlight";
 
 const SLICE_SIZE = 100;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
@@ -50,8 +56,6 @@ function ensureISOTimeFormat(
 const SYNCED_BOOKMARKS_KEY = "syncedBookmarks";
 const SYNCED_DOWNLOADS_KEY = "syncedDownloads";
 const SYNCED_HISTORY_KEY = "syncedHistory";
-
-let deviceSetupInProgress = false;
 
 // Helper functions for managing synced items
 async function getSyncedItems(key: string): Promise<Set<string>> {
@@ -187,379 +191,6 @@ async function triggerHistoryCrawl() {
   await store.dispatch({
     type: "loadUserSettings",
   });
-}
-
-async function getDeviceId(): Promise<string> {
-  const storage = await browser.storage.local.get("deviceId");
-  if (typeof storage.deviceId === "string" && storage.deviceId.length > 0) {
-    return storage.deviceId;
-  }
-
-  throw new Error(
-    "No device_id found. Please wait for device setup to complete.",
-  );
-}
-
-/**
- * Fire-and-forget heartbeat informing CI-Server that this device is alive.
- * Sends `PATCH /api/devices/:id/last-seen`. Failure is logged but never thrown
- * since the heartbeat must not block any other work.
- */
-/**
- * Capture a PNG snapshot of the active tab via `browser.tabs.captureVisibleTab`
- * and POST it to CI-Server's content API. The endpoint isn't live yet
- * (see planning/08-highlight-capture.md and planning/15-oauth-integration.md);
- * until then the screenshot is cached in storage.local so users can audit
- * what we'd send.
- */
-async function captureActiveTab(): Promise<{
-  url: string | undefined;
-  title: string | undefined;
-  size: number;
-}> {
-  const [tab] = await browser.tabs.query({
-    active: true,
-    currentWindow: true,
-  });
-  if (!tab || typeof tab.windowId !== "number") {
-    throw new Error("No active tab");
-  }
-
-  const dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, {
-    format: "png",
-  });
-  const body = dataUrl.replace(/^data:image\/png;base64,/, "");
-  const size = body.length;
-
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain, deviceId } = state;
-  const capturedAt = new Date().toISOString();
-
-  const payload = {
-    device_id: deviceId,
-    source_url: tab.url,
-    source_title: tab.title,
-    kind: "screenshot" as const,
-    mime_type: "image/png" as const,
-    body,
-    captured_at: capturedAt,
-  };
-
-  if (accessToken && serverDomain && deviceId) {
-    try {
-      await axios.post(`https://${serverDomain}/api/content`, payload, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 15000,
-      });
-      logger.info("capture.uploaded", {
-        url: tab.url,
-        size,
-      });
-    } catch (err) {
-      // /api/content isn't live yet. Cache locally and log; the outbox
-      // refactor (planning/06) will drain pending captures once the
-      // endpoint exists.
-      const pending =
-        ((await browser.storage.local.get("pendingCaptures"))
-          .pendingCaptures as Array<typeof payload> | undefined) ?? [];
-      pending.push(payload);
-      if (pending.length > 20) {
-        pending.splice(0, pending.length - 20);
-      }
-
-      await browser.storage.local.set({ pendingCaptures: pending });
-      logger.warn("capture.uploadDeferred", {
-        url: tab.url,
-        size,
-        pending: pending.length,
-        err: errMessage(err),
-      });
-    }
-  } else {
-    logger.info("capture.cachedLocal", { url: tab.url, size });
-    const pending =
-      ((await browser.storage.local.get("pendingCaptures")).pendingCaptures as
-        | Array<typeof payload>
-        | undefined) ?? [];
-    pending.push(payload);
-    if (pending.length > 20) {
-      pending.splice(0, pending.length - 20);
-    }
-
-    await browser.storage.local.set({ pendingCaptures: pending });
-  }
-
-  return { url: tab.url, title: tab.title, size };
-}
-
-async function updateDeviceLastSeen(deviceId: string): Promise<void> {
-  try {
-    const state = store.getState().ciState;
-    const { accessToken, serverDomain } = state;
-    if (!accessToken || !serverDomain) {
-      return;
-    }
-
-    const accessDecoded = jwtDecode<{ exp?: number }>(accessToken);
-    const isAuthExpired = accessDecoded?.exp
-      ? Date.now() >= accessDecoded.exp * 1000
-      : true;
-    if (isAuthExpired) {
-      return;
-    }
-
-    await axios.patch(
-      `https://${serverDomain}/api/devices/${deviceId}/last-seen`,
-      {},
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 5000,
-      },
-    );
-    logger.debug("device.lastSeen.updated", { deviceId });
-  } catch (err) {
-    // last_seen updates are non-critical — never block on them.
-    logger.debug("device.lastSeen.failed", { deviceId, err: errMessage(err) });
-  }
-}
-
-async function fetchDeviceFromServer(): Promise<string | null> {
-  try {
-    const state = store.getState().ciState;
-    const { accessToken, serverDomain } = state;
-
-    if (!accessToken) {
-      return null;
-    }
-
-    const accessDecoded = jwtDecode(accessToken) as any;
-    const isAuthExpired =
-      accessDecoded && accessDecoded.exp
-        ? Date.now() >= accessDecoded.exp * 1000
-        : true;
-
-    if (isAuthExpired) {
-      return null;
-    }
-
-    const response = await axios.get(`https://${serverDomain}/api/devices`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      timeout: 10000, // 10 second timeout
-    });
-
-    const devices = response.data;
-
-    const storage = await browser.storage.local.get("deviceId");
-    const storedDeviceId =
-      typeof storage.deviceId === "string" ? storage.deviceId : undefined;
-    if (storedDeviceId) {
-      const matchingDevice = devices.find(
-        (d: any) => d.device_id === storedDeviceId,
-      );
-      if (matchingDevice) {
-        return storedDeviceId;
-      }
-    }
-
-    // Tiered fingerprint match — server-side schema treats browser extensions
-    // as `device_type=browser`, `platform=web`. Match by name first, then by
-    // model as a fallback so OS version bumps don't fork the device row.
-    const deviceInfo = getDeviceInfo();
-    const matchingDevice = devices.find(
-      (d: any) =>
-        d.device_type === "browser" &&
-        d.platform === "web" &&
-        (d.device_name === deviceInfo.device_name ||
-          (deviceInfo.model && d.model === deviceInfo.model)),
-    );
-
-    if (matchingDevice) {
-      await browser.storage.local.set({
-        deviceId: matchingDevice.device_id,
-        deviceName: matchingDevice.device_name,
-        deviceType: matchingDevice.device_type,
-        devicePlatform: matchingDevice.platform,
-      });
-      store.dispatch(
-        setState({
-          deviceId: matchingDevice.device_id,
-          deviceName: matchingDevice.device_name,
-          deviceType: matchingDevice.device_type,
-          devicePlatform: matchingDevice.platform,
-        }),
-      );
-
-      return matchingDevice.device_id;
-    }
-
-    return null;
-  } catch (error: any) {
-    console.error(
-      "Failed to fetch devices from server:",
-      error?.response?.data || error?.message,
-    );
-
-    return null;
-  }
-}
-
-async function createDeviceOnServer(): Promise<string> {
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain } = state;
-
-  if (!accessToken) {
-    throw new Error("Cannot create device: No access token available");
-  }
-
-  const accessDecoded = jwtDecode(accessToken) as any;
-  const isAuthExpired =
-    accessDecoded && accessDecoded.exp
-      ? Date.now() >= accessDecoded.exp * 1000
-      : true;
-
-  if (isAuthExpired) {
-    throw new Error(
-      "Cannot create device: Access token expired. Please log in again.",
-    );
-  }
-
-  const deviceInfo = getDeviceInfo();
-
-  try {
-    const response = await axios.post(
-      `https://${serverDomain}/api/devices`,
-      deviceInfo,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 10000, // 10 second timeout
-      },
-    );
-
-    const deviceId = response.data.device_id;
-    const deviceName = response.data.device_name;
-    const deviceType = response.data.device_type;
-    const devicePlatform = response.data.platform;
-
-    await browser.storage.local.set({
-      deviceId,
-      deviceName,
-      deviceType,
-      devicePlatform,
-    });
-    store.dispatch(
-      setState({
-        deviceId,
-        deviceName,
-        deviceType,
-        devicePlatform,
-      }),
-    );
-
-    deviceSetupInProgress = false;
-
-    return deviceId;
-  } catch (error: any) {
-    const errorMessage =
-      error?.response?.data?.message ||
-      error?.response?.data?.error ||
-      error?.message ||
-      "Unknown error occurred";
-
-    throw new Error(`Failed to create device: ${errorMessage}`);
-  }
-}
-
-function checkAuthStatus() {
-  const state = store.getState().ciState;
-  const { accessToken } = state;
-
-  return { accessToken };
-}
-
-async function setupDevice(): Promise<string> {
-  if (deviceSetupInProgress) {
-    throw new Error("Device setup already in progress");
-  }
-
-  deviceSetupInProgress = true;
-
-  try {
-    const { accessToken } = checkAuthStatus();
-
-    if (!accessToken) {
-      throw new Error("No access token available. Please log in first.");
-    }
-
-    const existingDeviceId = await fetchDeviceFromServer();
-
-    if (existingDeviceId) {
-      return existingDeviceId;
-    }
-
-    return await createDeviceOnServer();
-  } catch (error: any) {
-    const errorMessage =
-      error?.message || error?.toString() || "Unknown error occurred";
-    deviceSetupInProgress = false;
-    throw new Error(errorMessage);
-  }
-}
-
-function getDeviceInfo() {
-  const browser_info = bowser.getParser(navigator.userAgent);
-  const osName = browser_info.getOSName() || "unknown";
-  const browserName = browser_info.getBrowserName() || "Chrome";
-  const browserVersion = browser_info.getBrowserVersion() || undefined;
-  const osVersion = browser_info.getOSVersion() || undefined;
-
-  const platformType = browser_info.getPlatformType();
-  const formFactor =
-    platformType === "mobile"
-      ? "mobile"
-      : platformType === "tablet"
-        ? "tablet"
-        : "desktop";
-
-  const device_name = `${browserName} on ${osName}`;
-  const model = osVersion ? `${osName} ${osVersion}` : osName;
-
-  const lower = osName.toLowerCase();
-  let manufacturer: string | undefined;
-  if (lower.includes("mac") || lower.includes("ios")) {
-    manufacturer = "Apple";
-  } else if (lower.includes("windows")) {
-    manufacturer = "Microsoft";
-  } else if (lower.includes("android")) {
-    manufacturer = "Google";
-  } else if (lower.includes("linux")) {
-    manufacturer = "Linux Foundation";
-  }
-
-  // device_type/platform are pinned to "browser"/"web" so that CI-Server's
-  // ensureDeviceExists treats every install as one logical browser device.
-  // The user's form factor lives in `form_factor` as supplementary metadata.
-  return {
-    device_name,
-    device_type: "browser" as const,
-    platform: "web" as const,
-    model,
-    manufacturer,
-    os_version: osVersion,
-    app_version: browserVersion,
-    form_factor: formFactor,
-  };
 }
 
 function isUrlBlacklisted(
@@ -2353,6 +1984,16 @@ export default defineBackground({
 
           return true;
         }
+
+        if (message.action === "SAVE_HIGHLIGHT") {
+          saveHighlight(message.input)
+            .then((result) => sendResponse({ success: true, ...result }))
+            .catch((err) =>
+              sendResponse({ success: false, error: errMessage(err) }),
+            );
+
+          return true;
+        }
       } catch (error) {
         console.error("Error checking authentication state:", error);
       }
@@ -2361,11 +2002,27 @@ export default defineBackground({
     // Alt+Shift+C — capture the active tab. The command is declared in
     // wxt.config.ts so users can rebind it via chrome://extensions/shortcuts.
     if (browser.commands?.onCommand) {
-      browser.commands.onCommand.addListener((command) => {
+      browser.commands.onCommand.addListener(async (command) => {
         if (command === "capture-active-tab") {
           void captureActiveTab().catch((err) =>
             logger.warn("capture.command.failed", { err: errMessage(err) }),
           );
+        }
+
+        if (command === "save-highlight") {
+          try {
+            const [tab] = await browser.tabs.query({
+              active: true,
+              currentWindow: true,
+            });
+            if (tab?.id !== undefined) {
+              await browser.tabs.sendMessage(tab.id, {
+                action: "TRIGGER_SAVE_HIGHLIGHT",
+              });
+            }
+          } catch (err) {
+            logger.warn("highlight.command.failed", { err: errMessage(err) });
+          }
         }
       });
     }

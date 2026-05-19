@@ -57,6 +57,12 @@ export default defineConfig({
         },
         description: "Capture a snapshot of the active tab to CI",
       },
+      "save-highlight": {
+        suggested_key: {
+          default: "Alt+Shift+H",
+        },
+        description: "Save the current text selection to CI",
+      },
     },
     browser_specific_settings: {
       gecko: {
