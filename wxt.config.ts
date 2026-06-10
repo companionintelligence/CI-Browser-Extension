@@ -18,7 +18,9 @@ export default defineConfig({
       "*://*.disneyplus.com/*",
     ],
     permissions: [
+      "alarms",
       "bookmarks",
+      "contextMenus",
       "cookies",
       "downloads",
       "history",

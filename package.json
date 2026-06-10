@@ -1,7 +1,7 @@
 {
   "name": "@ci/ci-browser-extension",
   "description": "Companion Intelligence browser extension for Chrome and Firefox",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "workspaces": [
     "packages/*"
   ],
@@ -27,7 +27,7 @@
     "zip:firefox": "wxt zip -b firefox",
     "zip:edge": "wxt zip -b edge",
     "zip:safari": "wxt zip -b safari",
-    "zip:safari-mobile": "wxt build -b safari --mv3 && cd .output && zip -r ci-browser-extension-0.0.0-safari-mobile.zip safari-mv3",
+    "zip:safari-mobile": "wxt build -b safari --mv3 && cd .output && zip -r \"ci-browser-extension-$(node -p \"require('../package.json').version\")-safari-mobile.zip\" safari-mv3",
     "zip:all": "npm run zip && npm run zip:firefox && npm run zip:edge && npm run zip:safari && npm run zip:safari-mobile",
     "clean": "rm -rf .output",
     "zip:opera": "wxt zip -b opera",

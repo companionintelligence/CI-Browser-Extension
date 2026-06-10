@@ -6,9 +6,8 @@
 
 **CI-Browser-Extension** sits in the **Capture** layer of the Companion Intelligence platform.
 
-Architecture: `CI-Engineering/architecture/architecture.md`
-Roadmap: `CI-Engineering/architecture/roadmap.md`
-Issues: <https://github.com/companionintelligence/CI-Engineering/issues>
+Roadmap & status: `CI-Engineering/projects/ci-browser-extension/README.md`
+Issues: <https://github.com/companionintelligence/CI-Browser-Extension/issues> (platform-wide: <https://github.com/companionintelligence/CI-Engineering/issues>)
 
 ## What this repo does
 
