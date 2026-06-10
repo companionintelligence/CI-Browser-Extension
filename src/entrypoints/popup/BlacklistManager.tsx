@@ -6,7 +6,7 @@ import {
   addPageBlacklist,
   removePageBlacklist,
 } from "@/store/ciStateSlice";
-import { domainRegex, siteRegex } from "@/utils.ts";
+import { domainRegex, siteRegex, parseUrl } from "@/utils.ts";
 import "./BlacklistManager.css";
 
 interface BlacklistManagerProps {
@@ -83,7 +83,7 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
       return;
     }
 
-    const parsedUrl = URL.parse(active);
+    const parsedUrl = parseUrl(active);
     if (!parsedUrl) {
       return;
     }

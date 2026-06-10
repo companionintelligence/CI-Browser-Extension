@@ -38,6 +38,9 @@ import huluProfileData from "./scrapeProfiles/hulu.json";
 import disneyProfileData from "./scrapeProfiles/disney.json";
 import slashdotProfileData from "./scrapeProfiles/slashdot.json";
 import githubProfileData from "./scrapeProfiles/github.json";
+import maxProfileData from "./scrapeProfiles/max.json";
+import paramountProfileData from "./scrapeProfiles/paramount.json";
+import primevideoProfileData from "./scrapeProfiles/primevideo.json";
 
 export class DomainScraper {
   private profiles: { [key: string]: ScrapeProfile } = {};
@@ -82,6 +85,32 @@ export class DomainScraper {
       this.profileNames["github.com"] = githubProfileData.name;
     } catch (error) {
       console.warn("Failed to load GitHub scrape profile:", error);
+    }
+
+    try {
+      this.profiles["max.com"] = maxProfileData as ScrapeProfile;
+      this.profileNames["max.com"] = maxProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Max scrape profile:", error);
+    }
+
+    try {
+      this.profiles["paramountplus.com"] =
+        paramountProfileData as ScrapeProfile;
+      this.profileNames["paramountplus.com"] = paramountProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Paramount+ scrape profile:", error);
+    }
+
+    try {
+      this.profiles["primevideo.com"] = primevideoProfileData as ScrapeProfile;
+      this.profileNames["primevideo.com"] = primevideoProfileData.name;
+      // Prime Video also lives under amazon.com/gp/video/*; the profile's
+      // targetUrl patterns restrict matching to those paths
+      this.profiles["amazon.com"] = primevideoProfileData as ScrapeProfile;
+      this.profileNames["amazon.com"] = primevideoProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Prime Video scrape profile:", error);
     }
   }
 
