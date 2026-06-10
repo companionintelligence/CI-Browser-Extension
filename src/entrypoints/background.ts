@@ -56,7 +56,7 @@ let deviceSetupInProgress = false;
 async function getSyncedItems(key: string): Promise<Set<string>> {
   const result = await browser.storage.local.get(key);
 
-  return new Set(result[key] || []);
+  return new Set((result[key] as string[] | undefined) ?? []);
 }
 
 // Helper function to validate URLs
@@ -190,7 +190,7 @@ async function triggerHistoryCrawl() {
 async function getDeviceId(): Promise<string> {
   const storage = await browser.storage.local.get("deviceId");
   if (storage.deviceId) {
-    return storage.deviceId;
+    return storage.deviceId as string;
   }
 
   throw new Error(
@@ -233,7 +233,7 @@ async function fetchDeviceFromServer(): Promise<string | null> {
         (d: any) => d.device_id === storage.deviceId,
       );
       if (matchingDevice) {
-        return storage.deviceId;
+        return storage.deviceId as string;
       }
     }
 
@@ -1860,6 +1860,14 @@ export default defineBackground({
         return;
       }
 
+      // The refresh endpoint requires a CSRF token; without the cookie the
+      // request would be rejected, so don't attempt it
+      if (!csrfTokenCookie) {
+        console.log("No CSRF token cookie available, skipping refresh");
+
+        return;
+      }
+
       // Check if session token is expired
       try {
         const sessionDecoded = jwtDecode(sessionToken) as any;
@@ -1936,15 +1944,15 @@ export default defineBackground({
 
         // Check if authentication is valid
         const accessDecoded = accessToken
-          ? (jwtDecode(accessToken) as string)
+          ? (jwtDecode(accessToken) as { exp?: number })
           : null;
-        const isAuthExpired = accessDecoded
+        const isAuthExpired = accessDecoded?.exp
           ? Date.now() >= (accessDecoded.exp - 5) * 1000
           : true;
         const sessionDecoded = sessionToken?.value
-          ? (jwtDecode(sessionToken.value) as string)
+          ? (jwtDecode(sessionToken.value) as { exp?: number })
           : null;
-        const isSessionExpired = sessionDecoded
+        const isSessionExpired = sessionDecoded?.exp
           ? Date.now() >= sessionDecoded.exp * 1000
           : true;
 

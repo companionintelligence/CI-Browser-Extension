@@ -78,7 +78,7 @@ export default function App() {
       try {
         // Send message to background to refresh auth status
         await browser.runtime.sendMessage({
-          type: "CHECK_AUTH_STATUS",
+          action: "CHECK_AUTH_STATUS",
         });
       } catch (error) {
         console.error("Error checking auth status:", error);
@@ -393,7 +393,7 @@ export default function App() {
 
           {/* Compact sync toggles moved below sync button */}
           <div className="flex flex-col gap-2 mt-4 p-4 bg-[rgba(75,167,166,0.05)] rounded-lg border-t border-[rgba(75,167,166,0.2)]">
-            <Field.Group className="max-w-lg w-full" orientation="horizontal">
+            <Field.Group className="max-w-lg w-full">
               <Field orientation="horizontal">
                 <Checkbox
                   id="history-sync-enabled"

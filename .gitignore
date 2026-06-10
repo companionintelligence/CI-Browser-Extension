@@ -9,6 +9,9 @@ lerna-debug.log*
 
 node_modules
 .output
+
+# Yarn local state (yarn 4, nodeLinker: node-modules)
+.yarn/
 stats.html
 stats-*.json
 .wxt

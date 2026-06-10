@@ -3,7 +3,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 export const loadUserSettings = createAsyncThunk(
   "ciState/loadUserSettings",
   async () => {
-    return await browser.storage.local.get([
+    return await browser.storage.local.get<Record<string, unknown>>([
       "accessToken",
       "lastHistorySync",
       "syncHistoryLogs",
@@ -219,9 +219,7 @@ export const ciStateSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(loadUserSettings.fulfilled, (state, action) => {
-      for (const [key, value] of Object.entries(
-        action.payload as Record<string, unknown>,
-      )) {
+      for (const [key, value] of Object.entries(action.payload)) {
         if (key in state) {
           (state as Record<string, unknown>)[key] = value;
         }
