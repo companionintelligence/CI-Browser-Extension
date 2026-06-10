@@ -27,7 +27,16 @@ const CSRF_COOKIE_NAME = "csrfToken";
 // Alarm names (chrome.alarms survives MV3 service-worker suspension)
 const AUTH_CHECK_ALARM = "ci-auth-check";
 const AUTO_SYNC_ALARM = "ci-auto-sync";
+const LAST_SEEN_ALARM = "ci-last-seen";
 const AUTO_SYNC_ALARM_TIME_RANGE = 24 * 60 * 60 * 1000; // sync the last 24h
+
+// Device last_seen heartbeat, driven by the LAST_SEEN_ALARM
+async function runLastSeenUpdate() {
+  const { deviceId } = store.getState().ciState;
+  if (deviceId) {
+    await updateDeviceLastSeen(deviceId);
+  }
+}
 
 // Periodic auto-sync, driven by the AUTO_SYNC_ALARM
 async function runAutoSync() {
@@ -207,6 +216,44 @@ async function getDeviceId(): Promise<string> {
   );
 }
 
+// Heartbeat so CI-Server can show device freshness; failures are non-critical
+async function updateDeviceLastSeen(deviceId: string): Promise<void> {
+  try {
+    const state = store.getState().ciState;
+    const { accessToken, serverDomain } = state;
+
+    if (!accessToken || !serverDomain) {
+      return;
+    }
+
+    const accessDecoded = jwtDecode(accessToken) as { exp?: number };
+    const isAuthExpired = accessDecoded?.exp
+      ? Date.now() >= accessDecoded.exp * 1000
+      : true;
+
+    if (isAuthExpired) {
+      return;
+    }
+
+    await axios.patch(
+      `https://${serverDomain}/api/devices/${deviceId}/last-seen`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 5000, // 5 second timeout
+      },
+    );
+  } catch (error: any) {
+    console.debug(
+      "Failed to update device last_seen:",
+      error?.response?.data || error?.message,
+    );
+  }
+}
+
 async function fetchDeviceFromServer(): Promise<string | null> {
   try {
     const state = store.getState().ciState;
@@ -236,21 +283,42 @@ async function fetchDeviceFromServer(): Promise<string | null> {
 
     const devices = response.data;
 
+    // First, try to match by device_id (primary key) if we have one stored
     const storage = await browser.storage.local.get("deviceId");
     if (storage.deviceId) {
       const matchingDevice = devices.find(
         (d: any) => d.device_id === storage.deviceId,
       );
       if (matchingDevice) {
+        // Update stored device info in case server has newer data
+        await browser.storage.local.set({
+          deviceId: matchingDevice.device_id,
+          deviceName: matchingDevice.device_name,
+          deviceType: matchingDevice.device_type,
+          devicePlatform: matchingDevice.platform,
+        });
+        store.dispatch(
+          setState({
+            deviceId: matchingDevice.device_id,
+            deviceName: matchingDevice.device_name,
+            deviceType: matchingDevice.device_type,
+            devicePlatform: matchingDevice.platform,
+          }),
+        );
+
         return storage.deviceId as string;
       }
     }
 
+    // Fallback: match by the characteristics CI-Server's ensureDeviceExists
+    // assigns to browser devices, then by name/model for disambiguation
     const deviceInfo = getDeviceInfo();
     const matchingDevice = devices.find(
       (d: any) =>
-        d.device_name === deviceInfo.device_name &&
-        d.platform === deviceInfo.platform,
+        d.device_type === "browser" &&
+        d.platform === "web" &&
+        (d.device_name === deviceInfo.device_name ||
+          (deviceInfo.model && d.model === deviceInfo.model)),
     );
 
     if (matchingDevice) {
@@ -318,10 +386,14 @@ async function createDeviceOnServer(): Promise<string> {
       },
     );
 
-    const deviceId = response.data.device_id;
-    const deviceName = response.data.device_name;
-    const deviceType = response.data.device_type;
-    const devicePlatform = response.data.platform;
+    // Handle both single device and array response (server supports both)
+    const deviceData = Array.isArray(response.data)
+      ? response.data[0]
+      : response.data;
+    const deviceId = deviceData.device_id;
+    const deviceName = deviceData.device_name;
+    const deviceType = deviceData.device_type;
+    const devicePlatform = deviceData.platform;
 
     await browser.storage.local.set({
       deviceId,
@@ -390,27 +462,40 @@ async function setupDevice(): Promise<string> {
 
 function getDeviceInfo() {
   const browser_info = bowser.getParser(navigator.userAgent);
-  const platform = browser_info.getOSName() || "unknown";
+  const osName = browser_info.getOSName() || "unknown";
   const browserName = browser_info.getBrowserName() || "Chrome";
+  const browserVersion = browser_info.getBrowserVersion() || "unknown";
+  const osVersion = browser_info.getOSVersion() || undefined;
 
-  let device_type = "desktop";
-  const platformType = browser_info.getPlatformType();
-  if (platformType === "mobile") {
-    device_type = "mobile";
-  } else if (platformType === "tablet") {
-    device_type = "tablet";
+  // Device name includes browser and OS for better identification
+  const device_name = `${browserName} on ${osName}`;
+
+  // Model includes OS version if available
+  const model = osVersion ? `${osName} ${osVersion}` : osName;
+
+  // Manufacturer derived from OS
+  let manufacturer: string | undefined = undefined;
+  if (
+    osName.toLowerCase().includes("mac") ||
+    osName.toLowerCase().includes("ios")
+  ) {
+    manufacturer = "Apple";
+  } else if (osName.toLowerCase().includes("windows")) {
+    manufacturer = "Microsoft";
+  } else if (osName.toLowerCase().includes("android")) {
+    manufacturer = "Google";
+  } else if (osName.toLowerCase().includes("linux")) {
+    manufacturer = "Linux Foundation";
   }
-
-  const device_name = `${browserName} on ${platform}`;
-  const model = browser_info.getOSVersion()
-    ? `${platform} ${browser_info.getOSVersion()}`
-    : platform;
 
   return {
     device_name: device_name,
-    device_type: device_type,
-    platform: platform.toLowerCase(),
+    device_type: "browser", // Must be 'browser' to match server's ensureDeviceExists
+    platform: "web", // Must be 'web' to match server's ensureDeviceExists
     model: model,
+    manufacturer: manufacturer,
+    os_version: osVersion,
+    app_version: browserVersion,
   };
 }
 
@@ -2086,6 +2171,7 @@ export default defineBackground({
 
     browser.alarms.create(AUTH_CHECK_ALARM, { periodInMinutes: 1 });
     browser.alarms.create(AUTO_SYNC_ALARM, { periodInMinutes: 10 });
+    browser.alarms.create(LAST_SEEN_ALARM, { periodInMinutes: 5 });
     browser.alarms.onAlarm.addListener((alarm) => {
       if (alarm.name === AUTH_CHECK_ALARM) {
         checkAuthenticationState();
@@ -2093,6 +2179,10 @@ export default defineBackground({
 
       if (alarm.name === AUTO_SYNC_ALARM) {
         runAutoSync();
+      }
+
+      if (alarm.name === LAST_SEEN_ALARM) {
+        runLastSeenUpdate();
       }
     });
 
