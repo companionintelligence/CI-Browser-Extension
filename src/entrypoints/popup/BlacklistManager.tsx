@@ -103,8 +103,8 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
 
       <div className="blacklist-description">
         <p>
-          These sites and pages will be excluded from automatic browser browser
-          history sync.
+          These sites and pages will be excluded from automatic browser history
+          sync.
         </p>
       </div>
 
