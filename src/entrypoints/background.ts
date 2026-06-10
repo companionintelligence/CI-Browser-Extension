@@ -10,6 +10,8 @@ import {
   addSyncHistoryLog,
 } from "@/store/ciStateSlice";
 import { siteRegex, parseUrl, isUrlBlacklisted } from "@/utils.ts";
+import { addSyncedItem, addSyncedItems, isItemSynced } from "@/lib/syncedItems";
+import { buildHighlightEvent } from "@/lib/highlight";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
 import { database } from "@/indexeddb";
@@ -21,6 +23,36 @@ const AUTO_SYNC_TIME_RANGE = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
 const SESSION_TOKEN_KEY = "sessionToken";
 const CSRF_COOKIE_NAME = "csrfToken";
+
+// Alarm names (chrome.alarms survives MV3 service-worker suspension)
+const AUTH_CHECK_ALARM = "ci-auth-check";
+const AUTO_SYNC_ALARM = "ci-auto-sync";
+const AUTO_SYNC_ALARM_TIME_RANGE = 24 * 60 * 60 * 1000; // sync the last 24h
+
+// Periodic auto-sync, driven by the AUTO_SYNC_ALARM
+async function runAutoSync() {
+  try {
+    const state = store.getState().ciState;
+
+    if (state.autoSyncEnabled && !state.historySyncInProgress) {
+      const { accessToken } = state;
+      const accessDecoded = accessToken
+        ? (jwtDecode(accessToken) as { exp?: number })
+        : null;
+      const isAuthExpired = accessDecoded?.exp
+        ? Date.now() >= accessDecoded.exp * 1000
+        : true;
+
+      if (!isAuthExpired) {
+        await triggerManualSync({
+          timeRange: AUTO_SYNC_ALARM_TIME_RANGE,
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Auto-sync error:", error);
+  }
+}
 
 // Helper function to ensure proper ISO time format with milliseconds
 function ensureISOTimeFormat(
@@ -52,13 +84,6 @@ const SYNCED_HISTORY_KEY = "syncedHistory";
 
 let deviceSetupInProgress = false;
 
-// Helper functions for managing synced items
-async function getSyncedItems(key: string): Promise<Set<string>> {
-  const result = await browser.storage.local.get(key);
-
-  return new Set((result[key] as string[] | undefined) ?? []);
-}
-
 // Helper function to validate URLs
 function isValidUrl(url: string): boolean {
   try {
@@ -86,31 +111,6 @@ function isValidUrl(url: string): boolean {
   } catch {
     return false;
   }
-}
-
-async function addSyncedItem(key: string, itemId: string): Promise<void> {
-  await addSyncedItems(key, [itemId]);
-}
-
-// Batch variant: one storage read/write per call instead of per item, which
-// matters when marking hundreds of history entries after a bulk upload
-async function addSyncedItems(key: string, itemIds: string[]): Promise<void> {
-  if (itemIds.length === 0) {
-    return;
-  }
-
-  const syncedItems = await getSyncedItems(key);
-  for (const itemId of itemIds) {
-    syncedItems.add(itemId);
-  }
-
-  await browser.storage.local.set({ [key]: Array.from(syncedItems) });
-}
-
-async function isItemSynced(key: string, itemId: string): Promise<boolean> {
-  const syncedItems = await getSyncedItems(key);
-
-  return syncedItems.has(itemId);
 }
 
 interface AuthResponse {
@@ -1406,6 +1406,40 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
   }
 }
 
+export const HIGHLIGHT_MENU_ID = "ci-save-highlight";
+
+// Context-menu "save highlight" → upload the selected text to CI-Server
+async function handleSaveHighlight(
+  info: {
+    menuItemId?: string | number;
+    selectionText?: string;
+    pageUrl?: string;
+  },
+  tab?: { url?: string; title?: string },
+) {
+  const state = store.getState().ciState;
+  const { accessToken, serverDomain } = state;
+
+  if (!accessToken || !serverDomain || !info.selectionText) {
+    return;
+  }
+
+  const url = tab?.url || info.pageUrl || "";
+  const event = buildHighlightEvent(info.selectionText, url, tab?.title);
+
+  try {
+    await axios.post(`https://${serverDomain}/api/browser-activity`, event, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+    console.log("Saved highlight from", url);
+  } catch (error) {
+    console.error("Error uploading highlight:", error);
+  }
+}
+
 async function getAllBookmarks(): Promise<any[]> {
   const bookmarkTree = await browser.bookmarks.getTree();
   const allBookmarks: any[] = [];
@@ -2031,10 +2065,55 @@ export default defineBackground({
       }
     }
 
-    // Set up periodic authentication checking
-    setInterval(checkAuthenticationState, 1000);
+    // Auth state is event-driven instead of polled: cookie changes on the
+    // configured server domain trigger an immediate check, and a periodic
+    // alarm acts as a safety net. Alarms survive MV3 service-worker
+    // suspension; setInterval does not.
+    browser.cookies.onChanged.addListener(({ cookie }) => {
+      if (
+        cookie.name !== SESSION_TOKEN_KEY &&
+        cookie.name !== CSRF_COOKIE_NAME
+      ) {
+        return;
+      }
 
-    store.dispatch(loadUserSettings());
+      const { serverDomain } = store.getState().ciState;
+      const cookieDomain = cookie.domain.replace(/^\./, "");
+      if (serverDomain && serverDomain.endsWith(cookieDomain)) {
+        checkAuthenticationState();
+      }
+    });
+
+    browser.alarms.create(AUTH_CHECK_ALARM, { periodInMinutes: 1 });
+    browser.alarms.create(AUTO_SYNC_ALARM, { periodInMinutes: 10 });
+    browser.alarms.onAlarm.addListener((alarm) => {
+      if (alarm.name === AUTH_CHECK_ALARM) {
+        checkAuthenticationState();
+      }
+
+      if (alarm.name === AUTO_SYNC_ALARM) {
+        runAutoSync();
+      }
+    });
+
+    // Context-menu entry for saving highlighted text (issue #25)
+    browser.runtime.onInstalled.addListener(() => {
+      browser.contextMenus.create({
+        id: HIGHLIGHT_MENU_ID,
+        title: "Save highlight to Companion Intelligence",
+        contexts: ["selection"],
+      });
+    });
+    browser.contextMenus.onClicked.addListener((info, tab) => {
+      if (info.menuItemId === HIGHLIGHT_MENU_ID) {
+        handleSaveHighlight(info, tab);
+      }
+    });
+
+    // Check auth once settings (incl. serverDomain) have been loaded
+    store.dispatch(loadUserSettings()).then(() => {
+      checkAuthenticationState();
+    });
 
     const existingKeys = Object.keys(store.getState().ciState);
     const toSet = Object.keys(storageDefaults)
@@ -2168,34 +2247,6 @@ export default defineBackground({
         console.error("Error checking authentication state:", error);
       }
     });
-
-    const AUTO_SYNC_INTERVAL = 10 * 60 * 1000; // 10 minutes
-    const AUTO_SYNC_TIME_RANGE = 24 * 60 * 60 * 1000;
-
-    setInterval(async () => {
-      try {
-        const state = store.getState().ciState;
-
-        if (state.autoSyncEnabled && !state.historySyncInProgress) {
-          const { accessToken } = state;
-          const accessDecoded = accessToken
-            ? (jwtDecode(accessToken) as any)
-            : null;
-          const isAuthExpired =
-            accessDecoded && accessDecoded.exp
-              ? Date.now() >= accessDecoded.exp * 1000
-              : true;
-
-          if (!isAuthExpired) {
-            await triggerManualSync({
-              timeRange: AUTO_SYNC_TIME_RANGE,
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Auto-sync error:", error);
-      }
-    }, AUTO_SYNC_INTERVAL);
 
     // Set up bookmark listeners based on settings
     const setupBookmarkListeners = () => {
