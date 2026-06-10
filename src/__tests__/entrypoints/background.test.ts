@@ -5,6 +5,7 @@
  */
 
 import axios from "axios";
+import { isUrlBlacklisted } from "@/utils";
 
 // Mock axios
 jest.mock("axios");
@@ -73,49 +74,26 @@ describe("Background Script", () => {
     it("should match domain blacklist correctly", () => {
       const url = "https://example.com/page";
       const siteBlacklist = ["example.com", "google.com", "github.com"];
-      // const pageBlacklist: string[] = [];
 
-      // Test blacklist matching logic (simplified version of isUrlBlacklisted)
-      let isBlacklisted = false;
-      try {
-        const parsedUrl = URL.parse(url);
-        if (parsedUrl && parsedUrl.hostname) {
-          // Check site blacklist
-          for (const site of siteBlacklist) {
-            if (parsedUrl.hostname.includes(site)) {
-              isBlacklisted = true;
-              break;
-            }
-          }
-        }
-      } catch {
-        isBlacklisted = false;
-      }
-
-      expect(isBlacklisted).toBe(true);
+      expect(isUrlBlacklisted(url, siteBlacklist, [])).toBe(true);
     });
 
     it("should not match unrelated domains", () => {
       const url = "https://unrelated.com/page";
       const siteBlacklist = ["example.com", "google.com"];
-      // const pageBlacklist: string[] = [];
 
-      let isBlacklisted = false;
-      try {
-        const parsedUrl = URL.parse(url);
-        if (parsedUrl && parsedUrl.hostname) {
-          for (const site of siteBlacklist) {
-            if (parsedUrl.hostname.includes(site)) {
-              isBlacklisted = true;
-              break;
-            }
-          }
-        }
-      } catch {
-        isBlacklisted = false;
-      }
+      expect(isUrlBlacklisted(url, siteBlacklist, [])).toBe(false);
+    });
 
-      expect(isBlacklisted).toBe(false);
+    it("should blacklist the URL being recorded, not the previously visited one", () => {
+      // Regression test for the off-by-one in recordHit: the blacklist must
+      // be evaluated against the page being uploaded
+      const previousUrl = "https://clean-site.com/home";
+      const currentUrl = "https://blocked-site.com/private";
+      const siteBlacklist = ["blocked-site.com"];
+
+      expect(isUrlBlacklisted(previousUrl, siteBlacklist, [])).toBe(false);
+      expect(isUrlBlacklisted(currentUrl, siteBlacklist, [])).toBe(true);
     });
   });
 

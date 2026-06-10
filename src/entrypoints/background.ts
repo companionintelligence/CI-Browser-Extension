@@ -9,7 +9,9 @@ import {
   saveUserSettings,
   addSyncHistoryLog,
 } from "@/store/ciStateSlice";
-import { siteRegex } from "@/utils.ts";
+import { siteRegex, parseUrl, isUrlBlacklisted } from "@/utils.ts";
+import { addSyncedItem, addSyncedItems, isItemSynced } from "@/lib/syncedItems";
+import { buildHighlightEvent } from "@/lib/highlight";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
 import { database } from "@/indexeddb";
@@ -18,6 +20,48 @@ const SLICE_SIZE = 100;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
 const DOWNLOAD_SYNC_KEY = "lastDownloadSync";
 const AUTO_SYNC_TIME_RANGE = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+
+const SESSION_TOKEN_KEY = "sessionToken";
+const CSRF_COOKIE_NAME = "csrfToken";
+
+// Alarm names (chrome.alarms survives MV3 service-worker suspension)
+const AUTH_CHECK_ALARM = "ci-auth-check";
+const AUTO_SYNC_ALARM = "ci-auto-sync";
+const LAST_SEEN_ALARM = "ci-last-seen";
+const AUTO_SYNC_ALARM_TIME_RANGE = 24 * 60 * 60 * 1000; // sync the last 24h
+
+// Device last_seen heartbeat, driven by the LAST_SEEN_ALARM
+async function runLastSeenUpdate() {
+  const { deviceId } = store.getState().ciState;
+  if (deviceId) {
+    await updateDeviceLastSeen(deviceId);
+  }
+}
+
+// Periodic auto-sync, driven by the AUTO_SYNC_ALARM
+async function runAutoSync() {
+  try {
+    const state = store.getState().ciState;
+
+    if (state.autoSyncEnabled && !state.historySyncInProgress) {
+      const { accessToken } = state;
+      const accessDecoded = accessToken
+        ? (jwtDecode(accessToken) as { exp?: number })
+        : null;
+      const isAuthExpired = accessDecoded?.exp
+        ? Date.now() >= accessDecoded.exp * 1000
+        : true;
+
+      if (!isAuthExpired) {
+        await triggerManualSync({
+          timeRange: AUTO_SYNC_ALARM_TIME_RANGE,
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Auto-sync error:", error);
+  }
+}
 
 // Helper function to ensure proper ISO time format with milliseconds
 function ensureISOTimeFormat(
@@ -49,13 +93,6 @@ const SYNCED_HISTORY_KEY = "syncedHistory";
 
 let deviceSetupInProgress = false;
 
-// Helper functions for managing synced items
-async function getSyncedItems(key: string): Promise<Set<string>> {
-  const result = await browser.storage.local.get(key);
-
-  return new Set(result[key] || []);
-}
-
 // Helper function to validate URLs
 function isValidUrl(url: string): boolean {
   try {
@@ -83,18 +120,6 @@ function isValidUrl(url: string): boolean {
   } catch {
     return false;
   }
-}
-
-async function addSyncedItem(key: string, itemId: string): Promise<void> {
-  const syncedItems = await getSyncedItems(key);
-  syncedItems.add(itemId);
-  await browser.storage.local.set({ [key]: Array.from(syncedItems) });
-}
-
-async function isItemSynced(key: string, itemId: string): Promise<boolean> {
-  const syncedItems = await getSyncedItems(key);
-
-  return syncedItems.has(itemId);
 }
 
 interface AuthResponse {
@@ -129,20 +154,24 @@ const recordHit = async function (e: any) {
     return;
   }
 
-  const parsed = URL.parse(active.url);
+  const parsed = parseUrl(active.url);
   if (!parsed) {
     return;
   }
 
   store.dispatch(setState({ domain: parsed.hostname, url: active.url }));
 
-  // Check if URL is blacklisted
-  const isBlacklisted = state.url
-    ? isUrlBlacklisted(state.url, state.siteBlacklist, state.pageBlacklist)
-    : true;
+  // Check the URL being recorded (active.url) against the blacklist —
+  // `state` was snapshotted before the dispatch above, so state.url still
+  // holds the previous page and must not be used here
+  const isBlacklisted = isUrlBlacklisted(
+    active.url,
+    state.siteBlacklist,
+    state.pageBlacklist,
+  );
 
-  if (!isAuthExpired && !isBlacklisted && state.lastUrl !== state.url) {
-    store.dispatch(setState({ lastUrl: state.url }));
+  if (!isAuthExpired && !isBlacklisted && state.lastUrl !== active.url) {
+    store.dispatch(setState({ lastUrl: active.url }));
 
     store.dispatch(saveUserSettings());
 
@@ -168,26 +197,18 @@ const recordHit = async function (e: any) {
         },
       );
 
-      const historyId = `${state.url}_${date}`;
+      const historyId = `${active.url}_${date}`;
       await addSyncedItem(SYNCED_HISTORY_KEY, historyId);
     } catch (err) {
       console.error("Error posting event:", err);
     }
-
-    triggerHistoryCrawl();
   }
 };
-
-async function triggerHistoryCrawl() {
-  await store.dispatch({
-    type: "loadUserSettings",
-  });
-}
 
 async function getDeviceId(): Promise<string> {
   const storage = await browser.storage.local.get("deviceId");
   if (storage.deviceId) {
-    return storage.deviceId;
+    return storage.deviceId as string;
   }
 
   throw new Error(
@@ -195,20 +216,20 @@ async function getDeviceId(): Promise<string> {
   );
 }
 
+// Heartbeat so CI-Server can show device freshness; failures are non-critical
 async function updateDeviceLastSeen(deviceId: string): Promise<void> {
   try {
     const state = store.getState().ciState;
     const { accessToken, serverDomain } = state;
 
-    if (!accessToken) {
+    if (!accessToken || !serverDomain) {
       return;
     }
 
-    const accessDecoded = jwtDecode(accessToken) as any;
-    const isAuthExpired =
-      accessDecoded && accessDecoded.exp
-        ? Date.now() >= accessDecoded.exp * 1000
-        : true;
+    const accessDecoded = jwtDecode(accessToken) as { exp?: number };
+    const isAuthExpired = accessDecoded?.exp
+      ? Date.now() >= accessDecoded.exp * 1000
+      : true;
 
     if (isAuthExpired) {
       return;
@@ -226,7 +247,6 @@ async function updateDeviceLastSeen(deviceId: string): Promise<void> {
       },
     );
   } catch (error: any) {
-    // Silently fail - last_seen updates are not critical
     console.debug(
       "Failed to update device last_seen:",
       error?.response?.data || error?.message,
@@ -286,20 +306,18 @@ async function fetchDeviceFromServer(): Promise<string | null> {
           }),
         );
 
-        return storage.deviceId;
+        return storage.deviceId as string;
       }
     }
 
-    // Fallback: try to match by device characteristics
-    // Match devices with device_type='browser' and platform='web'
+    // Fallback: match by the characteristics CI-Server's ensureDeviceExists
+    // assigns to browser devices, then by name/model for disambiguation
     const deviceInfo = getDeviceInfo();
     const matchingDevice = devices.find(
       (d: any) =>
         d.device_type === "browser" &&
         d.platform === "web" &&
-        // Optionally match by device_name for better identification
         (d.device_name === deviceInfo.device_name ||
-          // Or match by model/manufacturer if available
           (deviceInfo.model && d.model === deviceInfo.model)),
     );
 
@@ -406,56 +424,11 @@ async function createDeviceOnServer(): Promise<string> {
   }
 }
 
-async function authenticateWithCredentials(
-  username: string,
-  password: string,
-): Promise<{ accessToken: string; sessionToken: string }> {
-  const state = store.getState().ciState;
-  const { serverDomain } = state;
-
-  try {
-    const requestData = {
-      username: username,
-      password: password,
-    };
-
-    const response = await axios.post(
-      `https://${serverDomain}/api/authenticate`,
-      requestData,
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        timeout: 10000,
-      },
-    );
-
-    const { accessToken, sessionToken } = response.data;
-
-    if (!accessToken || !sessionToken) {
-      throw new Error("Invalid response from server - missing tokens");
-    }
-
-    store.dispatch(setState({ accessToken, sessionToken }));
-    await browser.storage.local.set({ accessToken, sessionToken });
-
-    return { accessToken, sessionToken };
-  } catch (error: any) {
-    const errorMessage =
-      error?.response?.data?.message ||
-      error?.response?.data?.error ||
-      error?.message ||
-      "Unknown error occurred";
-
-    throw new Error(`Authentication failed: ${errorMessage}`);
-  }
-}
-
 function checkAuthStatus() {
   const state = store.getState().ciState;
-  const { accessToken, sessionToken } = state;
+  const { accessToken } = state;
 
-  return { accessToken, sessionToken };
+  return { accessToken };
 }
 
 async function setupDevice(): Promise<string> {
@@ -466,41 +439,10 @@ async function setupDevice(): Promise<string> {
   deviceSetupInProgress = true;
 
   try {
-    let { accessToken } = checkAuthStatus();
+    const { accessToken } = checkAuthStatus();
 
     if (!accessToken) {
       throw new Error("No access token available. Please log in first.");
-    }
-
-    const accessDecoded = jwtDecode(accessToken) as any;
-    const isAuthExpired =
-      accessDecoded && accessDecoded.exp
-        ? Date.now() >= accessDecoded.exp * 1000
-        : true;
-
-    if (isAuthExpired) {
-      const storedCredentials = await browser.storage.local.get([
-        "username",
-        "password",
-      ]);
-      if (storedCredentials.username && storedCredentials.password) {
-        try {
-          const { accessToken: newAccessToken } =
-            await authenticateWithCredentials(
-              storedCredentials.username,
-              storedCredentials.password,
-            );
-          accessToken = newAccessToken;
-        } catch (authError: any) {
-          throw new Error(
-            `Authentication failed: ${authError.message}. Please log in again.`,
-          );
-        }
-      } else {
-        throw new Error(
-          "Access token expired and no stored credentials found. Please log in again.",
-        );
-      }
     }
 
     const existingDeviceId = await fetchDeviceFromServer();
@@ -509,9 +451,7 @@ async function setupDevice(): Promise<string> {
       return existingDeviceId;
     }
 
-    const newDeviceId = await createDeviceOnServer();
-
-    return newDeviceId;
+    return await createDeviceOnServer();
   } catch (error: any) {
     const errorMessage =
       error?.message || error?.toString() || "Unknown error occurred";
@@ -533,7 +473,7 @@ function getDeviceInfo() {
   // Model includes OS version if available
   const model = osVersion ? `${osName} ${osVersion}` : osName;
 
-  // Manufacturer can be derived from OS (e.g., "Apple" for macOS/iOS, "Microsoft" for Windows)
+  // Manufacturer derived from OS
   let manufacturer: string | undefined = undefined;
   if (
     osName.toLowerCase().includes("mac") ||
@@ -548,9 +488,6 @@ function getDeviceInfo() {
     manufacturer = "Linux Foundation";
   }
 
-  // App version is the browser version
-  const app_version = browserVersion;
-
   return {
     device_name: device_name,
     device_type: "browser", // Must be 'browser' to match server's ensureDeviceExists
@@ -558,43 +495,8 @@ function getDeviceInfo() {
     model: model,
     manufacturer: manufacturer,
     os_version: osVersion,
-    app_version: app_version,
+    app_version: browserVersion,
   };
-}
-
-function isUrlBlacklisted(
-  url: string,
-  siteBlacklist: string[],
-  pageBlacklist: string[],
-): boolean {
-  try {
-    const parsedUrl = URL.parse(url);
-    if (!parsedUrl || !parsedUrl.hostname) {
-      return false;
-    }
-
-    for (const site of siteBlacklist) {
-      const siteRegex = new RegExp(site);
-      if (siteRegex.test(parsedUrl.hostname)) {
-        return true;
-      }
-    }
-
-    parsedUrl.hash = "";
-    const urlWithoutHash = parsedUrl.toString();
-    for (const page of pageBlacklist) {
-      const pageRegex = new RegExp(page.replace("?", "\\?"));
-      if (pageRegex.test(urlWithoutHash)) {
-        return true;
-      }
-    }
-
-    return false;
-  } catch (error) {
-    console.error("Error checking if URL is blacklisted:", error);
-
-    return false;
-  }
 }
 
 async function convertToBrowserActivity(
@@ -727,10 +629,6 @@ async function convertToBrowserActivity(
 
 // Main sync function that coordinates all sync types based on toggles
 async function triggerManualSync(options: { timeRange?: number } = {}) {
-  await store.dispatch({
-    type: "loadUserSettings",
-  });
-
   const state = store.getState().ciState;
   const {
     accessToken,
@@ -825,10 +723,6 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
 // Individual sync functions
 async function syncHistory(options: { timeRange?: number } = {}) {
   console.log("syncHistory called with options:", options);
-
-  await store.dispatch({
-    type: "loadUserSettings",
-  });
 
   const state = store.getState().ciState;
   console.log("History sync state:", {
@@ -1201,12 +1095,11 @@ async function syncHistory(options: { timeRange?: number } = {}) {
           );
           uploaded = uploaded + browserActivities.length;
 
-          for (let j = 0; j < browserActivities.length; j++) {
-            const result = slice[j];
-            // Mark this specific history entry as synced only after successful upload
-            const historyId = `${result.url}_${result.visitTime}`;
-            await addSyncedItem(SYNCED_HISTORY_KEY, historyId);
-          }
+          // Mark the whole slice as synced only after successful upload
+          await addSyncedItems(
+            SYNCED_HISTORY_KEY,
+            slice.map((result) => `${result.url}_${result.visitTime}`),
+          );
         } catch (error: any) {
           console.error("Error uploading history entry:", error);
           console.error("Failed activities:", browserActivities);
@@ -1461,6 +1354,7 @@ async function syncDownloadsToServer() {
       );
 
       // Send each download event individually (server expects single object, not array)
+      const syncedDownloadIds: string[] = [];
       for (let j = 0; j < downloadEvents.length; j++) {
         const event = downloadEvents[j];
         const download = slice[j];
@@ -1485,7 +1379,7 @@ async function syncDownloadsToServer() {
           console.log("Successfully sent download event:", event.url);
 
           // Mark this specific download as synced only after successful upload
-          await addSyncedItem(SYNCED_DOWNLOADS_KEY, download.id.toString());
+          syncedDownloadIds.push(download.id.toString());
         } catch (eventError: any) {
           console.error("Error sending individual download event:", eventError);
           console.error("Failed event:", event);
@@ -1503,6 +1397,8 @@ async function syncDownloadsToServer() {
           // Don't mark as synced if upload failed
         }
       }
+
+      await addSyncedItems(SYNCED_DOWNLOADS_KEY, syncedDownloadIds);
     }
 
     // Update last sync time
@@ -1592,6 +1488,40 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
     });
   } catch (error) {
     console.error("Error uploading scraped data:", error);
+  }
+}
+
+export const HIGHLIGHT_MENU_ID = "ci-save-highlight";
+
+// Context-menu "save highlight" → upload the selected text to CI-Server
+async function handleSaveHighlight(
+  info: {
+    menuItemId?: string | number;
+    selectionText?: string;
+    pageUrl?: string;
+  },
+  tab?: { url?: string; title?: string },
+) {
+  const state = store.getState().ciState;
+  const { accessToken, serverDomain } = state;
+
+  if (!accessToken || !serverDomain || !info.selectionText) {
+    return;
+  }
+
+  const url = tab?.url || info.pageUrl || "";
+  const event = buildHighlightEvent(info.selectionText, url, tab?.title);
+
+  try {
+    await axios.post(`https://${serverDomain}/api/browser-activity`, event, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+    console.log("Saved highlight from", url);
+  } catch (error) {
+    console.error("Error uploading highlight:", error);
   }
 }
 
@@ -1802,6 +1732,7 @@ async function syncBookmarksToServer() {
         }
 
         // Send each event individually (server expects single object, not array)
+        const syncedBookmarkIds: string[] = [];
         for (let j = 0; j < validEvents.length; j++) {
           const event = validEvents[j];
           const bookmark = slice[j];
@@ -1826,7 +1757,7 @@ async function syncBookmarksToServer() {
             console.log("Successfully sent bookmark event:", event.url);
 
             // Mark this specific bookmark as synced only after successful upload
-            await addSyncedItem(SYNCED_BOOKMARKS_KEY, bookmark.id);
+            syncedBookmarkIds.push(bookmark.id);
           } catch (eventError: any) {
             console.error(
               "Error sending individual bookmark event:",
@@ -1847,6 +1778,8 @@ async function syncBookmarksToServer() {
             // Don't mark as synced if upload failed
           }
         }
+
+        await addSyncedItems(SYNCED_BOOKMARKS_KEY, syncedBookmarkIds);
       } catch (batchError) {
         console.error("Error processing bookmark batch:", batchError);
         // Continue with next batch even if this one fails
@@ -1973,7 +1906,6 @@ export default defineBackground({
 
     const wrapStore = createWrapStore();
     wrapStore(store);
-    const ACCESS_TOKEN_KEY = "accessToken";
     const storageDefaults = {
       domainWhitelist: [],
       domainWhitelistPending: {},
@@ -1987,13 +1919,13 @@ export default defineBackground({
       accessToken: null,
       sessionToken: null,
       refreshing: false,
-      serverDomain: "dev.companionintelligence.com",
+      serverDomain: "",
     };
-    const state = store.getState().ciState;
-    const { serverDomain, refreshing } = state;
 
     const refreshAccessToken = async () => {
-      if (refreshing) {
+      const state = store.getState().ciState;
+      const { serverDomain, refreshing } = state;
+      if (refreshing || !serverDomain) {
         return;
       }
 
@@ -2002,29 +1934,26 @@ export default defineBackground({
         url: `https://${serverDomain}`,
       });
       const sessionTokenCookie = cookies.find(
-        (cookie) => cookie.name === "CI_sessionToken",
+        (cookie) => cookie.name === SESSION_TOKEN_KEY,
       );
-
-      // Also check main domain
-      const mainDomain = serverDomain.replace(/^[^.]+\./, "");
-      const mainDomainCookies = await browser.cookies.getAll({
-        url: `https://${mainDomain}`,
-      });
-      const mainDomainSessionCookie = mainDomainCookies.find(
-        (cookie) => cookie.name === "CI_sessionToken",
+      const csrfTokenCookie = cookies.find(
+        (cookie) => cookie.name === CSRF_COOKIE_NAME,
       );
 
       // Use cookie if available, otherwise fall back to storage
-      let sessionToken =
-        sessionTokenCookie?.value || mainDomainSessionCookie?.value;
-      if (!sessionToken) {
-        const storage = await browser.storage.local.get("sessionToken");
-        sessionToken = storage.sessionToken;
-      }
+      const sessionToken = sessionTokenCookie?.value;
 
       // Validate session token exists and is not expired
       if (!sessionToken) {
         console.log("No session token available, skipping refresh");
+
+        return;
+      }
+
+      // The refresh endpoint requires a CSRF token; without the cookie the
+      // request would be rejected, so don't attempt it
+      if (!csrfTokenCookie) {
+        console.log("No CSRF token cookie available, skipping refresh");
 
         return;
       }
@@ -2054,24 +1983,15 @@ export default defineBackground({
           {
             method: "POST",
             headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${sessionToken}`,
+              "X-CSRF-Token": csrfTokenCookie.value,
             },
+            credentials: "include",
           },
         );
 
-        store.dispatch(setState({ accessToken: data.accessToken }));
-        store.dispatch(setState({ sessionToken: data.sessionToken }));
-        const decoded = jwtDecode(data.accessToken);
-        browser.cookies.set({
-          url: `https://${serverDomain}`,
-          expirationDate: decoded.exp,
-          name: `CI_${ACCESS_TOKEN_KEY}`,
-          value: data.accessToken,
-          sameSite: "no_restriction",
-          secure: true,
-        });
-        store.dispatch(setState({ refreshing: false }));
+        store.dispatch(
+          setState({ refreshing: false, accessToken: data.accessToken }),
+        );
 
         // Setup device after successful authentication
         try {
@@ -2090,209 +2010,96 @@ export default defineBackground({
       try {
         const currentState = store.getState().ciState;
         const { serverDomain } = currentState;
-        console.log("Checking authentication for server domain:", serverDomain);
+
+        // Nothing to check until the user has configured a server domain;
+        // without this guard cookies.getAll throws on "https://" every tick
+        if (!serverDomain) {
+          return;
+        }
 
         const result = await browser.cookies.getAll({
           url: `https://${serverDomain}`,
         });
-        console.log(
-          "Found cookies:",
-          result.map((c) => ({
-            name: c.name,
-            domain: c.domain,
-            value: c.value?.substring(0, 20) + "...",
-          })),
+
+        const sessionToken = result.find(
+          (cookie) => cookie.name === SESSION_TOKEN_KEY,
         );
 
-        // Also check for cookies on the main domain without subdomain
-        const mainDomain = serverDomain.replace(/^[^.]+\./, "");
-        console.log("Also checking main domain:", mainDomain);
-        const mainDomainResult = await browser.cookies.getAll({
-          url: `https://${mainDomain}`,
-        });
-        console.log(
-          "Found cookies on main domain:",
-          mainDomainResult.map((c) => ({
-            name: c.name,
-            domain: c.domain,
-            value: c.value?.substring(0, 20) + "...",
-          })),
-        );
-
-        // Check for CI cookies in both results
-        const allCookies = [...result, ...mainDomainResult];
-        const accessTokenCookie = allCookies.find(
-          (cookie) => cookie.name === "CI_accessToken",
-        );
-        const sessionTokenCookie = allCookies.find(
-          (cookie) => cookie.name === "CI_sessionToken",
-        );
-
-        console.log(
-          "All CI cookies found:",
-          allCookies
-            .filter((c) => c.name.startsWith("CI_"))
-            .map((c) => ({ name: c.name, domain: c.domain })),
-        );
-
-        // Also check for any cookies on companionintelligence.com
-        const companionResult = await browser.cookies.getAll({
-          url: "https://companionintelligence.com",
-        });
-        console.log(
-          "Found cookies on companionintelligence.com:",
-          companionResult.map((c) => ({
-            name: c.name,
-            domain: c.domain,
-            value: c.value?.substring(0, 20) + "...",
-          })),
-        );
-
-        // Check for cookies on the exact server domain you're using
-        console.log(
-          "Checking for cookies on your exact server domain:",
-          `https://${serverDomain}`,
-        );
-        const exactDomainResult = await browser.cookies.getAll({
-          url: `https://${serverDomain}`,
-        });
-        console.log(
-          "Found cookies on exact server domain:",
-          exactDomainResult.map((c) => ({
-            name: c.name,
-            domain: c.domain,
-            value: c.value?.substring(0, 20) + "...",
-          })),
-        );
-
-        // Check if we can access cookies at all
-        try {
-          const allCookiesTest = await browser.cookies.getAll({});
-          console.log(
-            "Total cookies accessible by extension:",
-            allCookiesTest.length,
-          );
-          console.log(
-            "Sample cookies:",
-            allCookiesTest
-              .slice(0, 5)
-              .map((c) => ({ name: c.name, domain: c.domain })),
-          );
-
-          // Look for any cookies that might be related to companion
-          const companionCookies = allCookiesTest.filter(
-            (c) =>
-              c.name.includes("CI_") ||
-              c.domain.includes("companion") ||
-              c.name.includes("access") ||
-              c.name.includes("session"),
-          );
-          console.log(
-            "Potential companion-related cookies:",
-            companionCookies.map((c) => ({
-              name: c.name,
-              domain: c.domain,
-              value: c.value?.substring(0, 20) + "...",
-            })),
-          );
-        } catch (error) {
-          console.error("Error accessing cookies:", error);
-        }
-
-        console.log("Access token cookie found:", !!accessTokenCookie);
-        console.log("Session token cookie found:", !!sessionTokenCookie);
-
-        let { accessToken, sessionToken, deviceId } = currentState;
         let authStateChanged = false;
 
-        // Check for access token changes
-        if (accessTokenCookie && accessTokenCookie.value !== accessToken) {
-          store.dispatch(setState({ accessToken: accessTokenCookie.value }));
-          accessToken = accessTokenCookie.value;
-          authStateChanged = true;
-          console.log("Access token updated from cookies");
-        }
-
-        // Check for session token changes
-        if (sessionTokenCookie && sessionTokenCookie.value !== sessionToken) {
-          const cookieDecoded = jwtDecode(sessionTokenCookie.value) as any;
-          const cookieExpires = new Date(cookieDecoded.exp * 1000);
-          const stateDecoded = sessionToken
-            ? (jwtDecode(sessionToken) as any)
-            : null;
-          const stateExpired = stateDecoded
-            ? new Date(stateDecoded.exp * 1000)
-            : null;
-          if (
-            !stateExpired ||
-            cookieExpires.getTime() > stateExpired.getTime()
-          ) {
-            store.dispatch(
-              setState({ sessionToken: sessionTokenCookie.value }),
-            );
-            sessionToken = sessionTokenCookie.value;
-            authStateChanged = true;
-            console.log("Session token updated from cookies");
-          }
+        //If the user has logged out, or switches domains, and no cookies are found,
+        //then clear state so that they aren't shown as logged in, and to avoid
+        //making requests with an invalid token
+        if (!sessionToken) {
+          store.dispatch(setState({ accessToken: null }));
         }
 
         // Get updated state after potential changes
-        ({ accessToken, sessionToken, deviceId } = store.getState().ciState);
+        let { accessToken, deviceId } = store.getState().ciState;
 
         // Check if authentication is valid
         const accessDecoded = accessToken
-          ? (jwtDecode(accessToken) as any)
+          ? (jwtDecode(accessToken) as { exp?: number })
           : null;
-        const isAuthExpired = accessDecoded
+        const isAuthExpired = accessDecoded?.exp
           ? Date.now() >= (accessDecoded.exp - 5) * 1000
           : true;
-        const sessionDecoded = sessionToken
-          ? (jwtDecode(sessionToken) as any)
+        const sessionDecoded = sessionToken?.value
+          ? (jwtDecode(sessionToken.value) as { exp?: number })
           : null;
-        const isSessionExpired = sessionDecoded
+        const isSessionExpired = sessionDecoded?.exp
           ? Date.now() >= sessionDecoded.exp * 1000
           : true;
 
         const isAuthenticated = !isAuthExpired && !isSessionExpired;
 
-        console.log("Authentication state check:");
-        console.log("- Access token expired:", isAuthExpired);
-        console.log("- Session token expired:", isSessionExpired);
-        console.log("- Is authenticated:", isAuthenticated);
-        console.log("- Device ID exists:", !!deviceId);
-        console.log(
-          "- Current access token:",
-          accessToken ? "exists" : "missing",
-        );
-        console.log(
-          "- Current session token:",
-          sessionToken ? "exists" : "missing",
-        );
-
         // Handle token refresh if needed
         // Only refresh if:
         // 1. We have a valid session token cookie (not expired)
         // 2. Either we don't have an access token cookie OR the access token is expired
-        if (sessionTokenCookie) {
-          const sessionCookieDecoded = jwtDecode(
-            sessionTokenCookie.value,
-          ) as any;
-          const isSessionCookieExpired = sessionCookieDecoded?.exp
-            ? Date.now() >= sessionCookieDecoded.exp * 1000
+        if (sessionToken) {
+          const sessionTokenDecoded = jwtDecode(sessionToken.value) as any;
+          const isSessionTokenExpired = sessionTokenDecoded?.exp
+            ? Date.now() >= sessionTokenDecoded.exp * 1000
             : true;
 
-          if (
-            !isSessionCookieExpired &&
-            (!accessTokenCookie || isAuthExpired)
-          ) {
+          if (!isSessionTokenExpired && (!accessToken || isAuthExpired)) {
             console.log("Refreshing access token...");
             await refreshAccessToken();
             authStateChanged = true;
-          } else if (isSessionCookieExpired) {
-            console.log("Session token cookie expired, not attempting refresh");
+          } else if (isSessionTokenExpired) {
+            console.log("Session token expired, not attempting refresh");
+            browser.runtime
+              .sendMessage({
+                action: "AUTH_STATE_UPDATED",
+                payload: {
+                  accessToken,
+                  deviceId,
+                },
+              })
+              .catch((error) => {
+                console.log(
+                  "No receiver for message, probably because popup not open",
+                );
+                console.log(error);
+              });
           }
         } else {
-          console.log("No session token cookie found, not attempting refresh");
+          console.log("No session token found, not attempting refresh");
+          browser.runtime
+            .sendMessage({
+              action: "AUTH_STATE_UPDATED",
+              payload: {
+                accessToken,
+                deviceId,
+              },
+            })
+            .catch((error) => {
+              console.log(
+                "No receiver for message, probably because popup not open",
+              );
+              console.log(error);
+            });
         }
 
         // Check if we have valid authentication but no device ID
@@ -2308,7 +2115,6 @@ export default defineBackground({
             // Get updated state after device setup
             const updatedState = store.getState().ciState;
             deviceId = updatedState.deviceId;
-            console.log("Updated device ID after setup:", deviceId);
           } catch (error) {
             console.error(
               "Failed to setup device after authentication:",
@@ -2317,26 +2123,87 @@ export default defineBackground({
           }
         }
 
-        // Recalculate authentication status after potential device setup
-        const finalIsAuthenticated = isAuthenticated && !!deviceId;
-
-        // Update isAuthenticated field in Redux state
-        store.dispatch(setState({ isAuthenticated: finalIsAuthenticated }));
-
         // Save settings if auth state changed
         if (authStateChanged) {
           store.dispatch(saveUserSettings());
           console.log("Authentication state updated");
+
+          // Get updated state after potential changes
+          ({ accessToken } = store.getState().ciState);
+          browser.runtime
+            .sendMessage({
+              action: "AUTH_STATE_UPDATED",
+              payload: {
+                accessToken,
+                deviceId,
+              },
+            })
+            .catch((error) => {
+              console.log(
+                "No receiver for message, probably because popup not open",
+              );
+              console.log(error);
+            });
         }
       } catch (error) {
         console.error("Error checking authentication state:", error);
       }
     }
 
-    // Set up periodic authentication checking
-    setInterval(checkAuthenticationState, 1000);
+    // Auth state is event-driven instead of polled: cookie changes on the
+    // configured server domain trigger an immediate check, and a periodic
+    // alarm acts as a safety net. Alarms survive MV3 service-worker
+    // suspension; setInterval does not.
+    browser.cookies.onChanged.addListener(({ cookie }) => {
+      if (
+        cookie.name !== SESSION_TOKEN_KEY &&
+        cookie.name !== CSRF_COOKIE_NAME
+      ) {
+        return;
+      }
 
-    store.dispatch(loadUserSettings());
+      const { serverDomain } = store.getState().ciState;
+      const cookieDomain = cookie.domain.replace(/^\./, "");
+      if (serverDomain && serverDomain.endsWith(cookieDomain)) {
+        checkAuthenticationState();
+      }
+    });
+
+    browser.alarms.create(AUTH_CHECK_ALARM, { periodInMinutes: 1 });
+    browser.alarms.create(AUTO_SYNC_ALARM, { periodInMinutes: 10 });
+    browser.alarms.create(LAST_SEEN_ALARM, { periodInMinutes: 5 });
+    browser.alarms.onAlarm.addListener((alarm) => {
+      if (alarm.name === AUTH_CHECK_ALARM) {
+        checkAuthenticationState();
+      }
+
+      if (alarm.name === AUTO_SYNC_ALARM) {
+        runAutoSync();
+      }
+
+      if (alarm.name === LAST_SEEN_ALARM) {
+        runLastSeenUpdate();
+      }
+    });
+
+    // Context-menu entry for saving highlighted text (issue #25)
+    browser.runtime.onInstalled.addListener(() => {
+      browser.contextMenus.create({
+        id: HIGHLIGHT_MENU_ID,
+        title: "Save highlight to Companion Intelligence",
+        contexts: ["selection"],
+      });
+    });
+    browser.contextMenus.onClicked.addListener((info, tab) => {
+      if (info.menuItemId === HIGHLIGHT_MENU_ID) {
+        handleSaveHighlight(info, tab);
+      }
+    });
+
+    // Check auth once settings (incl. serverDomain) have been loaded
+    store.dispatch(loadUserSettings()).then(() => {
+      checkAuthenticationState();
+    });
 
     const existingKeys = Object.keys(store.getState().ciState);
     const toSet = Object.keys(storageDefaults)
@@ -2359,29 +2226,6 @@ export default defineBackground({
       }
     }, 2000);
 
-    browser.runtime.onMessage.addListener(
-      async (message, sender, sendResponse) => {
-        try {
-          if (message && message.type === "SETUP_DEVICE") {
-            try {
-              await setupDevice();
-              sendResponse({ success: true });
-            } catch (error: any) {
-              const errorMessage =
-                error?.message || error?.toString() || "Unknown error occurred";
-              sendResponse({ success: false, error: errorMessage });
-            }
-
-            return true;
-          }
-        } catch {
-          sendResponse({ success: false, error: "Message listener error" });
-
-          return true;
-        }
-      },
-    );
-
     browser.tabs.onActivated.addListener(async () => {
       const tabInfo = await browser.tabs.query({
         active: true,
@@ -2389,7 +2233,7 @@ export default defineBackground({
       const active = tabInfo[0];
 
       if (active?.url) {
-        const parsed = URL.parse(active.url);
+        const parsed = parseUrl(active.url);
         if (parsed) {
           store.dispatch(setState({ domain: parsed.hostname }));
           store.dispatch(setState({ url: active.url }));
@@ -2407,118 +2251,92 @@ export default defineBackground({
     browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log("Background received message:", message);
 
-      if (message.action === "triggerManualSync") {
-        console.log("Triggering manual sync with options:", message.options);
-        triggerManualSync(message.options || {})
-          .then(() => {
-            console.log("Manual sync completed successfully");
-            sendResponse({ success: true });
-          })
-          .catch((error) => {
-            console.error("Manual sync failed:", error);
-            sendResponse({ success: false, error: error.message });
-          });
+      try {
+        if (message && message.action === "SETUP_DEVICE") {
+          try {
+            setupDevice().then(() => {
+              sendResponse({ success: true });
+            });
+          } catch (error: any) {
+            const errorMessage =
+              error?.message || error?.toString() || "Unknown error occurred";
+            sendResponse({ success: false, error: errorMessage });
+          }
 
-        return true;
-      }
+          return true;
+        }
 
-      if (message.action === "triggerManualHistorySync") {
-        triggerManualHistorySync(message.options || {})
-          .then(() => {
-            sendResponse({ success: true });
-          })
-          .catch((error) => {
-            console.error("Manual history sync failed:", error);
-            sendResponse({ success: false, error: error.message });
-          });
+        if (message.action === "triggerManualSync") {
+          console.log("Triggering manual sync with options:", message.options);
+          triggerManualSync(message.options || {})
+            .then(() => {
+              console.log("Manual sync completed successfully");
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Manual sync failed:", error);
+              sendResponse({ success: false, error: error.message });
+            });
 
-        return true;
-      }
+          return true;
+        }
 
-      if (message.action === "triggerBackgroundSync") {
-        // Trigger the background periodic sync logic
-        triggerBackgroundSync()
-          .then(() => {
-            sendResponse({ success: true });
-          })
-          .catch((error) => {
-            console.error("Background sync failed:", error);
-            sendResponse({ success: false, error: error.message });
-          });
+        if (message.action === "TRIGGER_MANUAL_HISTORY_SYNC") {
+          triggerManualHistorySync(message.options || {})
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Manual history sync failed:", error);
+              sendResponse({ success: false, error: error.message });
+            });
 
-        return true;
-      }
+          return true;
+        }
 
-      if (message.action === "checkAuthStatus") {
-        console.log("Checking authentication status from popup");
-        checkAuthenticationState()
-          .then(() => {
-            sendResponse({ success: true });
-          })
-          .catch((error) => {
-            console.error("Error checking auth status:", error);
-            sendResponse({ success: false, error: error.message });
-          });
+        if (message.action === "triggerBackgroundSync") {
+          // Trigger the background periodic sync logic
+          triggerBackgroundSync()
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Background sync failed:", error);
+              sendResponse({ success: false, error: error.message });
+            });
 
-        return true;
+          return true;
+        }
+
+        if (message.action === "CHECK_AUTH_STATUS") {
+          checkAuthenticationState()
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Error checking auth status:", error);
+              sendResponse({ success: false, error: error.message });
+            });
+
+          return true;
+        }
+
+        if (message.action === "DOMAIN_SCRAPE_DATA") {
+          handleScrapedData(message.data)
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Error handling scraped data:", error);
+              sendResponse({ success: false, error: error.message });
+            });
+
+          return true;
+        }
+      } catch (error) {
+        console.error("Error checking authentication state:", error);
       }
     });
-
-    const AUTO_SYNC_INTERVAL = 10 * 60 * 1000; // 10 minutes
-    const AUTO_SYNC_TIME_RANGE = 24 * 60 * 60 * 1000;
-    const LAST_SEEN_UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes
-
-    // Periodic auto-sync
-    setInterval(async () => {
-      try {
-        await store.dispatch({
-          type: "loadUserSettings",
-        });
-
-        const state = store.getState().ciState;
-
-        if (state.autoSyncEnabled && !state.historySyncInProgress) {
-          const { accessToken } = state;
-          const accessDecoded = accessToken
-            ? (jwtDecode(accessToken) as any)
-            : null;
-          const isAuthExpired =
-            accessDecoded && accessDecoded.exp
-              ? Date.now() >= accessDecoded.exp * 1000
-              : true;
-
-          if (!isAuthExpired) {
-            await triggerManualSync({
-              timeRange: AUTO_SYNC_TIME_RANGE,
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Auto-sync error:", error);
-      }
-    }, AUTO_SYNC_INTERVAL);
-
-    // Periodic device last_seen updates
-    setInterval(async () => {
-      try {
-        const state = store.getState().ciState;
-        const { accessToken, deviceId } = state;
-
-        if (accessToken && deviceId) {
-          const accessDecoded = jwtDecode(accessToken) as any;
-          const isAuthExpired =
-            accessDecoded && accessDecoded.exp
-              ? Date.now() >= accessDecoded.exp * 1000
-              : true;
-
-          if (!isAuthExpired) {
-            await updateDeviceLastSeen(deviceId);
-          }
-        }
-      } catch (error) {
-        console.debug("Device last_seen update error:", error);
-      }
-    }, LAST_SEEN_UPDATE_INTERVAL);
 
     // Set up bookmark listeners based on settings
     const setupBookmarkListeners = () => {
@@ -2570,20 +2388,5 @@ export default defineBackground({
         }
       }
     }, 5000);
-
-    browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message.type === "DOMAIN_SCRAPE_DATA") {
-        handleScrapedData(message.data)
-          .then(() => {
-            sendResponse({ success: true });
-          })
-          .catch((error) => {
-            console.error("Error handling scraped data:", error);
-            sendResponse({ success: false, error: error.message });
-          });
-
-        return true;
-      }
-    });
   },
 });

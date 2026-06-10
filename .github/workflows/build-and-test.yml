@@ -2,56 +2,54 @@ name: Build and Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ master ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ master ]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x]
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
-    - name: Setup Node.js ${{ matrix.node-version }}
+
+    - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-        
+        node-version: 22.x
+
+    - name: Enable Corepack (yarn 4)
+      run: corepack enable
+
     - name: Install dependencies
-      run: npm ci
-      
+      run: yarn install --immutable
+
     - name: Run linting
-      run: npm run lint
-      
+      run: yarn lint
+
     - name: Run type checking
-      run: npm run compile
-      
+      run: yarn compile
+
+    - name: Run tests
+      run: yarn test
+
     - name: Build Chrome extension
-      run: npm run build
-      
+      run: yarn build
+
     - name: Build Firefox extension
-      run: npm run build:firefox
-      
-    - name: Create store packages
-      run: npm run zip:all
-      
+      run: yarn build:firefox
+
     - name: Upload Chrome build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: chrome-extension-${{ matrix.node-version }}
-        path: .output/*chrome*
+        name: chrome-extension
+        path: .output/chrome-mv3
         retention-days: 30
-        
+
     - name: Upload Firefox build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: firefox-extension-${{ matrix.node-version }}
-        path: .output/*firefox*
+        name: firefox-extension
+        path: .output/firefox-mv2
         retention-days: 30

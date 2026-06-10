@@ -20,31 +20,8 @@ import "@testing-library/jest-dom";
   },
 };
 
-// Mock URL for Node.js environment - this needs to be before any other imports
-const originalURL = global.URL;
-
-// Create a proper URL constructor mock
-(global as { URL?: unknown }).URL = class MockURL {
-  href: string;
-
-  hash: string = "";
-
-  constructor(url: string, base?: string) {
-    this.href = base ? new originalURL(url, base).href : url;
-  }
-
-  toString() {
-    return this.href;
-  }
-
-  static parse = jest.fn().mockReturnValue({
-    hash: "",
-    toString: () => "https://example.com/page",
-  });
-};
-
-// Ensure the original URL is available for actual URL parsing needs
-(global as { URL?: { originalURL?: unknown } }).URL!.originalURL = originalURL;
+// jsdom 26+ (bundled with jest-environment-jsdom 30) implements URL and
+// URL.parse natively, so the real implementation is used in tests.
 
 // Mock console methods to reduce noise in tests
 global.console = {

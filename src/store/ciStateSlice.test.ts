@@ -31,32 +31,9 @@ describe("ciStateSlice", () => {
 
   describe("initialState", () => {
     it("should have correct initial state", () => {
-      const state = (store.getState() as { ciState: unknown }).ciState as {
-        accessToken: string | null;
-        sessionToken: string | null;
-        url: string | null;
-        domain: string | null;
-        lastUrl: string | null;
-        historySyncInProgress: boolean;
-        historySyncStatus: string | null;
-        lastHistorySync: string | null;
-        syncHistoryLogs: { status: string; timestamp: string }[];
-        refreshing: boolean;
-        serverDomain: string;
-        autoSyncEnabled: boolean;
-        siteBlacklist: string[];
-        pageBlacklist: string[];
-        deviceId: string | null;
-        deviceName: string | null;
-        deviceType: string | null;
-        devicePlatform: string | null;
-        bookmarkSyncEnabled: boolean;
-        downloadSyncEnabled: boolean;
-        formSyncEnabled: boolean;
-      };
+      const state = (store.getState() as { ciState: unknown }).ciState;
       expect(state).toEqual({
         accessToken: null,
-        sessionToken: null,
         url: null,
         domain: null,
         lastUrl: null,
@@ -64,6 +41,8 @@ describe("ciStateSlice", () => {
         historySyncStatus: null,
         lastHistorySync: null,
         syncHistoryLogs: [],
+        refreshing: false,
+        serverDomain: "",
         autoSyncEnabled: false,
         siteBlacklist: [],
         pageBlacklist: [],
@@ -73,7 +52,7 @@ describe("ciStateSlice", () => {
         devicePlatform: null,
         bookmarkSyncEnabled: false,
         downloadSyncEnabled: false,
-        formSyncEnabled: false,
+        historySyncEnabled: true,
       });
     });
   });
@@ -119,12 +98,11 @@ describe("ciStateSlice", () => {
   });
 
   describe("saveUserSettings", () => {
-    it("should call browser.storage.local.set with current state", () => {
+    it("should persist settings to browser.storage.local", () => {
       const testState = {
-        accessToken: "test-token",
-        sessionToken: "test-session",
         siteBlacklist: ["example.com"],
         pageBlacklist: ["https://example.com"],
+        serverDomain: "ci.example.com",
       };
 
       (store.dispatch as (action: unknown) => unknown)(setState(testState));
@@ -132,12 +110,21 @@ describe("ciStateSlice", () => {
 
       expect(mockBrowserStorage.local.set).toHaveBeenCalledWith(
         expect.objectContaining({
-          accessToken: "test-token",
-          sessionToken: "test-session",
           siteBlacklist: ["example.com"],
           pageBlacklist: ["https://example.com"],
+          serverDomain: "ci.example.com",
         }),
       );
+    });
+
+    it("should not persist the access token", () => {
+      (store.dispatch as (action: unknown) => unknown)(
+        setState({ accessToken: "test-token" }),
+      );
+      (store.dispatch as (action: unknown) => unknown)(saveUserSettings());
+
+      const persisted = mockBrowserStorage.local.set.mock.calls[0][0];
+      expect(persisted).not.toHaveProperty("accessToken");
     });
   });
 
@@ -174,7 +161,6 @@ describe("ciStateSlice", () => {
 
       expect(mockBrowserStorage.local.get).toHaveBeenCalledWith([
         "accessToken",
-        "sessionToken",
         "lastHistorySync",
         "syncHistoryLogs",
         "autoSyncEnabled",
@@ -186,7 +172,8 @@ describe("ciStateSlice", () => {
         "devicePlatform",
         "bookmarkSyncEnabled",
         "downloadSyncEnabled",
-        "formSyncEnabled",
+        "historySyncEnabled",
+        "serverDomain",
       ]);
     });
   });
