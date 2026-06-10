@@ -1,4 +1,4 @@
-import { domainRegex, siteRegex } from "./utils";
+import { domainRegex, siteRegex, parseUrl, isUrlBlacklisted } from "./utils";
 
 describe("Utils", () => {
   describe("domainRegex", () => {
@@ -75,6 +75,73 @@ describe("Utils", () => {
       expect(siteRegex.test(".com")).toBe(false);
       expect(siteRegex.test("http://")).toBe(false);
       expect(siteRegex.test("https://")).toBe(false);
+    });
+  });
+
+  describe("parseUrl", () => {
+    it("should parse valid URLs", () => {
+      const parsed = parseUrl("https://example.com/page?q=1#frag");
+      expect(parsed).not.toBeNull();
+      expect(parsed!.hostname).toBe("example.com");
+      expect(parsed!.pathname).toBe("/page");
+    });
+
+    it("should return null for invalid URLs", () => {
+      expect(parseUrl("")).toBeNull();
+      expect(parseUrl("not a url")).toBeNull();
+      expect(parseUrl("example.com")).toBeNull(); // no protocol
+    });
+  });
+
+  describe("isUrlBlacklisted", () => {
+    it("should match blacklisted domains", () => {
+      expect(
+        isUrlBlacklisted("https://example.com/page", ["example.com"], []),
+      ).toBe(true);
+    });
+
+    it("should match subdomains of blacklisted domains", () => {
+      expect(
+        isUrlBlacklisted("https://mail.example.com/inbox", ["example.com"], []),
+      ).toBe(true);
+    });
+
+    it("should not match unrelated domains", () => {
+      expect(
+        isUrlBlacklisted(
+          "https://unrelated.com/page",
+          ["example.com", "google.com"],
+          [],
+        ),
+      ).toBe(false);
+    });
+
+    it("should match blacklisted pages ignoring the hash fragment", () => {
+      expect(
+        isUrlBlacklisted(
+          "https://example.com/secret#section",
+          [],
+          ["https://example.com/secret"],
+        ),
+      ).toBe(true);
+    });
+
+    it("should not match other pages on the same domain", () => {
+      expect(
+        isUrlBlacklisted(
+          "https://example.com/public",
+          [],
+          ["https://example.com/secret"],
+        ),
+      ).toBe(false);
+    });
+
+    it("should return false for unparseable URLs", () => {
+      expect(isUrlBlacklisted("not a url", ["example.com"], [])).toBe(false);
+    });
+
+    it("should return false when both blacklists are empty", () => {
+      expect(isUrlBlacklisted("https://example.com", [], [])).toBe(false);
     });
   });
 });

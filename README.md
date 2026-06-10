@@ -1,8 +1,10 @@
-# 📄 PRIVATE AND CONFIDENTIAL
-# 📄 PROPERTY OF LIFESCOPE INC
+
 # Companion Intelligence Browser Extension
  
 A privacy-focused browser extension that records and extracts your web browsing history to work with your private CI Server for digital memory and web history archiving.
+
+####   PRIVATE AND CONFIDENTIAL
+#####   PROPERTY OF LIFESCOPE INC
 
 ## 🌟 Vision & Overview
 

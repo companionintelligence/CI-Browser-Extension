@@ -1,14 +1,15 @@
 {
-  "name": "ci-browser-extension",
+  "name": "@ci/ci-browser-extension",
   "description": "Companion Intelligence browser extension for Chrome and Firefox",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "1.4.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "dev:edge": "wxt zip -b edge",
-    "dev:safari": "wxt zip -b safari",
+    "dev:edge": "wxt -b edge",
+    "dev:safari": "wxt -b safari",
     "dev:opera": "wxt -b opera",
     "dev:brave": "wxt -b brave",
     "dev:duckduckgo": "wxt -b duckduckgo",
@@ -26,7 +27,7 @@
     "zip:firefox": "wxt zip -b firefox",
     "zip:edge": "wxt zip -b edge",
     "zip:safari": "wxt zip -b safari",
-    "zip:safari-mobile": "wxt build -b safari --mv3 && cd .output && zip -r ci-browser-extension-0.0.0-safari-mobile.zip safari-mv3",
+    "zip:safari-mobile": "wxt build -b safari --mv3 && cd .output && zip -r \"ci-browser-extension-$(node -p \"require('../package.json').version\")-safari-mobile.zip\" safari-mv3",
     "zip:all": "npm run zip && npm run zip:firefox && npm run zip:edge && npm run zip:safari && npm run zip:safari-mobile",
     "clean": "rm -rf .output",
     "zip:opera": "wxt zip -b opera",
@@ -43,7 +44,11 @@
     "check:types": "tsc --noEmit --skipLibCheck"
   },
   "dependencies": {
+    "@ci/shadcn": "workspace:*",
     "@reduxjs/toolkit": "^2.8.2",
+    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/vite": "^4.1.18",
+    "@vitejs/plugin-react-swc": "^4.2.3",
     "axios": "^1.11.0",
     "bowser": "^2.11.0",
     "jwt-decode": "^4.0.0",
@@ -62,7 +67,7 @@
     "@types/jest": "^30.0.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.3",
-    "@wxt-dev/module-react": "^1.1.3",
+    "@wxt-dev/module-react": "^1.1.5",
     "eslint": "^9.33.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.4",
@@ -74,21 +79,11 @@
     "jest-environment-jsdom": "^30.1.1",
     "lint-staged": "^16.1.2",
     "prettier": "^3.5.3",
+    "tailwindcss": "^4.1.7",
     "ts-jest": "^29.4.1",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.40.0",
     "wxt": "^0.20.6"
   },
-  "pnpm": {
-    "overrides": {
-      "@wxt-dev/browser": "^0.1.4",
-      "@wxt-dev/storage": "^1.2.5"
-    },
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "spawn-sync",
-      "unrs-resolver"
-    ]
-  },
-  "packageManager": "pnpm@10.19.0+sha512.c9fc7236e92adf5c8af42fd5bf1612df99c2ceb62f27047032f4720b33f8eacdde311865e91c411f2774f618d82f320808ecb51718bfa82c060c4ba7c76a32b8"
+  "packageManager": "yarn@4.9.1"
 }
