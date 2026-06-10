@@ -307,7 +307,7 @@ export default function App() {
               </Field.Label>
             </Field>
             <Field.Description className="mt-2 ml-7 text-[#888] dark:text-[#888] light:text-[#666] leading-[1.4] text-[0.9em]">
-              Excludes blacklisted items
+              Excludes ignored sites and pages
             </Field.Description>
           </Field>
 
@@ -515,7 +515,7 @@ export default function App() {
               onClick={() => setShowBlacklistManager(true)}
               className="rounded-lg border border-transparent px-[1.4em] py-[0.8em] text-base font-medium font-inherit cursor-pointer transition-all min-h-[44px] min-w-[44px] touch-manipulation bg-[#555] dark:bg-[#555] light:bg-[#e0e0e0] text-white dark:text-white light:text-[#213547] border-[#555] dark:border-[#555] light:border-[#d0d0d0] hover:bg-[#666] dark:hover:bg-[#666] light:hover:bg-[#d0d0d0] hover:border-[#666] dark:hover:border-[#666] light:hover:border-[#c0c0c0] active:translate-y-[1px] w-full"
             >
-              Manage Blacklists
+              Ignored Pages and Sites
             </Button>
             <div className="flex justify-around p-2 bg-[rgba(0,0,0,0.2)] dark:bg-[rgba(0,0,0,0.2)] light:bg-[rgba(0,0,0,0.05)] rounded text-[0.85em]">
               <span className="text-[#888] dark:text-[#888] light:text-[#666]">
