@@ -42,11 +42,11 @@ export default defineConfig({
       } as unknown as { id: string },
     },
     icons: {
-      "16": "icon/favicon-16x16.png",
-      "32": "icon/favicon-32x32.png",
-      "48": "icon/favicon-32x32.png",
-      "96": "icon/favicon-96x96.png",
-      "128": "icon/favicon-96x96.png",
+      "16": "icon/16.png",
+      "32": "icon/32.png",
+      "48": "icon/48.png",
+      "96": "icon/96.png",
+      "128": "icon/128.png",
     },
     // Mobile browser optimizations
     action: {

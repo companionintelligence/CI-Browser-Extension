@@ -85,21 +85,11 @@ export default function App() {
       }
     };
 
-    // Check auth status immediately when popup opens
+    // Check auth status immediately when popup opens. State updates arrive
+    // automatically through the webext-redux proxy store, so no manual
+    // settings reload is needed here.
     checkAuthStatus();
-
-    // Reload user settings when popup opens to get latest auth state
-    dispatch({ type: "loadUserSettings" });
-  }, [dispatch]);
-
-  // Also refresh periodically while popup is open to catch device updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      dispatch({ type: "loadUserSettings" });
-    }, 2000); // Check every 2 seconds
-
-    return () => clearInterval(interval);
-  }, [dispatch]);
+  }, []);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -312,10 +302,7 @@ export default function App() {
                 onCheckedChange={handleAutoSyncToggle}
                 className="w-[18px] h-[18px] cursor-pointer accent-[#4ba7a6]"
               />
-              <Field.Label
-                htmlFor="history-sync-enabled"
-                className="text-[1.2em]"
-              >
+              <Field.Label htmlFor="auto-sync-enabled" className="text-[1.2em]">
                 Auto-sync all browser history
               </Field.Label>
             </Field>

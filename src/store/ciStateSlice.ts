@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { parseUrl } from "@/utils";
 
 export const loadUserSettings = createAsyncThunk(
   "ciState/loadUserSettings",
@@ -157,9 +158,9 @@ export const ciStateSlice = createSlice({
     },
     addPageBlacklist(state, action) {
       let newPageBlacklist = state.pageBlacklist;
-      let parsed = URL.parse(action.payload);
+      let parsed = parseUrl(action.payload);
       if (!parsed) {
-        parsed = URL.parse(`https://${action.payload}`);
+        parsed = parseUrl(`https://${action.payload}`);
         action.payload = `https://${action.payload}`;
       }
 
@@ -176,9 +177,9 @@ export const ciStateSlice = createSlice({
       return { ...state, pageBlacklist: newPageBlacklist };
     },
     removePageBlacklist(state, action) {
-      let parsed = URL.parse(action.payload);
+      let parsed = parseUrl(action.payload);
       if (!parsed) {
-        parsed = URL.parse(`https://${action.payload}`);
+        parsed = parseUrl(`https://${action.payload}`);
         action.payload = `https://${action.payload}`;
       }
 

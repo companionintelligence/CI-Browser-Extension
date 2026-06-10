@@ -8,8 +8,8 @@
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "dev:edge": "wxt zip -b edge",
-    "dev:safari": "wxt zip -b safari",
+    "dev:edge": "wxt -b edge",
+    "dev:safari": "wxt -b safari",
     "dev:opera": "wxt -b opera",
     "dev:brave": "wxt -b brave",
     "dev:duckduckgo": "wxt -b duckduckgo",

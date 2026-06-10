@@ -9,7 +9,7 @@ import {
   saveUserSettings,
   addSyncHistoryLog,
 } from "@/store/ciStateSlice";
-import { siteRegex } from "@/utils.ts";
+import { siteRegex, parseUrl, isUrlBlacklisted } from "@/utils.ts";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
 import { database } from "@/indexeddb";
@@ -89,8 +89,21 @@ function isValidUrl(url: string): boolean {
 }
 
 async function addSyncedItem(key: string, itemId: string): Promise<void> {
+  await addSyncedItems(key, [itemId]);
+}
+
+// Batch variant: one storage read/write per call instead of per item, which
+// matters when marking hundreds of history entries after a bulk upload
+async function addSyncedItems(key: string, itemIds: string[]): Promise<void> {
+  if (itemIds.length === 0) {
+    return;
+  }
+
   const syncedItems = await getSyncedItems(key);
-  syncedItems.add(itemId);
+  for (const itemId of itemIds) {
+    syncedItems.add(itemId);
+  }
+
   await browser.storage.local.set({ [key]: Array.from(syncedItems) });
 }
 
@@ -132,20 +145,24 @@ const recordHit = async function (e: any) {
     return;
   }
 
-  const parsed = URL.parse(active.url);
+  const parsed = parseUrl(active.url);
   if (!parsed) {
     return;
   }
 
   store.dispatch(setState({ domain: parsed.hostname, url: active.url }));
 
-  // Check if URL is blacklisted
-  const isBlacklisted = state.url
-    ? isUrlBlacklisted(state.url, state.siteBlacklist, state.pageBlacklist)
-    : true;
+  // Check the URL being recorded (active.url) against the blacklist —
+  // `state` was snapshotted before the dispatch above, so state.url still
+  // holds the previous page and must not be used here
+  const isBlacklisted = isUrlBlacklisted(
+    active.url,
+    state.siteBlacklist,
+    state.pageBlacklist,
+  );
 
-  if (!isAuthExpired && !isBlacklisted && state.lastUrl !== state.url) {
-    store.dispatch(setState({ lastUrl: state.url }));
+  if (!isAuthExpired && !isBlacklisted && state.lastUrl !== active.url) {
+    store.dispatch(setState({ lastUrl: active.url }));
 
     store.dispatch(saveUserSettings());
 
@@ -171,21 +188,13 @@ const recordHit = async function (e: any) {
         },
       );
 
-      const historyId = `${state.url}_${date}`;
+      const historyId = `${active.url}_${date}`;
       await addSyncedItem(SYNCED_HISTORY_KEY, historyId);
     } catch (err) {
       console.error("Error posting event:", err);
     }
-
-    triggerHistoryCrawl();
   }
 };
-
-async function triggerHistoryCrawl() {
-  await store.dispatch({
-    type: "loadUserSettings",
-  });
-}
 
 async function getDeviceId(): Promise<string> {
   const storage = await browser.storage.local.get("deviceId");
@@ -405,41 +414,6 @@ function getDeviceInfo() {
   };
 }
 
-function isUrlBlacklisted(
-  url: string,
-  siteBlacklist: string[],
-  pageBlacklist: string[],
-): boolean {
-  try {
-    const parsedUrl = URL.parse(url);
-    if (!parsedUrl || !parsedUrl.hostname) {
-      return false;
-    }
-
-    for (const site of siteBlacklist) {
-      const siteRegex = new RegExp(site);
-      if (siteRegex.test(parsedUrl.hostname)) {
-        return true;
-      }
-    }
-
-    parsedUrl.hash = "";
-    const urlWithoutHash = parsedUrl.toString();
-    for (const page of pageBlacklist) {
-      const pageRegex = new RegExp(page.replace("?", "\\?"));
-      if (pageRegex.test(urlWithoutHash)) {
-        return true;
-      }
-    }
-
-    return false;
-  } catch (error) {
-    console.error("Error checking if URL is blacklisted:", error);
-
-    return false;
-  }
-}
-
 async function convertToBrowserActivity(
   url: string,
   visitTime: number,
@@ -570,10 +544,6 @@ async function convertToBrowserActivity(
 
 // Main sync function that coordinates all sync types based on toggles
 async function triggerManualSync(options: { timeRange?: number } = {}) {
-  await store.dispatch({
-    type: "loadUserSettings",
-  });
-
   const state = store.getState().ciState;
   const {
     accessToken,
@@ -668,10 +638,6 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
 // Individual sync functions
 async function syncHistory(options: { timeRange?: number } = {}) {
   console.log("syncHistory called with options:", options);
-
-  await store.dispatch({
-    type: "loadUserSettings",
-  });
 
   const state = store.getState().ciState;
   console.log("History sync state:", {
@@ -1044,12 +1010,11 @@ async function syncHistory(options: { timeRange?: number } = {}) {
           );
           uploaded = uploaded + browserActivities.length;
 
-          for (let j = 0; j < browserActivities.length; j++) {
-            const result = slice[j];
-            // Mark this specific history entry as synced only after successful upload
-            const historyId = `${result.url}_${result.visitTime}`;
-            await addSyncedItem(SYNCED_HISTORY_KEY, historyId);
-          }
+          // Mark the whole slice as synced only after successful upload
+          await addSyncedItems(
+            SYNCED_HISTORY_KEY,
+            slice.map((result) => `${result.url}_${result.visitTime}`),
+          );
         } catch (error: any) {
           console.error("Error uploading history entry:", error);
           console.error("Failed activities:", browserActivities);
@@ -1304,6 +1269,7 @@ async function syncDownloadsToServer() {
       );
 
       // Send each download event individually (server expects single object, not array)
+      const syncedDownloadIds: string[] = [];
       for (let j = 0; j < downloadEvents.length; j++) {
         const event = downloadEvents[j];
         const download = slice[j];
@@ -1328,7 +1294,7 @@ async function syncDownloadsToServer() {
           console.log("Successfully sent download event:", event.url);
 
           // Mark this specific download as synced only after successful upload
-          await addSyncedItem(SYNCED_DOWNLOADS_KEY, download.id.toString());
+          syncedDownloadIds.push(download.id.toString());
         } catch (eventError: any) {
           console.error("Error sending individual download event:", eventError);
           console.error("Failed event:", event);
@@ -1346,6 +1312,8 @@ async function syncDownloadsToServer() {
           // Don't mark as synced if upload failed
         }
       }
+
+      await addSyncedItems(SYNCED_DOWNLOADS_KEY, syncedDownloadIds);
     }
 
     // Update last sync time
@@ -1645,6 +1613,7 @@ async function syncBookmarksToServer() {
         }
 
         // Send each event individually (server expects single object, not array)
+        const syncedBookmarkIds: string[] = [];
         for (let j = 0; j < validEvents.length; j++) {
           const event = validEvents[j];
           const bookmark = slice[j];
@@ -1669,7 +1638,7 @@ async function syncBookmarksToServer() {
             console.log("Successfully sent bookmark event:", event.url);
 
             // Mark this specific bookmark as synced only after successful upload
-            await addSyncedItem(SYNCED_BOOKMARKS_KEY, bookmark.id);
+            syncedBookmarkIds.push(bookmark.id);
           } catch (eventError: any) {
             console.error(
               "Error sending individual bookmark event:",
@@ -1690,6 +1659,8 @@ async function syncBookmarksToServer() {
             // Don't mark as synced if upload failed
           }
         }
+
+        await addSyncedItems(SYNCED_BOOKMARKS_KEY, syncedBookmarkIds);
       } catch (batchError) {
         console.error("Error processing bookmark batch:", batchError);
         // Continue with next batch even if this one fails
@@ -1835,7 +1806,7 @@ export default defineBackground({
     const refreshAccessToken = async () => {
       const state = store.getState().ciState;
       const { serverDomain, refreshing } = state;
-      if (refreshing) {
+      if (refreshing || !serverDomain) {
         return;
       }
 
@@ -1920,7 +1891,12 @@ export default defineBackground({
       try {
         const currentState = store.getState().ciState;
         const { serverDomain } = currentState;
-        console.log("Checking authentication for server domain:", serverDomain);
+
+        // Nothing to check until the user has configured a server domain;
+        // without this guard cookies.getAll throws on "https://" every tick
+        if (!serverDomain) {
+          return;
+        }
 
         const result = await browser.cookies.getAll({
           url: `https://${serverDomain}`,
@@ -2088,7 +2064,7 @@ export default defineBackground({
       const active = tabInfo[0];
 
       if (active?.url) {
-        const parsed = URL.parse(active.url);
+        const parsed = parseUrl(active.url);
         if (parsed) {
           store.dispatch(setState({ domain: parsed.hostname }));
           store.dispatch(setState({ url: active.url }));
@@ -2198,10 +2174,6 @@ export default defineBackground({
 
     setInterval(async () => {
       try {
-        await store.dispatch({
-          type: "loadUserSettings",
-        });
-
         const state = store.getState().ciState;
 
         if (state.autoSyncEnabled && !state.historySyncInProgress) {
