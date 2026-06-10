@@ -10,6 +10,10 @@ export default defineContentScript({
     "*://slashdot.org/*",
     "*://*.github.com/*",
     "*://github.com/*",
+    "*://*.max.com/*",
+    "*://*.paramountplus.com/*",
+    "*://*.primevideo.com/*",
+    "*://*.amazon.com/gp/video/*",
   ],
   main() {
     function performScraping() {

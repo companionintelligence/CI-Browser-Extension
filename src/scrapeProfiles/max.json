@@ -1,0 +1,109 @@
+{
+  "domain": "max.com",
+  "name": "Max (HBO) Data Scraper",
+  "description": "Scrapes Max (HBO) watchlist, viewing history, and profile data",
+  "targetUrl": [
+    "https://www.max.com/watchlist*",
+    "https://www.max.com/profile*",
+    "https://www.max.com/series/*",
+    "https://www.max.com/movies/*"
+  ],
+  "dataSelectors": {
+    "watchlist": {
+      "container": "[data-testid='watchlist-item'], .watchlist-item, .content-tile, .title-card",
+      "fields": {
+        "title": {
+          "selector": "[data-testid='title'], .title, .content-title, h3, h4",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "imageUrl": {
+          "selector": "img",
+          "type": "attribute",
+          "attribute": "src",
+          "transform": "absoluteUrl"
+        },
+        "contentType": {
+          "selector": "[data-testid='content-type'], .content-type, .type-badge",
+          "type": "text",
+          "transform": "trim"
+        },
+        "description": {
+          "selector": "[data-testid='description'], .description, .synopsis",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "viewingHistory": {
+      "container": "[data-testid='continue-watching'], .continue-watching-item, .history-item",
+      "fields": {
+        "title": {
+          "selector": "[data-testid='title'], .title, h3, h4",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "progress": {
+          "selector": "[data-testid='progress'], .progress, .watch-progress",
+          "type": "text",
+          "transform": "trim"
+        },
+        "lastWatched": {
+          "selector": "[data-testid='last-watched'], .last-watched, .date",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "recommendations": {
+      "container": "[data-testid='recommendation'], .recommendation-item, .content-row .content-tile",
+      "fields": {
+        "title": {
+          "selector": "[data-testid='title'], .title, h3, h4",
+          "type": "text",
+          "transform": "trim"
+        },
+        "titleUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "category": {
+          "selector": "[data-testid='category'], .category, .row-header",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "watchlist",
+      "description": "Max watchlist items saved by user",
+      "personalDataType": "entertainment_preferences"
+    },
+    {
+      "name": "viewing_history",
+      "description": "Max viewing history with watch progress",
+      "personalDataType": "entertainment_preferences"
+    },
+    {
+      "name": "recommendations",
+      "description": "Max personalized recommendations",
+      "personalDataType": "entertainment_preferences"
+    }
+  ]
+}
