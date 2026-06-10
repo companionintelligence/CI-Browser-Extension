@@ -78,28 +78,18 @@ export default function App() {
       try {
         // Send message to background to refresh auth status
         await browser.runtime.sendMessage({
-          type: "CHECK_AUTH_STATUS",
+          action: "CHECK_AUTH_STATUS",
         });
       } catch (error) {
         console.error("Error checking auth status:", error);
       }
     };
 
-    // Check auth status immediately when popup opens
+    // Check auth status immediately when popup opens. State updates arrive
+    // automatically through the webext-redux proxy store, so no manual
+    // settings reload is needed here.
     checkAuthStatus();
-
-    // Reload user settings when popup opens to get latest auth state
-    dispatch({ type: "loadUserSettings" });
-  }, [dispatch]);
-
-  // Also refresh periodically while popup is open to catch device updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      dispatch({ type: "loadUserSettings" });
-    }, 2000); // Check every 2 seconds
-
-    return () => clearInterval(interval);
-  }, [dispatch]);
+  }, []);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -312,10 +302,7 @@ export default function App() {
                 onCheckedChange={handleAutoSyncToggle}
                 className="w-[18px] h-[18px] cursor-pointer accent-[#4ba7a6]"
               />
-              <Field.Label
-                htmlFor="history-sync-enabled"
-                className="text-[1.2em]"
-              >
+              <Field.Label htmlFor="auto-sync-enabled" className="text-[1.2em]">
                 Auto-sync all browser history
               </Field.Label>
             </Field>
@@ -393,7 +380,7 @@ export default function App() {
 
           {/* Compact sync toggles moved below sync button */}
           <div className="flex flex-col gap-2 mt-4 p-4 bg-[rgba(75,167,166,0.05)] rounded-lg border-t border-[rgba(75,167,166,0.2)]">
-            <Field.Group className="max-w-lg w-full" orientation="horizontal">
+            <Field.Group className="max-w-lg w-full">
               <Field orientation="horizontal">
                 <Checkbox
                   id="history-sync-enabled"

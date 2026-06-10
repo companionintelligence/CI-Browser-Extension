@@ -11,6 +11,18 @@ import {
   FieldTitle,
 } from "../ui/field";
 
+type FieldComponent = typeof Field & {
+  Label: typeof FieldLabel;
+  Description: typeof FieldDescription;
+  Error: typeof FieldError;
+  Group: typeof FieldGroup;
+  Legend: typeof FieldLegend;
+  Separator: typeof FieldSeparator;
+  Set: typeof FieldSet;
+  Content: typeof FieldContent;
+  Title: typeof FieldTitle;
+};
+
 const AugmentedField = Field as FieldComponent;
 
 AugmentedField.Label = FieldLabel;

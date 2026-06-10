@@ -27,6 +27,8 @@ export default defineConfig({
       "webNavigation",
     ],
     browser_specific_settings: {
+      // data_collection_permissions is an AMO disclosure requirement that
+      // WXT's manifest types don't model yet, hence the loose cast
       gecko: {
         id: "@ci-browser-extension",
         data_collection_permissions: {
@@ -37,14 +39,14 @@ export default defineConfig({
             "browsingActivity",
           ],
         },
-      },
+      } as unknown as { id: string },
     },
     icons: {
-      "16": "icon/favicon-16x16.png",
-      "32": "icon/favicon-32x32.png",
-      "48": "icon/favicon-32x32.png",
-      "96": "icon/favicon-96x96.png",
-      "128": "icon/favicon-96x96.png",
+      "16": "icon/16.png",
+      "32": "icon/32.png",
+      "48": "icon/48.png",
+      "96": "icon/96.png",
+      "128": "icon/128.png",
     },
     // Mobile browser optimizations
     action: {

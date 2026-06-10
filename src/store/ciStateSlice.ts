@@ -1,9 +1,10 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { parseUrl } from "@/utils";
 
 export const loadUserSettings = createAsyncThunk(
   "ciState/loadUserSettings",
   async () => {
-    return await browser.storage.local.get([
+    return await browser.storage.local.get<Record<string, unknown>>([
       "accessToken",
       "lastHistorySync",
       "syncHistoryLogs",
@@ -157,9 +158,9 @@ export const ciStateSlice = createSlice({
     },
     addPageBlacklist(state, action) {
       let newPageBlacklist = state.pageBlacklist;
-      let parsed = URL.parse(action.payload);
+      let parsed = parseUrl(action.payload);
       if (!parsed) {
-        parsed = URL.parse(`https://${action.payload}`);
+        parsed = parseUrl(`https://${action.payload}`);
         action.payload = `https://${action.payload}`;
       }
 
@@ -176,9 +177,9 @@ export const ciStateSlice = createSlice({
       return { ...state, pageBlacklist: newPageBlacklist };
     },
     removePageBlacklist(state, action) {
-      let parsed = URL.parse(action.payload);
+      let parsed = parseUrl(action.payload);
       if (!parsed) {
-        parsed = URL.parse(`https://${action.payload}`);
+        parsed = parseUrl(`https://${action.payload}`);
         action.payload = `https://${action.payload}`;
       }
 
@@ -219,9 +220,7 @@ export const ciStateSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(loadUserSettings.fulfilled, (state, action) => {
-      for (const [key, value] of Object.entries(
-        action.payload as Record<string, unknown>,
-      )) {
+      for (const [key, value] of Object.entries(action.payload)) {
         if (key in state) {
           (state as Record<string, unknown>)[key] = value;
         }

@@ -25,21 +25,28 @@ WXT-based browser extension that captures browsing activity and sends it to CI-S
 
 ```bash
 # Install dependencies
-npm install
+yarn install
 
 # Start development server / service
-npm run dev
+yarn dev
 
 # Run tests
-npm test
+yarn test
 
-# Build for production
-npm run build
+# Type check and lint
+yarn compile
+yarn lint
+
+# Build for production (Chrome MV3 / Firefox MV2)
+yarn build
+yarn build:firefox
 ```
 
 ## Package manager
 
-**npm** — use exclusively; do not mix with npm/yarn/pnpm/bun unless the repo explicitly requires it.
+**yarn 4** (via corepack; pinned by the `packageManager` field in package.json) —
+required because the workspace uses the `workspace:*` protocol, which npm cannot
+install. Do not mix with npm/pnpm/bun.
 
 ## Cross-repo connections
 
@@ -49,7 +56,7 @@ npm run build
 
 ## Build targets
 
-`npm run build` produces Chrome and Firefox variants. See PUBLISHING.md for store submission.
+`yarn build` produces the Chrome variant and `yarn build:firefox` the Firefox variant. See PUBLISHING.md for store submission.
 
 ## Multi-agent safety
 
