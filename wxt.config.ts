@@ -59,6 +59,11 @@ export default defineConfig({
     minimum_chrome_version: "88",
   },
   srcDir: "src",
+  // Clean store-artifact names (the package is @ci/ci-browser-extension, which
+  // would otherwise produce "cici-browser-extension-*.zip")
+  zip: {
+    name: "ci-browser-extension",
+  },
   modules: ["@wxt-dev/module-react"],
   // Output configurations for different browsers including mobile
   outDir: ".output",
