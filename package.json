@@ -1,15 +1,15 @@
 {
   "name": "@ci/ci-browser-extension",
   "description": "Companion Intelligence browser extension for Chrome and Firefox",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "dev:edge": "wxt zip -b edge",
-    "dev:safari": "wxt zip -b safari",
+    "dev:edge": "wxt -b edge",
+    "dev:safari": "wxt -b safari",
     "dev:opera": "wxt -b opera",
     "dev:brave": "wxt -b brave",
     "dev:duckduckgo": "wxt -b duckduckgo",
@@ -27,7 +27,7 @@
     "zip:firefox": "wxt zip -b firefox",
     "zip:edge": "wxt zip -b edge",
     "zip:safari": "wxt zip -b safari",
-    "zip:safari-mobile": "wxt build -b safari --mv3 && cd .output && zip -r ci-browser-extension-0.0.0-safari-mobile.zip safari-mv3",
+    "zip:safari-mobile": "wxt build -b safari --mv3 && cd .output && zip -r \"ci-browser-extension-$(node -p \"require('../package.json').version\")-safari-mobile.zip\" safari-mv3",
     "zip:all": "npm run zip && npm run zip:firefox && npm run zip:edge && npm run zip:safari && npm run zip:safari-mobile",
     "clean": "rm -rf .output",
     "zip:opera": "wxt zip -b opera",
@@ -73,7 +73,6 @@
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-prettier": "^5.5.4",
-    "fake-indexeddb": "^6.2.5",
     "globals": "^16.4.0",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.1.1",

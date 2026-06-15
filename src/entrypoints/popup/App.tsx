@@ -12,7 +12,6 @@ import {
 import "@/theme.css";
 import bowser from "bowser";
 import BlacklistManager from "./BlacklistManager";
-import Diagnostics from "./Diagnostics";
 import SetupWizard from "./SetupWizard";
 import { Button, Checkbox, Field, Label, Input, Card } from "@ci/shadcn";
 
@@ -28,7 +27,7 @@ export default function App() {
     historySyncStatus: string | null;
     lastHistorySync: string | null;
     serverDomain: string;
-    serverEnvironmentId: string | null;
+    settingsLoaded: boolean;
     autoSyncEnabled: boolean;
     siteBlacklist: string[];
     pageBlacklist: string[];
@@ -55,7 +54,7 @@ export default function App() {
     historySyncStatus,
     lastHistorySync,
     serverDomain,
-    serverEnvironmentId,
+    settingsLoaded,
     autoSyncEnabled,
     siteBlacklist,
     pageBlacklist,
@@ -68,18 +67,20 @@ export default function App() {
   } = ciState;
 
   const [showBlacklistManager, setShowBlacklistManager] = useState(false);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  // Show the setup wizard when the user hasn't picked an environment yet
-  // *and* hasn't dismissed it this session. Existing users (who already
-  // have a serverDomain saved) skip straight to the main view.
-  const [setupDismissed, setSetupDismissed] = useState(false);
-  const needsSetup = !serverEnvironmentId && !serverDomain && !setupDismissed;
   const [domain, setDomain] = useState(serverDomain);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
   const [token, setToken] = useState(accessToken);
-  const [captureInProgress, setCaptureInProgress] = useState(false);
-  const [captureStatus, setCaptureStatus] = useState<string | null>(null);
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
+
+  // First-run onboarding: once persisted settings have loaded, if no
+  // CI-Server is configured yet, surface the setup wizard. Choosing a server
+  // or skipping closes it (skip lets the user fall back to manual entry).
+  useEffect(() => {
+    if (settingsLoaded && !serverDomain) {
+      setShowSetupWizard(true);
+    }
+  }, [settingsLoaded, serverDomain]);
 
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
@@ -90,53 +91,18 @@ export default function App() {
       try {
         // Send message to background to refresh auth status
         await browser.runtime.sendMessage({
-          type: "CHECK_AUTH_STATUS",
+          action: "CHECK_AUTH_STATUS",
         });
       } catch (error) {
         console.error("Error checking auth status:", error);
       }
     };
 
-    // Check auth status immediately when popup opens
+    // Check auth status immediately when popup opens. State updates arrive
+    // automatically through the webext-redux proxy store, so no manual
+    // settings reload is needed here.
     checkAuthStatus();
-
-    // Reload user settings when popup opens to get latest auth state
-    dispatch({ type: "loadUserSettings" });
-  }, [dispatch]);
-
-  // Also refresh periodically while popup is open to catch device updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      dispatch({ type: "loadUserSettings" });
-    }, 2000); // Check every 2 seconds
-
-    return () => clearInterval(interval);
-  }, [dispatch]);
-
-  // Auto-dismiss the sync status banner ~10s after a terminal state so it
-  // doesn't show stale "Successfully synced N visits" forever.
-  useEffect(() => {
-    if (!historySyncStatus || historySyncInProgress) {
-      return;
-    }
-
-    const t = setTimeout(() => {
-      dispatch(setState({ historySyncStatus: null }));
-    }, 10_000);
-
-    return () => clearTimeout(t);
-  }, [historySyncStatus, historySyncInProgress, dispatch]);
-
-  // Auto-dismiss the capture toast for the same reason.
-  useEffect(() => {
-    if (!captureStatus) {
-      return;
-    }
-
-    const t = setTimeout(() => setCaptureStatus(null), 6_000);
-
-    return () => clearTimeout(t);
-  }, [captureStatus]);
+  }, []);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -150,6 +116,50 @@ export default function App() {
       }
     });
   }, []);
+
+  // const triggerManualSync = async function () {
+  //   console.log(
+  //     "triggerManualSync called, historySyncInProgress:",
+  //     historySyncInProgress,
+  //   );
+  //
+  //   if (historySyncInProgress) {
+  //     console.log("Sync already in progress, returning");
+  //
+  //     return;
+  //   }
+  //
+  //   try {
+  //     // If auto-sync is enabled, just trigger the background periodic sync
+  //     if (autoSyncEnabled) {
+  //       console.log("Auto-sync enabled, triggering background sync");
+  //       const response = await browser.runtime.sendMessage({
+  //         action: "TRIGGER_BACKGROUND_SYNC",
+  //       });
+  //
+  //       console.log("Background sync response:", response);
+  //       if (!response.success) {
+  //         console.error("Background sync failed:", response.error);
+  //       }
+  //     } else {
+  //       // If auto-sync is disabled, do a full manual sync
+  //       console.log("Auto-sync disabled, triggering manual sync");
+  //       const response = await browser.runtime.sendMessage({
+  //         action: "TRIGGER_MANUAL_SYNC",
+  //         options: {
+  //           timeRange: 7 * 24 * 60 * 60 * 1000, // Last 7 days
+  //         },
+  //       });
+  //
+  //       console.log("Manual sync response:", response);
+  //       if (!response.success) {
+  //         console.error("Manual history sync failed:", response.error);
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error("Error triggering sync:", error);
+  //   }
+  // };
 
   const handleAutoSyncToggle = () => {
     dispatch(toggleAutoSync());
@@ -199,32 +209,6 @@ export default function App() {
     }
   };
 
-  const captureSnapshot = async () => {
-    if (captureInProgress) {
-      return;
-    }
-
-    setCaptureInProgress(true);
-    setCaptureStatus(null);
-    try {
-      const response = await browser.runtime.sendMessage({
-        action: "CAPTURE_ACTIVE_TAB",
-      });
-      if (response?.success) {
-        const kb = Math.round((response.size ?? 0) / 1024);
-        setCaptureStatus(`Captured ${response.title ?? "page"} (${kb} KB)`);
-      } else {
-        setCaptureStatus(`Capture failed: ${response?.error ?? "unknown"}`);
-      }
-    } catch (err) {
-      setCaptureStatus(
-        `Capture failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    } finally {
-      setCaptureInProgress(false);
-    }
-  };
-
   const clearSyncLogs = () => {
     dispatch(clearSyncHistoryLogs());
   };
@@ -255,14 +239,14 @@ export default function App() {
     }
   };
 
-  if (needsSetup) {
+  if (showSetupWizard) {
     return (
       <div
-        className={`min-w-[300px] ${isMobile ? "w-full max-w-full" : "max-w-[420px]"} mx-auto p-4 box-border`}
+        className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[400px]"} mx-auto p-4 box-border`}
       >
         <SetupWizard
-          onComplete={() => setSetupDismissed(true)}
-          onSkip={() => setSetupDismissed(true)}
+          onComplete={() => setShowSetupWizard(false)}
+          onSkip={() => setShowSetupWizard(false)}
         />
       </div>
     );
@@ -274,16 +258,6 @@ export default function App() {
         className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[400px]"} mx-auto p-4 box-border`}
       >
         <BlacklistManager onBack={() => setShowBlacklistManager(false)} />
-      </div>
-    );
-  }
-
-  if (showDiagnostics) {
-    return (
-      <div
-        className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[420px]"} mx-auto p-4 box-border`}
-      >
-        <Diagnostics onBack={() => setShowDiagnostics(false)} />
       </div>
     );
   }
@@ -354,10 +328,7 @@ export default function App() {
                 onCheckedChange={handleAutoSyncToggle}
                 className="w-[18px] h-[18px] cursor-pointer accent-[#4ba7a6]"
               />
-              <Field.Label
-                htmlFor="history-sync-enabled"
-                className="text-[1.2em]"
-              >
+              <Field.Label htmlFor="auto-sync-enabled" className="text-[1.2em]">
                 Auto-sync all browser history
               </Field.Label>
             </Field>
@@ -423,12 +394,7 @@ export default function App() {
             </Button>
           </div>
           {historySyncStatus && (
-            <div
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-              className="text-[0.85em] text-[#666] dark:text-[#666] light:text-[#333] my-2 p-2 rounded bg-[rgba(75,167,166,0.1)]"
-            >
+            <div className="text-[0.85em] text-[#666] dark:text-[#666] light:text-[#333] my-2 p-2 rounded bg-[rgba(75,167,166,0.1)]">
               {historySyncStatus}
             </div>
           )}
@@ -440,7 +406,7 @@ export default function App() {
 
           {/* Compact sync toggles moved below sync button */}
           <div className="flex flex-col gap-2 mt-4 p-4 bg-[rgba(75,167,166,0.05)] rounded-lg border-t border-[rgba(75,167,166,0.2)]">
-            <Field.Group className="max-w-lg w-full flex flex-row gap-4">
+            <Field.Group className="max-w-lg w-full">
               <Field orientation="horizontal">
                 <Checkbox
                   id="history-sync-enabled"
@@ -554,13 +520,10 @@ export default function App() {
                               log.status.slice(1)}
                             {log.error && (
                               <div
-                                className="text-[10px] text-[#dc3545] mt-1 italic"
+                                className="text-[10px] text-[#dc3545] mt-1 italic truncate"
                                 title={log.error}
                               >
-                                ⚠️{" "}
-                                {log.error.length > 60
-                                  ? `${log.error.slice(0, 60)}…`
-                                  : log.error}
+                                ⚠️ {log.error.substring(0, 20)}...
                               </div>
                             )}
                           </div>
@@ -575,38 +538,10 @@ export default function App() {
 
           <div className="flex flex-col gap-2 mb-4 mt-4">
             <Button
-              onClick={captureSnapshot}
-              disabled={captureInProgress}
-              aria-busy={captureInProgress}
-              title="Capture a PNG snapshot of the current tab (Alt+Shift+C)"
-              className="rounded-lg border border-transparent px-[1.4em] py-[0.8em] text-base font-medium cursor-pointer transition-all min-h-[44px] touch-manipulation bg-[#4ba7a6] text-white hover:bg-[#2f6b7e] hover:border-[#2f6b7e] disabled:opacity-60 disabled:cursor-not-allowed active:translate-y-[1px] w-full"
-            >
-              {captureInProgress
-                ? "Capturing…"
-                : "📸 Snapshot Current Tab (Alt+Shift+C)"}
-            </Button>
-            {captureStatus && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="text-[0.85em] text-[#666] p-2 rounded bg-[rgba(75,167,166,0.1)]"
-              >
-                {captureStatus}
-              </div>
-            )}
-            <Button
               onClick={() => setShowBlacklistManager(true)}
               className="rounded-lg border border-transparent px-[1.4em] py-[0.8em] text-base font-medium font-inherit cursor-pointer transition-all min-h-[44px] min-w-[44px] touch-manipulation bg-[#555] dark:bg-[#555] light:bg-[#e0e0e0] text-white dark:text-white light:text-[#213547] border-[#555] dark:border-[#555] light:border-[#d0d0d0] hover:bg-[#666] dark:hover:bg-[#666] light:hover:bg-[#d0d0d0] hover:border-[#666] dark:hover:border-[#666] light:hover:border-[#c0c0c0] active:translate-y-[1px] w-full"
             >
-              Manage Ignored Sites &amp; Pages
-            </Button>
-            <Button
-              onClick={() => setShowDiagnostics(true)}
-              variant="outline"
-              className="text-xs min-h-[36px] w-full"
-              title="View logs and queued content (for debugging)"
-            >
-              🩺 Diagnostics
+              Ignored Pages and Sites
             </Button>
             <div className="flex justify-around p-2 bg-[rgba(0,0,0,0.2)] dark:bg-[rgba(0,0,0,0.2)] light:bg-[rgba(0,0,0,0.05)] rounded text-[0.85em]">
               <span className="text-[#888] dark:text-[#888] light:text-[#666]">

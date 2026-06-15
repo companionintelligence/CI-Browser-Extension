@@ -33,14 +33,19 @@ export interface ScrapeResult {
   };
 }
 
-// Vite eagerly loads every JSON under scrapeProfiles/<category>/*.json.
-// Adding a new profile is a no-code change: drop the JSON in the right
-// category folder, add the host to `host_permissions` and to the content
-// script `matches`, and rebuild.
-const PROFILE_MODULES = import.meta.glob<{ default: ScrapeProfile }>(
-  "./scrapeProfiles/*/*.json",
-  { eager: true },
-);
+import netflixProfileData from "./scrapeProfiles/netflix.json";
+import huluProfileData from "./scrapeProfiles/hulu.json";
+import disneyProfileData from "./scrapeProfiles/disney.json";
+import slashdotProfileData from "./scrapeProfiles/slashdot.json";
+import githubProfileData from "./scrapeProfiles/github.json";
+import maxProfileData from "./scrapeProfiles/max.json";
+import paramountProfileData from "./scrapeProfiles/paramount.json";
+import primevideoProfileData from "./scrapeProfiles/primevideo.json";
+import cnnProfileData from "./scrapeProfiles/cnn.json";
+import wsjProfileData from "./scrapeProfiles/wsj.json";
+import quoraProfileData from "./scrapeProfiles/quora.json";
+import robinhoodProfileData from "./scrapeProfiles/robinhood.json";
+import airbnbProfileData from "./scrapeProfiles/airbnb.json";
 
 export class DomainScraper {
   private profiles: { [key: string]: ScrapeProfile } = {};
@@ -52,36 +57,101 @@ export class DomainScraper {
   }
 
   private loadProfiles() {
-    for (const [path, mod] of Object.entries(PROFILE_MODULES)) {
-      try {
-        const profile = mod.default;
-        if (!profile?.domain) {
-          console.warn(`Skipping profile ${path}: missing domain`);
-          continue;
-        }
-
-        this.profiles[profile.domain] = profile;
-        this.profileNames[profile.domain] = profile.name;
-      } catch (error) {
-        console.warn(`Failed to load scrape profile ${path}:`, error);
-      }
-    }
-  }
-
-  /**
-   * Categories are derived from the directory layout, e.g. a profile at
-   * scrapeProfiles/streaming/netflix.json reports category "streaming".
-   */
-  public getProfileCategory(domain: string): string | undefined {
-    for (const [path, mod] of Object.entries(PROFILE_MODULES)) {
-      if (mod.default?.domain === domain) {
-        const match = path.match(/\.\/scrapeProfiles\/([^/]+)\//);
-
-        return match?.[1];
-      }
+    try {
+      this.profiles["netflix.com"] = netflixProfileData as ScrapeProfile;
+      this.profileNames["netflix.com"] = netflixProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Netflix scrape profile:", error);
     }
 
-    return undefined;
+    try {
+      this.profiles["hulu.com"] = huluProfileData as ScrapeProfile;
+      this.profileNames["hulu.com"] = huluProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Hulu scrape profile:", error);
+    }
+
+    try {
+      this.profiles["disneyplus.com"] = disneyProfileData as ScrapeProfile;
+      this.profileNames["disneyplus.com"] = disneyProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Disney+ scrape profile:", error);
+    }
+
+    try {
+      this.profiles["slashdot.org"] = slashdotProfileData as ScrapeProfile;
+      this.profileNames["slashdot.org"] = slashdotProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Slashdot scrape profile:", error);
+    }
+
+    try {
+      this.profiles["github.com"] = githubProfileData as ScrapeProfile;
+      this.profileNames["github.com"] = githubProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load GitHub scrape profile:", error);
+    }
+
+    try {
+      this.profiles["max.com"] = maxProfileData as ScrapeProfile;
+      this.profileNames["max.com"] = maxProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Max scrape profile:", error);
+    }
+
+    try {
+      this.profiles["paramountplus.com"] =
+        paramountProfileData as ScrapeProfile;
+      this.profileNames["paramountplus.com"] = paramountProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Paramount+ scrape profile:", error);
+    }
+
+    try {
+      this.profiles["primevideo.com"] = primevideoProfileData as ScrapeProfile;
+      this.profileNames["primevideo.com"] = primevideoProfileData.name;
+      // Prime Video also lives under amazon.com/gp/video/*; the profile's
+      // targetUrl patterns restrict matching to those paths
+      this.profiles["amazon.com"] = primevideoProfileData as ScrapeProfile;
+      this.profileNames["amazon.com"] = primevideoProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Prime Video scrape profile:", error);
+    }
+
+    try {
+      this.profiles["cnn.com"] = cnnProfileData as ScrapeProfile;
+      this.profileNames["cnn.com"] = cnnProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load CNN scrape profile:", error);
+    }
+
+    try {
+      this.profiles["wsj.com"] = wsjProfileData as ScrapeProfile;
+      this.profileNames["wsj.com"] = wsjProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load WSJ scrape profile:", error);
+    }
+
+    try {
+      this.profiles["quora.com"] = quoraProfileData as ScrapeProfile;
+      this.profileNames["quora.com"] = quoraProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Quora scrape profile:", error);
+    }
+
+    try {
+      this.profiles["robinhood.com"] = robinhoodProfileData as ScrapeProfile;
+      this.profileNames["robinhood.com"] = robinhoodProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Robinhood scrape profile:", error);
+    }
+
+    try {
+      this.profiles["airbnb.com"] = airbnbProfileData as ScrapeProfile;
+      this.profileNames["airbnb.com"] = airbnbProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Airbnb scrape profile:", error);
+    }
   }
 
   public getAllProfiles(): { [key: string]: ScrapeProfile } {

@@ -31,28 +31,7 @@ describe("ciStateSlice", () => {
 
   describe("initialState", () => {
     it("should have correct initial state", () => {
-      const state = (store.getState() as { ciState: unknown }).ciState as {
-        accessToken: string | null;
-        url: string | null;
-        domain: string | null;
-        lastUrl: string | null;
-        historySyncInProgress: boolean;
-        historySyncStatus: string | null;
-        lastHistorySync: string | null;
-        syncHistoryLogs: { status: string; timestamp: string }[];
-        refreshing: boolean;
-        serverDomain: string;
-        autoSyncEnabled: boolean;
-        siteBlacklist: string[];
-        pageBlacklist: string[];
-        deviceId: string | null;
-        deviceName: string | null;
-        deviceType: string | null;
-        devicePlatform: string | null;
-        bookmarkSyncEnabled: boolean;
-        downloadSyncEnabled: boolean;
-        historySyncEnabled: boolean;
-      };
+      const state = (store.getState() as { ciState: unknown }).ciState;
       expect(state).toEqual({
         accessToken: null,
         url: null,
@@ -65,6 +44,7 @@ describe("ciStateSlice", () => {
         refreshing: false,
         serverDomain: "",
         serverEnvironmentId: null,
+        settingsLoaded: false,
         autoSyncEnabled: false,
         siteBlacklist: [],
         pageBlacklist: [],
@@ -120,23 +100,33 @@ describe("ciStateSlice", () => {
   });
 
   describe("saveUserSettings", () => {
-    it("should call browser.storage.local.set with current state", () => {
+    it("should persist settings to browser.storage.local", () => {
       const testState = {
-        accessToken: "test-token",
         siteBlacklist: ["example.com"],
         pageBlacklist: ["https://example.com"],
+        serverDomain: "ci.example.com",
       };
 
       (store.dispatch as (action: unknown) => unknown)(setState(testState));
       (store.dispatch as (action: unknown) => unknown)(saveUserSettings());
 
-      // `saveUserSettings` does not persist accessToken (it's session-scoped via cookie refresh).
       expect(mockBrowserStorage.local.set).toHaveBeenCalledWith(
         expect.objectContaining({
           siteBlacklist: ["example.com"],
           pageBlacklist: ["https://example.com"],
+          serverDomain: "ci.example.com",
         }),
       );
+    });
+
+    it("should not persist the access token", () => {
+      (store.dispatch as (action: unknown) => unknown)(
+        setState({ accessToken: "test-token" }),
+      );
+      (store.dispatch as (action: unknown) => unknown)(saveUserSettings());
+
+      const persisted = mockBrowserStorage.local.set.mock.calls[0][0];
+      expect(persisted).not.toHaveProperty("accessToken");
     });
   });
 

@@ -1,31 +1,26 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-
-const USER_SETTINGS_KEYS = [
-  "accessToken",
-  "lastHistorySync",
-  "syncHistoryLogs",
-  "autoSyncEnabled",
-  "siteBlacklist",
-  "pageBlacklist",
-  "deviceId",
-  "deviceName",
-  "deviceType",
-  "devicePlatform",
-  "bookmarkSyncEnabled",
-  "downloadSyncEnabled",
-  "historySyncEnabled",
-  "serverDomain",
-  "serverEnvironmentId",
-] as const;
+import { parseUrl } from "@/utils";
 
 export const loadUserSettings = createAsyncThunk(
   "ciState/loadUserSettings",
   async () => {
-    const keys = USER_SETTINGS_KEYS as readonly (keyof CiState)[];
-
-    return (await browser.storage.local.get(
-      keys as (keyof CiState)[],
-    )) as Partial<CiState>;
+    return await browser.storage.local.get<Record<string, unknown>>([
+      "accessToken",
+      "lastHistorySync",
+      "syncHistoryLogs",
+      "autoSyncEnabled",
+      "siteBlacklist",
+      "pageBlacklist",
+      "deviceId",
+      "deviceName",
+      "deviceType",
+      "devicePlatform",
+      "bookmarkSyncEnabled",
+      "downloadSyncEnabled",
+      "historySyncEnabled",
+      "serverDomain",
+      "serverEnvironmentId",
+    ]);
   },
 );
 
@@ -40,11 +35,8 @@ interface CiState {
   syncHistoryLogs: { status: string; timestamp: string }[];
   refreshing: boolean;
   serverDomain: string;
-  /**
-   * Which curated environment the user picked, or "custom" / null if they
-   * haven't been through the wizard yet. See src/lib/environments.ts.
-   */
   serverEnvironmentId: string | null;
+  settingsLoaded: boolean;
   autoSyncEnabled: boolean;
   siteBlacklist: string[];
   pageBlacklist: string[];
@@ -71,6 +63,7 @@ export const ciStateSlice = createSlice({
     refreshing: false,
     serverDomain: "",
     serverEnvironmentId: null,
+    settingsLoaded: false,
     autoSyncEnabled: false,
     siteBlacklist: [],
     pageBlacklist: [],
@@ -170,9 +163,9 @@ export const ciStateSlice = createSlice({
     },
     addPageBlacklist(state, action) {
       let newPageBlacklist = state.pageBlacklist;
-      let parsed = URL.parse(action.payload);
+      let parsed = parseUrl(action.payload);
       if (!parsed) {
-        parsed = URL.parse(`https://${action.payload}`);
+        parsed = parseUrl(`https://${action.payload}`);
         action.payload = `https://${action.payload}`;
       }
 
@@ -189,9 +182,9 @@ export const ciStateSlice = createSlice({
       return { ...state, pageBlacklist: newPageBlacklist };
     },
     removePageBlacklist(state, action) {
-      let parsed = URL.parse(action.payload);
+      let parsed = parseUrl(action.payload);
       if (!parsed) {
-        parsed = URL.parse(`https://${action.payload}`);
+        parsed = parseUrl(`https://${action.payload}`);
         action.payload = `https://${action.payload}`;
       }
 
@@ -233,12 +226,13 @@ export const ciStateSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(loadUserSettings.fulfilled, (state, action) => {
-      const payload = (action.payload ?? {}) as Record<string, unknown>;
-      for (const [key, value] of Object.entries(payload)) {
+      for (const [key, value] of Object.entries(action.payload)) {
         if (key in state) {
           (state as Record<string, unknown>)[key] = value;
         }
       }
+
+      state.settingsLoaded = true;
     });
   },
 });

@@ -5,6 +5,7 @@
  */
 
 import axios from "axios";
+import { isUrlBlacklisted } from "@/utils";
 
 // Mock axios
 jest.mock("axios");
@@ -70,48 +71,29 @@ describe("Background Script", () => {
   });
 
   describe("Domain and Page Blacklist Matching Logic", () => {
-    const parseHostname = (url: string): string | null => {
-      try {
-        return new URL(url).hostname;
-      } catch {
-        return null;
-      }
-    };
-
     it("should match domain blacklist correctly", () => {
       const url = "https://example.com/page";
       const siteBlacklist = ["example.com", "google.com", "github.com"];
 
-      let isBlacklisted = false;
-      const hostname = parseHostname(url);
-      if (hostname) {
-        for (const site of siteBlacklist) {
-          if (hostname.includes(site)) {
-            isBlacklisted = true;
-            break;
-          }
-        }
-      }
-
-      expect(isBlacklisted).toBe(true);
+      expect(isUrlBlacklisted(url, siteBlacklist, [])).toBe(true);
     });
 
     it("should not match unrelated domains", () => {
       const url = "https://unrelated.com/page";
       const siteBlacklist = ["example.com", "google.com"];
 
-      let isBlacklisted = false;
-      const hostname = parseHostname(url);
-      if (hostname) {
-        for (const site of siteBlacklist) {
-          if (hostname.includes(site)) {
-            isBlacklisted = true;
-            break;
-          }
-        }
-      }
+      expect(isUrlBlacklisted(url, siteBlacklist, [])).toBe(false);
+    });
 
-      expect(isBlacklisted).toBe(false);
+    it("should blacklist the URL being recorded, not the previously visited one", () => {
+      // Regression test for the off-by-one in recordHit: the blacklist must
+      // be evaluated against the page being uploaded
+      const previousUrl = "https://clean-site.com/home";
+      const currentUrl = "https://blocked-site.com/private";
+      const siteBlacklist = ["blocked-site.com"];
+
+      expect(isUrlBlacklisted(previousUrl, siteBlacklist, [])).toBe(false);
+      expect(isUrlBlacklisted(currentUrl, siteBlacklist, [])).toBe(true);
     });
   });
 

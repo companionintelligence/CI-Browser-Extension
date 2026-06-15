@@ -1,26 +1,19 @@
 import { domainScraper } from "@/domainScraper";
 
-// Keep this list in lock-step with `host_permissions` in wxt.config.ts and
-// with the scrape profiles under src/scrapeProfiles/<category>/*.json.
 export default defineContentScript({
   matches: [
     "*://*.netflix.com/*",
     "*://*.hulu.com/*",
     "*://secure.hulu.com/*",
     "*://*.disneyplus.com/*",
-    "*://*.max.com/*",
-    "*://*.primevideo.com/*",
-    "*://*.amazon.com/gp/video/*",
-    "*://*.paramountplus.com/*",
     "*://*.slashdot.org/*",
     "*://slashdot.org/*",
     "*://*.github.com/*",
     "*://github.com/*",
-    "*://*.quora.com/*",
-    "*://*.cnn.com/*",
-    "*://*.wsj.com/*",
-    "*://*.airbnb.com/*",
-    "*://*.robinhood.com/*",
+    "*://*.max.com/*",
+    "*://*.paramountplus.com/*",
+    "*://*.primevideo.com/*",
+    "*://*.amazon.com/gp/video/*",
   ],
   main() {
     function performScraping() {

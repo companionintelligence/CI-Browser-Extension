@@ -1,287 +1,156 @@
+<div align="center">
+
+<img src="store-assets/shared/hero.png" alt="Companion Intelligence Browser Extension" width="820">
 
 # Companion Intelligence Browser Extension
- 
-A privacy-focused browser extension that records and extracts your web browsing history to work with your private CI Server for digital memory and web history archiving.
 
-####   PRIVATE AND CONFIDENTIAL
-#####   PROPERTY OF LIFESCOPE INC
+**Your browsing, your private memory.**
+A privacy-first browser extension that syncs your history, bookmarks, downloads,
+and highlights to a **Companion Intelligence (CI) Server that you control** —
+never the cloud.
 
-## 🌟 Vision & Overview
+`v1.4.0` · Chrome · Firefox · Safari · WXT + TypeScript
 
-The Companion Intelligence Browser Extension is designed to create a comprehensive digital memory of your web browsing activities. It serves as a data logger that works seamlessly with your private CI Server to maintain a detailed archive of your web history, enabling you to build a personal knowledge base from your online activities.
+> #### PRIVATE AND CONFIDENTIAL — PROPERTY OF LIFESCOPE INC.
+
+<img src="store-assets/shared/demo.gif" alt="Popup walkthrough" width="320">
+
+</div>
+
+## 🌟 Overview
+
+The extension is a personal web-archival tool. It records **your own** browsing
+activity and sends it to your private CI Server, building a searchable digital
+memory of your online life. Lifescope never receives your data, and there are no
+third-party trackers.
 
 ## ✨ Features
 
-- **Smart Domain Tracking**: Monitor specific domains you care about with configurable whitelists
-- **Page Content Extraction**: Automatically extract page titles, descriptions, and metadata
-- **Media Detection**: Capture thumbnails, videos, and audio content from visited pages
-- **Private Data Logging**: All data is sent to your private CI Server, maintaining full control over your information
-- **Historical Crawling**: Retroactively process your browser history for whitelisted domains
-- **Real-time Monitoring**: Track your browsing activity as it happens
-- **Authentication Integration**: Secure token-based authentication with your CI Server
+- **History sync** — sync your browsing history (URL, title, visit time, dwell,
+  scroll depth, page description) to your CI Server, over a time range you pick.
+- **Bookmarks & downloads** — keep them in sync too; each data type toggles
+  independently.
+- **Highlight-to-save** — select text on any page and archive it via the context
+  menu.
+- **Ignored Pages and Sites** — exclude any site or page from capture in one
+  click. Nothing on your ignore list is ever uploaded.
+- **Supported-site profiles** — structured capture (e.g. watchlists) on Netflix,
+  Hulu, Disney+, Max, Paramount+, Prime Video, GitHub, and Slashdot — only on
+  those domains.
+- **Reliable background sync** — uses the `chrome.alarms` lifecycle so scheduled
+  work survives MV3 service-worker suspension.
+- **Self-hosted & token-secured** — point it at any CI Server domain; auth uses
+  the server's session cookie + short-lived access tokens.
+
+See [`PRIVACY.md`](PRIVACY.md) for the full data-handling disclosure and
+[`CHANGELOG.md`](CHANGELOG.md) for release notes.
+
+## 📸 Screenshots
+
+| Sync to your server | Pick what's captured | Keep private sites private |
+|---|---|---|
+| ![](store-assets/shared/screenshot-1.png) | ![](store-assets/shared/screenshot-2.png) | ![](store-assets/shared/screenshot-3.png) |
 
 ## 🚀 Installation
 
-### For Users (Production)
-*Store publication coming soon - we plan to publish to all major browser extension stores*
+### For users
+Store listings are prepared for the Chrome Web Store, Firefox Add-ons, and the
+Apple App Store (Safari). See [`store-assets/STORE-LISTING.md`](store-assets/STORE-LISTING.md)
+and [`PUBLISHING.md`](PUBLISHING.md).
 
-### For Developers (Manual Installation)
-1. Clone this repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Build the extension:
-   ```bash
-   npm run build
-   ```
-4. Load the extension in your browser:
-   - **Chrome/Edge**: Go to `chrome://extensions/`, enable Developer mode, click "Load unpacked" and select the `.output/chrome-mv3` folder
-   - **Firefox**: Go to `about:debugging`, click "This Firefox", click "Load Temporary Add-on" and select the manifest.json file
+### For developers (manual install)
 
-## 📖 Usage Guide
-
-### Initial Setup
-1. Install the extension following the installation instructions above
-2. Install nginx certificate into Chrome (LOCAL DEV ONLY)
-3. Configure your CI Server URL (see Configuration section)
-4. Authenticate with your CI Server through the extension popup
-5. Configure your domain and page whitelists to specify what content to track
-
-### Daily Usage
-- The extension works automatically in the background
-- Visit the extension popup to view current tracking status
-- Manage your whitelists through the options page
-- Monitor authentication status and connection to your CI Server
-
-### What Gets Tracked
-- **Domain Visits**: URLs matching your domain whitelist patterns
-- **Page Content**: Title, description, and metadata from visited pages
-- **Media Content**: Thumbnails and embedded media information
-- **Visit Timing**: When pages were accessed
-- **Historical Data**: Past visits to whitelisted domains (processed retroactively)
-
-### Installing local nginx certificate into Chrome (LOCAL DEV ONLY)
-1. In Chrome, go to chrome://certificate-manager/localcerts/usercerts
-2. Under Trusted Certificates click Import, navigate to ci-server/infrastructure/nginx/ssl, and import localhost.crt
-
-## ⚙️ Configuration
-
-### Server URL Configuration
-**Important**: The extension currently uses a hardcoded server URL (`dev.companionintelligence.com`). This needs to be made configurable to support:
-- Demo server at `alpha.companionintel.com`
-- Private CI Server instances
-- Local development environments
-
-*Configuration UI for server URL selection is planned for future releases.*
-
-### Whitelist Configuration
-Configure which domains and pages to track:
-- **Domain Whitelist**: Track all pages from specific domains (e.g., `github.com`, `stackoverflow.com`)
-- **Page Whitelist**: Track specific URL patterns or individual pages
-
-### Authentication
-The extension uses JWT-based authentication with your CI Server:
-- Access tokens for API requests
-- Session tokens for maintaining login state
-- Automatic token refresh when needed
-
-## 🛠️ Development Setup
-
-### Prerequisites
-- Node.js (v18 or later)
-- npm or yarn
-- Modern browser for testing
-
-### Development Commands
 ```bash
-# Install dependencies
-npm install
-
-# Start development mode (Chrome)
-npm run dev
-
-# Start development mode for other browsers
-npm run dev:firefox
-npm run dev:opera
-npm run dev:brave
-npm run dev:duckduckgo
-
-# Build for production (Chrome)
-npm run build
-
-# Build for other browsers
-npm run build:firefox
-npm run build:opera
-npm run build:brave
-npm run build:duckduckgo
-
-# Create distribution packages
-npm run zip
-npm run zip:firefox
-npm run zip:opera
-npm run zip:brave
-npm run zip:duckduckgo
-
-# Linting and code quality
-npm run lint
-npm run lint:fix
-npm run compile
+corepack enable          # the repo pins yarn 4 via packageManager
+yarn install
+yarn build               # Chrome MV3  → .output/chrome-mv3
+yarn build:firefox       # Firefox MV2 → .output/firefox-mv2
 ```
-## Safari Setup
 
-For Safari Mobile (iOS) development:
+- **Chrome / Edge / Brave**: `chrome://extensions` → enable Developer mode →
+  **Load unpacked** → select `.output/chrome-mv3`.
+- **Firefox**: `about:debugging` → This Firefox → **Load Temporary Add-on** →
+  select `.output/firefox-mv2/manifest.json`.
 
-1. Build the extension with `npm run build:safari`
-2. The output will be in `.output/safari-mv3/`
-3. Use Xcode to create a Safari App Extension wrapper for iOS distribution
-4. The extension uses Manifest V3 for better Safari iOS compatibility
+> **Package manager:** this repo uses **yarn 4** (via corepack). It cannot be
+> installed with npm/pnpm because the workspace uses the `workspace:*` protocol.
 
-### Project Structure
+## 📖 Usage
+
+1. Open the popup and enter your **CI Server URL** (e.g. `my-ci.example.com`),
+   then **Save**.
+2. Click **Log in to continue** — this opens your CI Server's web login. Once
+   signed in, the popup shows **Logged in** and your device.
+3. Choose a **sync time range** and click **Start History Sync**, or enable
+   **Auto-sync** to run in the background.
+4. Toggle **History / Bookmarks / Downloads** to control what's captured.
+5. Use **Ignored Pages and Sites** to exclude anything private.
+
+## 🛠️ Development
+
+```bash
+yarn dev                 # Chrome dev server (also dev:firefox, dev:edge, …)
+yarn test                # Jest unit tests
+yarn compile             # tsc --noEmit
+yarn lint                # eslint
+yarn build:firefox       # per-browser builds; see package.json scripts
+yarn prepare:store       # clean + zip all store targets into .output/
+```
+
+### Project structure
+
 ```
 src/
 ├── entrypoints/
-│   ├── background.ts      # Background script with main logic
-│   ├── content.ts         # Content script
-│   ├── popup/            # Extension popup UI
-│   └── options/          # Options page UI
-├── hooks/                # Custom React hooks
-├── store/                # Redux store configuration
-└── utils.ts              # Utility functions
+│   ├── background.ts            # sync engine, auth, alarms, device setup
+│   ├── content.ts              # scroll depth + page metadata + highlight save
+│   ├── domainScraper.content.ts # supported-site capture
+│   └── popup/                  # popup UI (App.tsx, BlacklistManager.tsx)
+├── scrapeProfiles/             # per-site scrape profile JSON
+├── store/                      # Redux Toolkit + webext-redux
+├── indexeddb.ts                # local queue
+└── utils.ts                    # URL parsing, ignore-list matching
+store-assets/                   # store + README art (regenerate via render.sh)
 ```
 
-## 📦 Building and Packaging
+## 🏗️ Architecture
 
-### For Chrome/Edge
-```bash
-npm run build
-npm run zip
-```
+- **Framework:** [WXT](https://wxt.dev) (cross-browser, type-safe)
+- **UI:** React 19 + TypeScript + Tailwind/shadcn
+- **State:** Redux Toolkit + `webext-redux` (shared across popup/background)
+- **Storage:** IndexedDB queue + `browser.storage.local`
+- **HTTP:** Axios to your CI Server's `/api/browser-activity` and `/api/devices`
 
-### For Firefox
-```bash
-npm run build:firefox
-npm run zip:firefox
-```
+**Browser builds:** Chrome MV3 (primary), Firefox MV2, Safari MV3, plus
+Edge/Opera/Brave/DuckDuckGo (Chromium, identical manifest). `yarn build:<target>`.
 
-### For Opera
-```bash
-npm run build:opera
-npm run zip:opera
-```
+### Data flow
+1. Navigation events and manual/auto sync collect activity (minus your ignore lists).
+2. Items are de-duplicated against local sync bookkeeping.
+3. Batches POST to your CI Server with a short-lived bearer token.
+4. Page title/description come from the page itself (a content-script read) — no
+   third-party metadata service.
 
-### For Brave
-```bash
-npm run build:brave
-npm run zip:brave
-```
+### Security & privacy
+- Data is sent only to **your** configured CI Server; no third-party analytics.
+- Auth: the CI Server's `sessionToken`/`csrfToken` cookies (read on that domain
+  only) → `POST /api/authenticate/refresh` → short-lived access token.
+- No passwords or form contents are collected. See [`PRIVACY.md`](PRIVACY.md).
 
-### For DuckDuckGo
-```bash
-npm run build:duckduckgo
-npm run zip:duckduckgo
-```
+## 🗺️ Roadmap
 
-The built extensions will be available in the `.output/` directory, with packaged versions in the `dist/` directory.
-
-## 🏪 Store Publication Plans
-
-We plan to publish this extension to all major browser extension stores:
-
-- **Chrome Web Store** - For Chrome and Chromium-based browsers
-- **Firefox Add-ons** - For Firefox
-- **Microsoft Edge Add-ons** - For Microsoft Edge
-- **Opera Add-ons** - For Opera browser
-- **Brave Browser Extensions** - For Brave browser (via Chrome Web Store compatibility)
-- **DuckDuckGo Browser Extensions** - For DuckDuckGo browser (via Chrome Web Store compatibility)
-- **Safari Extensions** - For Safari (future consideration)
-
-This will eliminate the need for manual installation and building, making the extension accessible to all users.
-
-## 🏗️ Technical Architecture
-
-### Core Technologies
-- **Framework**: WXT (Web Extension Toolkit) - Modern, type-safe extension development
-- **Frontend**: React 19 with TypeScript
-- **State Management**: Redux Toolkit with webext-redux for cross-context state
-- **HTTP Client**: Axios for API communications
-- **Build Tool**: Vite for fast development and building
-
-### Browser Compatibility
-The extension supports all major browsers through WXT's cross-browser compilation:
-- **Chrome** - Manifest V3 (primary development target)
-- **Firefox** - Manifest V2 (Mozilla's recommended version)
-- **Microsoft Edge** - Manifest V3 (Chromium-based)
-- **Opera** - Manifest V3 (Chromium-based) 
-- **Brave** - Manifest V3 (Chromium-based)
-- **DuckDuckGo Browser** - Manifest V3 (Chromium-based)
-- **Safari** - Manifest V3 (iOS compatibility)
-- **Kiwi Browser** - Chromium-based mobile browser with extension support  
-- **Samsung Internet** (limited) - Some versions support extensions
-- **Microsoft Edge Mobile** (limited) - Limited extension support
-
-### Installation on Mobile
-1. Install a compatible browser (Firefox for Android or Kiwi Browser recommended)
-2. Enable extension/add-on support in browser settings
-3. Load the extension via developer mode or install from browser store
-4. Extension popup and options will automatically adapt to mobile interface
-
-
-All Chromium-based browsers use identical manifests and functionality, while Firefox uses a slightly adapted Manifest V2 version for optimal compatibility.
-
-### Key Components
-- **Background Script**: Handles web navigation monitoring, API communications, and data processing
-- **Content Scripts**: Inject functionality into web pages when needed
-- **Popup Interface**: Provides user controls and status information
-- **Options Page**: Configuration interface for whitelists and settings
-
-### Data Flow
-1. Web navigation events trigger the background script
-2. URLs are checked against configured whitelists
-3. Page metadata is extracted via iframely API
-4. Processed events are sent to your CI Server
-5. Historical data is crawled and processed for new whitelist entries
-
-### Security & Privacy
-- All data processing happens locally in the extension
-- Data is only sent to your configured CI Server
-- JWT-based authentication ensures secure API access
-- No third-party analytics or tracking
-
-## 🚀 Future Roadmap
-
-### Browser-Use Integration
-We plan to integrate with **Browser-Use** running on your CI Server, which will enable:
-- **Automated Browser Control**: Let the CI Server control browser actions
-- **Task Automation**: Execute complex web workflows automatically  
-- **Enhanced Data Collection**: More sophisticated page analysis and interaction
-- **Bidirectional Communication**: The extension will not only send data but also receive and execute commands
-
-### Planned Features
-- **Enhanced Configuration UI**: Easy server URL and advanced settings management
-- **Improved Content Extraction**: Better handling of dynamic content and SPAs
-- **Data Export/Import**: Backup and restore extension data
-- **Privacy Controls**: Fine-grained control over what data is collected
-- **Performance Optimization**: Reduced memory usage and faster processing
-- **Multi-Server Support**: Connect to multiple CI Server instances
-
-### Store Distribution
-- Automated publishing pipeline for all browser stores
-- Consistent release process across platforms
-- User feedback integration and rapid updates
+Tracked in `CI-Engineering/projects/ci-browser-extension`. Highlights: local-first
+outbox/queue, diagnostics panel and setup wizard, broader scrape-profile coverage,
+participation in platform **SSO once CI-Server federates to the CI-Portal OIDC
+identity provider** (the extension will continue to ride CI-Server sessions —
+see the OIDC/SSO audit), and Browser-Use bidirectional control.
 
 ## 🤝 Contributing
 
-This project uses modern development practices:
-- TypeScript for type safety
-- ESLint for code quality
-- Prettier for code formatting
-- WXT for cross-browser compatibility
- 
+TypeScript, ESLint, Prettier, and WXT. Run `yarn lint && yarn compile && yarn test`
+before pushing. CI (GitHub Actions) runs lint/type/test/build on every PR.
+
 ## 🆘 Support
 
-For support with the Companion Intelligence Browser Extension:
-- Check the extension options and popup for status information
-- Ensure your CI Server is properly configured and accessible
-- Verify your authentication tokens are valid
-- Review browser console logs for error messages
+support@ci.computer — and check the popup status, your CI Server connectivity,
+and the browser console for diagnostics.

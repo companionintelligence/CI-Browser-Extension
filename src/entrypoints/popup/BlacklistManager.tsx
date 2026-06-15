@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   addSiteBlacklist,
@@ -6,7 +6,7 @@ import {
   addPageBlacklist,
   removePageBlacklist,
 } from "@/store/ciStateSlice";
-import { domainRegex, siteRegex } from "@/utils.ts";
+import { domainRegex, siteRegex, parseUrl } from "@/utils.ts";
 import "./BlacklistManager.css";
 
 interface BlacklistManagerProps {
@@ -28,19 +28,6 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
   const [invalidSite, setInvalidSite] = useState(false);
   const [invalidPage, setInvalidPage] = useState(false);
   const [activeTab, setActiveTab] = useState<"sites" | "pages">("sites");
-
-  // Esc returns to the main popup view.
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onBack();
-      }
-    };
-
-    window.addEventListener("keydown", handleKey);
-
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [onBack]);
 
   const addSiteEntry = (e: { preventDefault: () => void }) => {
     e.preventDefault();
@@ -96,7 +83,7 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
       return;
     }
 
-    const parsedUrl = URL.parse(active);
+    const parsedUrl = parseUrl(active);
     if (!parsedUrl) {
       return;
     }
@@ -111,12 +98,12 @@ export default function BlacklistManager({ onBack }: BlacklistManagerProps) {
         <button className="back-button" onClick={onBack} title="Go back">
           ←
         </button>
-        <h2>Ignored Sites and Pages</h2>
+        <h2>Ignored Pages and Sites</h2>
       </div>
 
       <div className="blacklist-description">
         <p>
-          Ignored sites and pages are excluded from automatic browser history
+          These sites and pages will be excluded from automatic browser history
           sync.
         </p>
       </div>
