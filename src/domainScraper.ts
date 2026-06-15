@@ -41,6 +41,11 @@ import githubProfileData from "./scrapeProfiles/github.json";
 import maxProfileData from "./scrapeProfiles/max.json";
 import paramountProfileData from "./scrapeProfiles/paramount.json";
 import primevideoProfileData from "./scrapeProfiles/primevideo.json";
+import cnnProfileData from "./scrapeProfiles/cnn.json";
+import wsjProfileData from "./scrapeProfiles/wsj.json";
+import quoraProfileData from "./scrapeProfiles/quora.json";
+import robinhoodProfileData from "./scrapeProfiles/robinhood.json";
+import airbnbProfileData from "./scrapeProfiles/airbnb.json";
 
 export class DomainScraper {
   private profiles: { [key: string]: ScrapeProfile } = {};
@@ -111,6 +116,41 @@ export class DomainScraper {
       this.profileNames["amazon.com"] = primevideoProfileData.name;
     } catch (error) {
       console.warn("Failed to load Prime Video scrape profile:", error);
+    }
+
+    try {
+      this.profiles["cnn.com"] = cnnProfileData as ScrapeProfile;
+      this.profileNames["cnn.com"] = cnnProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load CNN scrape profile:", error);
+    }
+
+    try {
+      this.profiles["wsj.com"] = wsjProfileData as ScrapeProfile;
+      this.profileNames["wsj.com"] = wsjProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load WSJ scrape profile:", error);
+    }
+
+    try {
+      this.profiles["quora.com"] = quoraProfileData as ScrapeProfile;
+      this.profileNames["quora.com"] = quoraProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Quora scrape profile:", error);
+    }
+
+    try {
+      this.profiles["robinhood.com"] = robinhoodProfileData as ScrapeProfile;
+      this.profileNames["robinhood.com"] = robinhoodProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Robinhood scrape profile:", error);
+    }
+
+    try {
+      this.profiles["airbnb.com"] = airbnbProfileData as ScrapeProfile;
+      this.profileNames["airbnb.com"] = airbnbProfileData.name;
+    } catch (error) {
+      console.warn("Failed to load Airbnb scrape profile:", error);
     }
   }
 

@@ -1,0 +1,112 @@
+{
+  "domain": "cnn.com",
+  "name": "CNN News Data Scraper", 
+  "description": "Scrapes CNN articles, headlines, and news content",
+  "targetUrl": [
+    "https://www.cnn.com/*",
+    "https://edition.cnn.com/*"
+  ],
+  "dataSelectors": {
+    "articles": {
+      "container": "[data-testid='article'], .article, .card, .media, .list-item",
+      "fields": {
+        "headline": {
+          "selector": "[data-testid='headline'], .headline, h1, h2, h3, .card-title",
+          "type": "text",
+          "transform": "trim"
+        },
+        "articleUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "summary": {
+          "selector": "[data-testid='summary'], .summary, .description, .excerpt, p",
+          "type": "text",
+          "transform": "trim"
+        },
+        "imageUrl": {
+          "selector": "img, .media-image",
+          "type": "attribute",
+          "attribute": "src",
+          "transform": "absoluteUrl"
+        },
+        "publishDate": {
+          "selector": "[data-testid='publish-date'], .publish-date, .timestamp, time",
+          "type": "text",
+          "transform": "trim"
+        },
+        "author": {
+          "selector": "[data-testid='author'], .author, .byline",
+          "type": "text",
+          "transform": "trim"
+        },
+        "category": {
+          "selector": "[data-testid='category'], .category, .section, .topic",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "breakingNews": {
+      "container": "[data-testid='breaking-news'], .breaking-news, .alert, .urgent",
+      "fields": {
+        "headline": {
+          "selector": "[data-testid='headline'], .headline, h1, h2",
+          "type": "text",
+          "transform": "trim"
+        },
+        "articleUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "timestamp": {
+          "selector": "[data-testid='timestamp'], .timestamp, time",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "headlines": {
+      "container": "[data-testid='headline-item'], .headline-item, .top-story, .featured",
+      "fields": {
+        "title": {
+          "selector": "[data-testid='title'], .title, h1, h2, h3",
+          "type": "text",
+          "transform": "trim"
+        },
+        "url": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "category": {
+          "selector": "[data-testid='category'], .category, .section",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "news_articles",
+      "description": "CNN news articles and content viewed",
+      "personalDataType": "news_consumption"
+    },
+    {
+      "name": "breaking_news",
+      "description": "CNN breaking news alerts and urgent updates",
+      "personalDataType": "news_consumption"
+    },
+    {
+      "name": "headlines",
+      "description": "CNN top headlines and featured stories",
+      "personalDataType": "news_consumption"
+    }
+  ]
+}

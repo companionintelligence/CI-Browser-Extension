@@ -19,6 +19,7 @@ export const loadUserSettings = createAsyncThunk(
       "downloadSyncEnabled",
       "historySyncEnabled",
       "serverDomain",
+      "serverEnvironmentId",
     ]);
   },
 );
@@ -34,6 +35,8 @@ interface CiState {
   syncHistoryLogs: { status: string; timestamp: string }[];
   refreshing: boolean;
   serverDomain: string;
+  serverEnvironmentId: string | null;
+  settingsLoaded: boolean;
   autoSyncEnabled: boolean;
   siteBlacklist: string[];
   pageBlacklist: string[];
@@ -59,6 +62,8 @@ export const ciStateSlice = createSlice({
     syncHistoryLogs: [],
     refreshing: false,
     serverDomain: "",
+    serverEnvironmentId: null,
+    settingsLoaded: false,
     autoSyncEnabled: false,
     siteBlacklist: [],
     pageBlacklist: [],
@@ -211,6 +216,7 @@ export const ciStateSlice = createSlice({
           downloadSyncEnabled: state.downloadSyncEnabled,
           historySyncEnabled: state.historySyncEnabled,
           serverDomain: state.serverDomain,
+          serverEnvironmentId: state.serverEnvironmentId,
         }),
       );
       browser.storage.local.set(parsed);
@@ -225,6 +231,8 @@ export const ciStateSlice = createSlice({
           (state as Record<string, unknown>)[key] = value;
         }
       }
+
+      state.settingsLoaded = true;
     });
   },
 });

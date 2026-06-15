@@ -12,6 +12,7 @@ import {
 import "@/theme.css";
 import bowser from "bowser";
 import BlacklistManager from "./BlacklistManager";
+import SetupWizard from "./SetupWizard";
 import { Button, Checkbox, Field, Label, Input, Card } from "@ci/shadcn";
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
     historySyncStatus: string | null;
     lastHistorySync: string | null;
     serverDomain: string;
+    settingsLoaded: boolean;
     autoSyncEnabled: boolean;
     siteBlacklist: string[];
     pageBlacklist: string[];
@@ -52,6 +54,7 @@ export default function App() {
     historySyncStatus,
     lastHistorySync,
     serverDomain,
+    settingsLoaded,
     autoSyncEnabled,
     siteBlacklist,
     pageBlacklist,
@@ -68,6 +71,16 @@ export default function App() {
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
   const [token, setToken] = useState(accessToken);
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
+
+  // First-run onboarding: once persisted settings have loaded, if no
+  // CI-Server is configured yet, surface the setup wizard. Choosing a server
+  // or skipping closes it (skip lets the user fall back to manual entry).
+  useEffect(() => {
+    if (settingsLoaded && !serverDomain) {
+      setShowSetupWizard(true);
+    }
+  }, [settingsLoaded, serverDomain]);
 
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
@@ -225,6 +238,19 @@ export default function App() {
         return "#6c757d";
     }
   };
+
+  if (showSetupWizard) {
+    return (
+      <div
+        className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[400px]"} mx-auto p-4 box-border`}
+      >
+        <SetupWizard
+          onComplete={() => setShowSetupWizard(false)}
+          onSkip={() => setShowSetupWizard(false)}
+        />
+      </div>
+    );
+  }
 
   if (showBlacklistManager) {
     return (

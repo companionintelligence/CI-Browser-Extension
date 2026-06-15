@@ -1,0 +1,107 @@
+{
+  "domain": "quora.com",
+  "name": "Quora Data Scraper",
+  "description": "Scrapes Quora questions, answers, and user activity",
+  "targetUrl": [
+    "https://www.quora.com/profile/*",
+    "https://www.quora.com/*",
+    "https://www.quora.com/answer/*"
+  ],
+  "dataSelectors": {
+    "questions": {
+      "container": "[data-testid='question'], .q-box, .QuestionText, .question",
+      "fields": {
+        "title": {
+          "selector": "[data-testid='question-title'], .question-text, .QuestionText, h1, h2",
+          "type": "text",
+          "transform": "trim"
+        },
+        "questionUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "topics": {
+          "selector": "[data-testid='topics'], .topics, .TopicTag",
+          "type": "text",
+          "transform": "trim"
+        },
+        "timestamp": {
+          "selector": "[data-testid='timestamp'], .timestamp, .datetime",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "answers": {
+      "container": "[data-testid='answer'], .AnswerBase, .answer, .Answer",
+      "fields": {
+        "content": {
+          "selector": "[data-testid='answer-content'], .answer-content, .AnswerText",
+          "type": "text",
+          "transform": "trim"
+        },
+        "questionTitle": {
+          "selector": "[data-testid='question-link'], .question-link, .QuestionText",
+          "type": "text",
+          "transform": "trim"
+        },
+        "questionUrl": {
+          "selector": "[data-testid='question-link'], .question-link",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "upvotes": {
+          "selector": "[data-testid='upvotes'], .upvote-count, .UpvoteValue",
+          "type": "text",
+          "transform": "trim"
+        },
+        "timestamp": {
+          "selector": "[data-testid='timestamp'], .timestamp, .datetime",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "following": {
+      "container": "[data-testid='user-card'], .user-card, .UserCard",
+      "fields": {
+        "name": {
+          "selector": "[data-testid='user-name'], .user-name, .UserName",
+          "type": "text",
+          "transform": "trim"
+        },
+        "profileUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "bio": {
+          "selector": "[data-testid='bio'], .bio, .UserBio",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "questions",
+      "description": "Quora questions asked by user",
+      "personalDataType": "social_activity"
+    },
+    {
+      "name": "answers",
+      "description": "Quora answers written by user",
+      "personalDataType": "social_activity"
+    },
+    {
+      "name": "following",
+      "description": "Quora users and topics followed",
+      "personalDataType": "social_connections"
+    }
+  ]
+}
