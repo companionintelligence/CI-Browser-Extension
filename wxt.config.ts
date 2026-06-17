@@ -16,6 +16,7 @@ export default defineConfig({
       "*://*.hulu.com/*",
       "*://secure.hulu.com/*",
       "*://*.disneyplus.com/*",
+      "*://*.ci.localhost/*",
     ],
     permissions: [
       "alarms",

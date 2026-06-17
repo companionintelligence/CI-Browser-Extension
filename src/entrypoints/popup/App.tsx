@@ -80,7 +80,18 @@ export default function App() {
     if (settingsLoaded && !serverDomain) {
       setShowSetupWizard(true);
     }
+
+    if (serverDomain) {
+      setDomain(serverDomain);
+      browser.runtime.sendMessage({
+        action: "CHECK_AUTH_STATUS",
+      });
+    }
   }, [settingsLoaded, serverDomain]);
+
+  useEffect(() => {
+    setToken(accessToken);
+  }, [accessToken]);
 
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
