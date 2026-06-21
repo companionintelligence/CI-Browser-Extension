@@ -14,9 +14,18 @@ import {
   discover,
   signIn,
   getAccessToken,
+  getIdToken,
   loadTokens,
   type OidcConfig,
 } from "./oidcAuth";
+
+/** Build an unsigned JWT whose payload carries the given exp (epoch seconds). */
+function jwtWithExp(exp: number): string {
+  const b64 = (o: unknown) =>
+    Buffer.from(JSON.stringify(o)).toString("base64url");
+
+  return `${b64({ alg: "EdDSA", typ: "JWT" })}.${b64({ sub: "u", exp })}.sig`;
+}
 
 // jsdom does not expose WebCrypto's subtle; use Node's for SHA-256 + RNG.
 if (!(globalThis.crypto && "subtle" in globalThis.crypto)) {
@@ -229,5 +238,43 @@ describe("getAccessToken", () => {
     installBrowser(() => undefined);
     installFetch({});
     expect(await getAccessToken(CONFIG)).toBeNull();
+  });
+});
+
+describe("getIdToken", () => {
+  const now = Math.floor(Date.now() / 1000);
+
+  it("returns the id_token (the JWKS-signed JWT) when it is unexpired", async () => {
+    installBrowser(() => undefined);
+    const { fetchMock } = installFetch({});
+    const id = jwtWithExp(now + 3600);
+    store.oidcTokens = {
+      access_token: "opaque",
+      id_token: id,
+      expires_at: Date.now() + 600_000,
+    };
+    expect(await getIdToken(CONFIG)).toBe(id);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns null when there is no id_token (e.g. a non-openid scope)", async () => {
+    installBrowser(() => undefined);
+    installFetch({});
+    store.oidcTokens = {
+      access_token: "opaque",
+      expires_at: Date.now() + 600_000,
+    };
+    expect(await getIdToken(CONFIG)).toBeNull();
+  });
+
+  it("returns null when the id_token is expired and cannot be reissued (no refresh_token)", async () => {
+    installBrowser(() => undefined);
+    installFetch({});
+    store.oidcTokens = {
+      access_token: "opaque",
+      id_token: jwtWithExp(now - 100),
+      expires_at: Date.now() - 1000,
+    };
+    expect(await getIdToken(CONFIG)).toBeNull();
   });
 });

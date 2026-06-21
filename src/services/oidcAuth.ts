@@ -6,8 +6,9 @@
  * extension is registered as the `ci-browser-extension` public PKCE client
  * (CI-Portal #356); the redirect is `browser.identity.getRedirectURL()`
  * (`https://<extension-id>.chromiumapp.org/`, allowed by the portal redirect
- * allowlist). The resulting access token is the Bearer the extension sends to
- * CI-Server's `/v1/events` (which validates portal tokens after CI-Server #1473).
+ * allowlist). The **id_token** (getIdToken) — not the opaque OAuth access_token —
+ * is the Bearer the extension sends to CI-Server's `/v1/events` (which validates
+ * the JWKS-signed portal JWT after CI-Server #1473).
  *
  * Pure helpers (PKCE, authorize-URL, redirect parsing, token-request body) are
  * separated from the `browser`/network flow so they unit-test without a browser.
@@ -276,6 +277,56 @@ export async function getAccessToken(
 
   try {
     return (await refresh(config)).access_token;
+  } catch {
+    return null;
+  }
+}
+
+/** `exp` (epoch seconds) from a JWT payload, or null if unparseable. */
+function jwtExp(jwt: string): number | null {
+  try {
+    const part = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = part.padEnd(
+      part.length + ((4 - (part.length % 4)) % 4),
+      "=",
+    );
+    const payload = JSON.parse(atob(padded)) as { exp?: number };
+
+    return typeof payload.exp === "number" ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Return the OIDC **id_token** — the JWKS-signed JWT (aud === client_id) to
+ * forward to CI-Server as the Bearer for `/v1/events`. The OAuth access_token is
+ * an opaque random string and cannot pass CI-Server's `jwtVerify`, so this — not
+ * getAccessToken — is the token to send to CI-Server.
+ *
+ * The refresh grant does not reissue an id_token, so once it expires this returns
+ * null (the caller prompts a re-sign-in) rather than a token CI-Server rejects.
+ */
+export async function getIdToken(
+  config: OidcConfig,
+  skewMs = 60_000,
+): Promise<string | null> {
+  const tokens = await loadTokens();
+  if (!tokens?.id_token) {
+    return null;
+  }
+
+  const exp = jwtExp(tokens.id_token);
+  if (exp === null || exp * 1000 - skewMs > Date.now()) {
+    return tokens.id_token;
+  }
+
+  if (!tokens.refresh_token) {
+    return null;
+  }
+
+  try {
+    return (await refresh(config)).id_token ?? null;
   } catch {
     return null;
   }
