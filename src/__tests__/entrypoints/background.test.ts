@@ -1,72 +1,132 @@
 /**
- * Tests for background script functionality
- * Note: These tests focus on testable pure functions and logic.
- * Browser API interactions are mocked.
+ * Tests for background script behavior.
+ *
+ * The background entrypoint (defineBackground) wires browser APIs and can't be
+ * imported directly under jest, so these tests cover the contracts the
+ * background now depends on: the unified CaptureEvent transport (Phase 3,
+ * replacing the legacy axios `POST /api/browser-activity`) and the portal OIDC
+ * issuer derivation, plus the pure blacklist / slicing logic.
  */
 
-import axios from "axios";
 import { isUrlBlacklisted } from "@/utils";
+import {
+  sendCaptureEvents,
+  toCaptureEvent,
+  SOURCE_SYSTEM,
+  type BrowserActivity,
+} from "@/services/captureEvents";
+import {
+  deriveIssuer,
+  resolvePortalIssuer,
+  portalOidcConfig,
+  DEFAULT_PORTAL_ISSUER,
+  OIDC_CLIENT_ID,
+} from "@/services/portalConfig";
 
-// Mock axios
-jest.mock("axios");
-const mockedAxios = axios as jest.Mocked<typeof axios>;
-
-// Mock the store
-const mockStore = {
-  getState: jest.fn(),
-  dispatch: jest.fn(),
-};
-
-jest.mock("@/store", () => ({
-  store: mockStore,
-}));
-
-// Mock jwtDecode
-jest.mock("jwt-decode", () => ({
-  jwtDecode: jest.fn(),
-}));
+function activity(over: Partial<BrowserActivity> = {}): BrowserActivity {
+  return {
+    time: "2023-01-01T00:00:00.000Z",
+    device_id: "dev-1",
+    url: "https://example.com",
+    action_type: "visit",
+    ...over,
+  };
+}
 
 describe("Background Script", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe("assembleContentAndEvents function logic", () => {
-    it("should create event object with correct structure", () => {
-      const url = "https://example.com";
-      const time = "2023-01-01T00:00:00.000Z";
+  describe("CaptureEvent transport (Phase 3)", () => {
+    afterEach(() => jest.restoreAllMocks());
 
-      // This tests the logic we can extract from assembleContentAndEvents
-      const expectedEvent = {
-        name: "Visited " + url,
-        start_time: time,
-        type: "View",
-        content: [],
-      };
+    it("maps a browser visit to a browser.visit CaptureEvent", () => {
+      const event = toCaptureEvent(
+        activity({ title: "Example", action_type: "visit" }),
+      );
 
-      // Test the basic structure that should be returned
-      expect(expectedEvent.name).toBe("Visited https://example.com");
-      expect(expectedEvent.start_time).toBe(time);
-      expect(expectedEvent.type).toBe("View");
-      expect(Array.isArray(expectedEvent.content)).toBe(true);
+      expect(event).toMatchObject({
+        source_system: SOURCE_SYSTEM,
+        kind: "browser.visit",
+        occurred_at: "2023-01-01T00:00:00.000Z",
+        title: "Example",
+      });
+      expect(event.payload).toMatchObject({
+        url: "https://example.com",
+        device_id: "dev-1",
+        action_type: "visit",
+      });
     });
 
-    it("should use current time when no time is provided", () => {
-      const url = "https://example.com";
-      const beforeTime = new Date().toJSON();
+    it("POSTs activities as {events} to /v1/events with the Bearer token", async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ ingested: 1, duplicate: 0, rejected: [] }),
+      });
+      (global as { fetch?: unknown }).fetch = fetchMock;
 
-      // Test default time behavior
-      const eventWithDefaultTime = {
-        name: "Visited " + url,
-        start_time: new Date().toJSON(),
-        type: "View",
-        content: [],
-      };
+      const result = await sendCaptureEvents(
+        "dev.companionintelligence.com",
+        "portal-jwt",
+        [activity()],
+      );
 
-      const afterTime = new Date().toJSON();
+      expect(result).toEqual({ ingested: 1, duplicate: 0, rejected: [] });
 
-      expect(eventWithDefaultTime.start_time >= beforeTime).toBe(true);
-      expect(eventWithDefaultTime.start_time <= afterTime).toBe(true);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("https://dev.companionintelligence.com/v1/events");
+      expect((init.headers as Record<string, string>).Authorization).toBe(
+        "Bearer portal-jwt",
+      );
+      const body = JSON.parse(init.body as string);
+      expect(body.events[0].source_system).toBe(SOURCE_SYSTEM);
+      expect(body.events[0].kind).toBe("browser.visit");
+    });
+
+    it("throws on a non-2xx so the caller keeps its retry/logging", async () => {
+      (global as { fetch?: unknown }).fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: false, status: 401 });
+
+      await expect(
+        sendCaptureEvents("dev.companionintelligence.com", "t", [activity()]),
+      ).rejects.toThrow(/HTTP 401/);
+    });
+  });
+
+  describe("Portal OIDC issuer derivation (Phase 3)", () => {
+    it("derives the issuer from a server domain (bare host or URL)", () => {
+      expect(deriveIssuer("hub.ci.computer")).toBe(
+        "https://hub.ci.computer/api/auth",
+      );
+      expect(deriveIssuer("https://hub.ci.computer/")).toBe(
+        "https://hub.ci.computer/api/auth",
+      );
+    });
+
+    it("prefers an explicit portalIssuer override, then derives, then prod", () => {
+      expect(
+        resolvePortalIssuer({
+          serverDomain: "hub.ci.computer",
+          portalIssuer: "https://portal.example.com/api/auth",
+        }),
+      ).toBe("https://portal.example.com/api/auth");
+
+      expect(resolvePortalIssuer({ serverDomain: "dev.ci.computer" })).toBe(
+        "https://dev.ci.computer/api/auth",
+      );
+
+      expect(resolvePortalIssuer({})).toBe(DEFAULT_PORTAL_ISSUER);
+    });
+
+    it("builds the full OIDC client config for the extension", () => {
+      expect(portalOidcConfig({ serverDomain: "hub.ci.computer" })).toEqual({
+        issuer: "https://hub.ci.computer/api/auth",
+        clientId: OIDC_CLIENT_ID,
+        scopes: "openid profile email offline_access",
+      });
     });
   });
 
@@ -94,72 +154,6 @@ describe("Background Script", () => {
 
       expect(isUrlBlacklisted(previousUrl, siteBlacklist, [])).toBe(false);
       expect(isUrlBlacklisted(currentUrl, siteBlacklist, [])).toBe(true);
-    });
-  });
-
-  describe("API Request Logic", () => {
-    it("should make POST request with correct headers and data structure", async () => {
-      const mockEvents = [
-        {
-          name: "Visited https://example.com",
-          start_time: "2023-01-01T00:00:00.000Z",
-          type: "View",
-          content: [],
-        },
-      ];
-
-      const mockAccessToken = "test-token";
-
-      mockedAxios.post.mockResolvedValue({ status: 200 });
-
-      // Test the API call structure
-      await axios.post(
-        "https://dev.companionintelligence.com/api/browser-activity",
-        mockEvents,
-        {
-          headers: {
-            Authorization: `Bearer ${mockAccessToken}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        "https://dev.companionintelligence.com/api/browser-activity",
-        mockEvents,
-        {
-          headers: {
-            Authorization: "Bearer test-token",
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    });
-
-    it("should handle API errors gracefully", async () => {
-      const mockEvents = [{ name: "test" }];
-      const mockAccessToken = "test-token";
-
-      mockedAxios.post.mockRejectedValue(new Error("API Error"));
-
-      // Test error handling
-      let errorCaught = false;
-      try {
-        await axios.post(
-          "https://dev.companionintelligence.com/api/browser-activity",
-          mockEvents,
-          {
-            headers: {
-              Authorization: `Bearer ${mockAccessToken}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-      } catch {
-        errorCaught = true;
-      }
-
-      expect(errorCaught).toBe(true);
     });
   });
 
@@ -199,40 +193,6 @@ describe("Background Script", () => {
       }
 
       expect(slices).toHaveLength(0);
-    });
-  });
-
-  describe("JWT Token Validation Logic", () => {
-    it("should detect expired tokens", () => {
-      const currentTime = Date.now();
-      const expiredTime = currentTime - 1000; // 1 second ago
-
-      const mockAccessDecoded = {
-        exp: Math.floor(expiredTime / 1000),
-      };
-
-      const isAuthExpired = Date.now() >= mockAccessDecoded.exp * 1000;
-      expect(isAuthExpired).toBe(true);
-    });
-
-    it("should detect valid tokens", () => {
-      const currentTime = Date.now();
-      const futureTime = currentTime + 3600000; // 1 hour from now
-
-      const mockAccessDecoded = {
-        exp: Math.floor(futureTime / 1000),
-      };
-
-      const isAuthExpired = Date.now() >= mockAccessDecoded.exp * 1000;
-      expect(isAuthExpired).toBe(false);
-    });
-
-    it("should handle null token as expired", () => {
-      const mockAccessDecoded = null;
-      const isAuthExpired = mockAccessDecoded
-        ? Date.now() >= (mockAccessDecoded as { exp?: number }).exp! * 1000
-        : true;
-      expect(isAuthExpired).toBe(true);
     });
   });
 });

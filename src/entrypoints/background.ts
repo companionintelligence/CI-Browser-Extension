@@ -1,6 +1,4 @@
 import axios from "axios";
-import { fetchJson } from "../hooks/fetchJson";
-import { jwtDecode } from "jwt-decode";
 import { createWrapStore } from "webext-redux";
 import { store } from "@/store";
 import {
@@ -11,7 +9,13 @@ import {
 } from "@/store/ciStateSlice";
 import { siteRegex, parseUrl, isUrlBlacklisted } from "@/utils.ts";
 import { addSyncedItem, addSyncedItems, isItemSynced } from "@/lib/syncedItems";
-import { buildHighlightEvent } from "@/lib/highlight";
+import { buildHighlightActivity } from "@/lib/highlight";
+import {
+  sendCaptureEvents,
+  type BrowserActivity,
+} from "@/services/captureEvents";
+import { getAccessToken, signIn } from "@/services/oidcAuth";
+import { portalOidcConfig } from "@/services/portalConfig";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
 import { database } from "@/indexeddb";
@@ -20,9 +24,6 @@ const SLICE_SIZE = 100;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
 const DOWNLOAD_SYNC_KEY = "lastDownloadSync";
 const AUTO_SYNC_TIME_RANGE = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-
-const SESSION_TOKEN_KEY = "sessionToken";
-const CSRF_COOKIE_NAME = "csrfToken";
 
 // Alarm names (chrome.alarms survives MV3 service-worker suspension)
 const AUTH_CHECK_ALARM = "ci-auth-check";
@@ -44,15 +45,9 @@ async function runAutoSync() {
     const state = store.getState().ciState;
 
     if (state.autoSyncEnabled && !state.historySyncInProgress) {
-      const { accessToken } = state;
-      const accessDecoded = accessToken
-        ? (jwtDecode(accessToken) as { exp?: number })
-        : null;
-      const isAuthExpired = accessDecoded?.exp
-        ? Date.now() >= accessDecoded.exp * 1000
-        : true;
+      const token = await resolveAccessToken();
 
-      if (!isAuthExpired) {
+      if (token) {
         await triggerManualSync({
           timeRange: AUTO_SYNC_ALARM_TIME_RANGE,
         });
@@ -61,6 +56,50 @@ async function runAutoSync() {
   } catch (error) {
     console.error("Auto-sync error:", error);
   }
+}
+
+// ---- Unified identity + capture transport (Phase 3) ----
+
+// The portal OIDC client config, derived from the configured server domain (or
+// an explicit portalIssuer override). See services/portalConfig.
+function oidcConfig() {
+  const { serverDomain, portalIssuer } = store.getState().ciState;
+
+  return portalOidcConfig({ serverDomain, portalIssuer });
+}
+
+// Resolve a Bearer for CI-Server: prefer the portal OIDC session (refreshing
+// within the skew window), and fall back to a legacy CI-Server token still
+// mirrored in Redux during the migration. Returns null when signed out.
+async function resolveAccessToken(): Promise<string | null> {
+  const portalToken = await getAccessToken(oidcConfig());
+  if (portalToken) {
+    return portalToken;
+  }
+
+  return store.getState().ciState.accessToken ?? null;
+}
+
+// Central capture transport: every browser-activity write goes through here as
+// CaptureEvents on CI-Server's unified `/v1/events` path (replacing the legacy
+// `POST /api/browser-activity`). No-ops without a server domain or batch;
+// throws on a missing token or non-2xx so callers keep their retry/logging.
+async function postCaptureEvents(activities: BrowserActivity[]): Promise<void> {
+  if (activities.length === 0) {
+    return;
+  }
+
+  const { serverDomain } = store.getState().ciState;
+  if (!serverDomain) {
+    return;
+  }
+
+  const token = await resolveAccessToken();
+  if (!token) {
+    throw new Error("No access token available for capture upload");
+  }
+
+  await sendCaptureEvents(serverDomain, token, activities);
 }
 
 // Helper function to ensure proper ISO time format with milliseconds
@@ -122,27 +161,19 @@ function isValidUrl(url: string): boolean {
   }
 }
 
-interface AuthResponse {
-  accessToken: string;
-  sessionToken: string;
-}
-
 const recordHit = async function (e: any) {
-  const state = store.getState().ciState;
-  const { accessToken } = state;
-
-  // Don't make API calls if user is not authenticated
-  if (!accessToken) {
+  // Don't make API calls if the user has no usable session
+  if (!(await resolveAccessToken())) {
     return;
   }
 
-  const accessDecoded = jwtDecode(accessToken);
-  const isAuthExpired = accessDecoded.exp
-    ? Date.now() >= accessDecoded.exp * 1000
-    : true;
   if (e.frameId !== 0) {
     return;
   }
+
+  // Snapshot state before the dispatch below so state.lastUrl still holds the
+  // previously recorded page
+  const state = store.getState().ciState;
 
   const tabInfo = await browser.tabs.query({
     active: true,
@@ -170,7 +201,7 @@ const recordHit = async function (e: any) {
     state.pageBlacklist,
   );
 
-  if (!isAuthExpired && !isBlacklisted && state.lastUrl !== active.url) {
+  if (!isBlacklisted && state.lastUrl !== active.url) {
     store.dispatch(setState({ lastUrl: active.url }));
 
     store.dispatch(saveUserSettings());
@@ -184,18 +215,7 @@ const recordHit = async function (e: any) {
     );
 
     try {
-      const { accessToken } = store.getState().ciState;
-      await axios.post(
-        // TODO: update to use env var
-        `https://${state.serverDomain}/api/browser-activity`,
-        newActivity,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      await postCaptureEvents([newActivity]);
 
       const historyId = `${active.url}_${date}`;
       await addSyncedItem(SYNCED_HISTORY_KEY, historyId);
@@ -219,19 +239,10 @@ async function getDeviceId(): Promise<string> {
 // Heartbeat so CI-Server can show device freshness; failures are non-critical
 async function updateDeviceLastSeen(deviceId: string): Promise<void> {
   try {
-    const state = store.getState().ciState;
-    const { accessToken, serverDomain } = state;
+    const { serverDomain } = store.getState().ciState;
+    const token = await resolveAccessToken();
 
-    if (!accessToken || !serverDomain) {
-      return;
-    }
-
-    const accessDecoded = jwtDecode(accessToken) as { exp?: number };
-    const isAuthExpired = accessDecoded?.exp
-      ? Date.now() >= accessDecoded.exp * 1000
-      : true;
-
-    if (isAuthExpired) {
+    if (!token || !serverDomain) {
       return;
     }
 
@@ -240,7 +251,7 @@ async function updateDeviceLastSeen(deviceId: string): Promise<void> {
       {},
       {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         timeout: 5000, // 5 second timeout
@@ -256,26 +267,16 @@ async function updateDeviceLastSeen(deviceId: string): Promise<void> {
 
 async function fetchDeviceFromServer(): Promise<string | null> {
   try {
-    const state = store.getState().ciState;
-    const { accessToken, serverDomain } = state;
+    const { serverDomain } = store.getState().ciState;
+    const token = await resolveAccessToken();
 
-    if (!accessToken) {
-      return null;
-    }
-
-    const accessDecoded = jwtDecode(accessToken) as any;
-    const isAuthExpired =
-      accessDecoded && accessDecoded.exp
-        ? Date.now() >= accessDecoded.exp * 1000
-        : true;
-
-    if (isAuthExpired) {
+    if (!token) {
       return null;
     }
 
     const response = await axios.get(`https://${serverDomain}/api/devices`, {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       timeout: 10000, // 10 second timeout
@@ -352,23 +353,11 @@ async function fetchDeviceFromServer(): Promise<string | null> {
 }
 
 async function createDeviceOnServer(): Promise<string> {
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain } = state;
+  const { serverDomain } = store.getState().ciState;
+  const token = await resolveAccessToken();
 
-  if (!accessToken) {
+  if (!token) {
     throw new Error("Cannot create device: No access token available");
-  }
-
-  const accessDecoded = jwtDecode(accessToken) as any;
-  const isAuthExpired =
-    accessDecoded && accessDecoded.exp
-      ? Date.now() >= accessDecoded.exp * 1000
-      : true;
-
-  if (isAuthExpired) {
-    throw new Error(
-      "Cannot create device: Access token expired. Please log in again.",
-    );
   }
 
   const deviceInfo = getDeviceInfo();
@@ -379,7 +368,7 @@ async function createDeviceOnServer(): Promise<string> {
       deviceInfo,
       {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         timeout: 10000, // 10 second timeout
@@ -424,13 +413,6 @@ async function createDeviceOnServer(): Promise<string> {
   }
 }
 
-function checkAuthStatus() {
-  const state = store.getState().ciState;
-  const { accessToken } = state;
-
-  return { accessToken };
-}
-
 async function setupDevice(): Promise<string> {
   if (deviceSetupInProgress) {
     throw new Error("Device setup already in progress");
@@ -439,9 +421,9 @@ async function setupDevice(): Promise<string> {
   deviceSetupInProgress = true;
 
   try {
-    const { accessToken } = checkAuthStatus();
+    const token = await resolveAccessToken();
 
-    if (!accessToken) {
+    if (!token) {
       throw new Error("No access token available. Please log in first.");
     }
 
@@ -630,15 +612,11 @@ async function convertToBrowserActivity(
 // Main sync function that coordinates all sync types based on toggles
 async function triggerManualSync(options: { timeRange?: number } = {}) {
   const state = store.getState().ciState;
-  const {
-    accessToken,
-    historySyncEnabled,
-    bookmarkSyncEnabled,
-    downloadSyncEnabled,
-  } = state;
+  const { historySyncEnabled, bookmarkSyncEnabled, downloadSyncEnabled } =
+    state;
 
   // Don't sync if user is not authenticated
-  if (!accessToken) {
+  if (!(await resolveAccessToken())) {
     store.dispatch(
       setState({
         historySyncInProgress: false,
@@ -734,26 +712,16 @@ async function syncHistory(options: { timeRange?: number } = {}) {
   // Note: Sync state is managed by the main triggerManualSync function
   // No need to check historySyncInProgress here as it's already set by the caller
 
-  // Check authentication
-  const { accessToken } = state;
-  const accessDecoded = accessToken ? (jwtDecode(accessToken) as any) : null;
-  const isAuthExpired =
-    accessDecoded && accessDecoded.exp
-      ? Date.now() >= accessDecoded.exp * 1000
-      : true;
+  // Check authentication (portal OIDC session, refreshing if needed)
+  const token = await resolveAccessToken();
 
-  console.log("Authentication check:", {
-    hasAccessToken: !!accessToken,
-    isAuthExpired,
-    tokenExp: accessDecoded?.exp,
-    currentTime: Date.now(),
-  });
+  console.log("Authentication check:", { hasToken: !!token });
 
-  if (isAuthExpired) {
-    console.log("Authentication expired, stopping history sync");
+  if (!token) {
+    console.log("No usable session, stopping history sync");
     store.dispatch(
       setState({
-        historySyncStatus: "Authentication expired. Please log in again.",
+        historySyncStatus: "Authentication required. Please log in again.",
       }),
     );
 
@@ -1069,12 +1037,6 @@ async function syncHistory(options: { timeRange?: number } = {}) {
           }),
         );
 
-        const { accessToken } = store.getState().ciState;
-
-        if (!accessToken) {
-          throw new Error("No access token available for authentication");
-        }
-
         try {
           // Log the data being sent for debugging
           // console.log(
@@ -1082,17 +1044,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
           //   JSON.stringify(browserActivities, null, 2),
           // );
 
-          await axios.post(
-            `https://${state.serverDomain}/api/browser-activity`,
-            browserActivities,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-              timeout: 300000,
-            },
-          );
+          await postCaptureEvents(browserActivities);
           uploaded = uploaded + browserActivities.length;
 
           // Mark the whole slice as synced only after successful upload
@@ -1311,10 +1263,7 @@ async function createDownloadEvent(
 }
 
 async function syncDownloadsToServer() {
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain } = state;
-
-  if (!accessToken) {
+  if (!(await resolveAccessToken())) {
     return;
   }
 
@@ -1366,16 +1315,7 @@ async function syncDownloadsToServer() {
             JSON.stringify(event, null, 2),
           );
 
-          await axios.post(
-            `https://${serverDomain}/api/browser-activity`,
-            event, // Send individual object, not array
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-            },
-          );
+          await postCaptureEvents([event]);
           console.log("Successfully sent download event:", event.url);
 
           // Mark this specific download as synced only after successful upload
@@ -1412,24 +1352,14 @@ async function syncDownloadsToServer() {
 
 async function handleDownloadCreated(download: any) {
   const state = store.getState().ciState;
-  const { accessToken, serverDomain } = state;
 
-  if (!accessToken || !state.downloadSyncEnabled) {
+  if (!state.downloadSyncEnabled || !(await resolveAccessToken())) {
     return;
   }
 
   try {
     const downloadEvent = await createDownloadEvent(download, "create");
-    await axios.post(
-      `https://${serverDomain}/api/browser-activity`,
-      downloadEvent,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    await postCaptureEvents([downloadEvent]);
   } catch (error) {
     console.error("Error syncing created download:", error);
   }
@@ -1437,55 +1367,47 @@ async function handleDownloadCreated(download: any) {
 
 // Handle scraped data from domain scraper content scripts
 async function handleScrapedData(scrapeResult: ScrapeResult) {
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain } = state;
+  const { deviceId } = store.getState().ciState;
 
-  if (!accessToken) {
+  if (!(await resolveAccessToken())) {
     return;
   }
 
-  // Convert scraped data to events format
-  const events = [];
+  // Map each scraped item to a CaptureEvent-ready activity (kind browser.scrape).
+  // A per-item source_id keeps distinct items on the same page/timestamp from
+  // deduping into a single event server-side.
+  const activities: BrowserActivity[] = [];
 
   for (const [dataType, items] of Object.entries(scrapeResult.data)) {
     if (!Array.isArray(items)) {
       continue;
     }
 
-    for (const item of items) {
-      const itemData = item as any;
-      const event = {
-        name: `Scraped ${scrapeResult.profileName} - ${itemData.title || "Data"}`,
-        start_time: scrapeResult.timestamp,
-        type: "Scraped Data",
-        content: [
-          {
-            type: "Personal Data",
-            mimetype: "application/json",
-            url: scrapeResult.url,
-            title: itemData.title || `${scrapeResult.profileName} Data`,
-            text: JSON.stringify(itemData),
-            scrapeProfile: scrapeResult.profileName,
-            domain: scrapeResult.domain,
-            dataType: dataType,
-          },
-        ],
-      };
-      events.push(event);
-    }
+    items.forEach((item, index) => {
+      const itemData = item as Record<string, any>;
+      activities.push({
+        time: scrapeResult.timestamp,
+        device_id: deviceId || "",
+        url: scrapeResult.url,
+        title: itemData.title || `${scrapeResult.profileName} Data`,
+        action_type: "scrape",
+        properties: {
+          source_id: `${scrapeResult.profileName}:${dataType}:${index}`,
+          scrape_profile: scrapeResult.profileName,
+          domain: scrapeResult.domain,
+          data_type: dataType,
+          data: itemData,
+        },
+      });
+    });
   }
 
-  if (events.length === 0) {
+  if (activities.length === 0) {
     return;
   }
 
   try {
-    await axios.post(`https://${serverDomain}/api/browser-activity`, events, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-    });
+    await postCaptureEvents(activities);
   } catch (error) {
     console.error("Error uploading scraped data:", error);
   }
@@ -1502,23 +1424,22 @@ async function handleSaveHighlight(
   },
   tab?: { url?: string; title?: string },
 ) {
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain } = state;
+  const { serverDomain, deviceId } = store.getState().ciState;
 
-  if (!accessToken || !serverDomain || !info.selectionText) {
+  if (!serverDomain || !info.selectionText || !(await resolveAccessToken())) {
     return;
   }
 
   const url = tab?.url || info.pageUrl || "";
-  const event = buildHighlightEvent(info.selectionText, url, tab?.title);
+  const activity = buildHighlightActivity(
+    info.selectionText,
+    url,
+    deviceId || "",
+    tab?.title,
+  );
 
   try {
-    await axios.post(`https://${serverDomain}/api/browser-activity`, event, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-    });
+    await postCaptureEvents([activity]);
     console.log("Saved highlight from", url);
   } catch (error) {
     console.error("Error uploading highlight:", error);
@@ -1609,10 +1530,9 @@ async function createBookmarkEvent(
 }
 
 async function syncBookmarksToServer() {
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain, deviceId } = state;
+  const { deviceId } = store.getState().ciState;
 
-  if (!accessToken) {
+  if (!(await resolveAccessToken())) {
     console.log("No access token available for bookmark sync");
 
     return;
@@ -1691,7 +1611,6 @@ async function syncBookmarksToServer() {
         continue;
       }
 
-      const { accessToken: currentAccessToken } = store.getState().ciState;
       try {
         console.log(
           "Sending bookmark events:",
@@ -1744,16 +1663,7 @@ async function syncBookmarksToServer() {
               JSON.stringify(event, null, 2),
             );
 
-            await axios.post(
-              `https://${serverDomain}/api/browser-activity`,
-              event, // Send individual object, not array
-              {
-                headers: {
-                  Authorization: `Bearer ${currentAccessToken}`,
-                  "Content-Type": "application/json",
-                },
-              },
-            );
+            await postCaptureEvents([event]);
             console.log("Successfully sent bookmark event:", event.url);
 
             // Mark this specific bookmark as synced only after successful upload
@@ -1796,35 +1706,20 @@ async function syncBookmarksToServer() {
 }
 
 async function handleBookmarkCreated(id: string, bookmark: any) {
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain } = state;
-
-  if (!accessToken || !bookmark.url) {
+  if (!bookmark.url || !(await resolveAccessToken())) {
     return; // Skip folders or if not authenticated
   }
 
   try {
     const bookmarkEvent = await createBookmarkEvent(bookmark, "create");
-    await axios.post(
-      `https://${serverDomain}/api/browser-activity`,
-      bookmarkEvent,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    await postCaptureEvents([bookmarkEvent]);
   } catch (error) {
     console.error("Error syncing created bookmark:", error);
   }
 }
 
 async function handleBookmarkChanged(id: string) {
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain } = state;
-
-  if (!accessToken) {
+  if (!(await resolveAccessToken())) {
     return;
   }
 
@@ -1837,55 +1732,35 @@ async function handleBookmarkChanged(id: string) {
     }
 
     const bookmarkEvent = await createBookmarkEvent(bookmark, "update");
-    await axios.post(
-      `https://${serverDomain}/api/browser-activity`,
-      bookmarkEvent,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    await postCaptureEvents([bookmarkEvent]);
   } catch (error) {
     console.error("Error syncing updated bookmark:", error);
   }
 }
 
 async function handleBookmarkRemoved(id: string, removeInfo: any) {
-  const state = store.getState().ciState;
-  const { accessToken, serverDomain } = state;
+  const { deviceId } = store.getState().ciState;
 
-  if (!accessToken) {
-    return;
+  if (!removeInfo.node?.url || !(await resolveAccessToken())) {
+    return; // Skip folders or if not authenticated
   }
 
   try {
-    const bookmarkEvent = {
-      name: `Removed Bookmark: ${removeInfo.node.title || removeInfo.node.url}`,
-      start_time: new Date().toJSON(),
-      type: "Remove",
-      content: [
-        {
-          type: "Bookmark",
-          mimetype: "text/html",
-          url: removeInfo.node.url,
-          title: removeInfo.node.title,
-        },
-      ],
-      bookmark_id: id,
+    // A bookmark removal is a bookmark activity with event_type "remove",
+    // mirroring createBookmarkEvent so it rides the same browser.bookmark kind.
+    const removalActivity: BrowserActivity = {
+      time: new Date().toISOString(),
+      device_id: deviceId || "",
+      url: removeInfo.node.url,
+      title: removeInfo.node.title,
+      action_type: "bookmark",
+      properties: {
+        bookmark_id: id,
+        event_type: "remove",
+      },
     };
 
-    await axios.post(
-      `https://${serverDomain}/api/browser-activity`,
-      bookmarkEvent,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    await postCaptureEvents([removalActivity]);
   } catch (error) {
     console.error("Error syncing removed bookmark:", error);
   }
@@ -1917,204 +1792,41 @@ export default defineBackground({
       domain: null,
       lastUrl: null,
       accessToken: null,
-      sessionToken: null,
-      refreshing: false,
       serverDomain: "",
     };
 
-    const refreshAccessToken = async () => {
-      const state = store.getState().ciState;
-      const { serverDomain, refreshing } = state;
-      if (refreshing || !serverDomain) {
-        return;
-      }
-
-      // Check for session token cookie first (most reliable source)
-      const cookies = await browser.cookies.getAll({
-        url: `https://${serverDomain}`,
-      });
-      const sessionTokenCookie = cookies.find(
-        (cookie) => cookie.name === SESSION_TOKEN_KEY,
-      );
-      const csrfTokenCookie = cookies.find(
-        (cookie) => cookie.name === CSRF_COOKIE_NAME,
-      );
-
-      // Use cookie if available, otherwise fall back to storage
-      const sessionToken = sessionTokenCookie?.value;
-
-      // Validate session token exists and is not expired
-      if (!sessionToken) {
-        console.log("No session token available, skipping refresh");
-
-        return;
-      }
-
-      // The refresh endpoint requires a CSRF token; without the cookie the
-      // request would be rejected, so don't attempt it
-      if (!csrfTokenCookie) {
-        console.log("No CSRF token cookie available, skipping refresh");
-
-        return;
-      }
-
-      // Check if session token is expired
-      try {
-        const sessionDecoded = jwtDecode(sessionToken) as any;
-        const isSessionExpired = sessionDecoded?.exp
-          ? Date.now() >= sessionDecoded.exp * 1000
-          : true;
-
-        if (isSessionExpired) {
-          console.log("Session token expired, skipping refresh");
-
-          return;
-        }
-      } catch (err) {
-        console.error("Error decoding session token:", err);
-
-        return;
-      }
-
-      store.dispatch(setState({ refreshing: true }));
-      try {
-        const data: AuthResponse = await fetchJson(
-          `https://${serverDomain}/api/authenticate/refresh`,
-          {
-            method: "POST",
-            headers: {
-              "X-CSRF-Token": csrfTokenCookie.value,
-            },
-            credentials: "include",
-          },
-        );
-
-        store.dispatch(
-          setState({ refreshing: false, accessToken: data.accessToken }),
-        );
-
-        // Setup device after successful authentication
-        try {
-          await setupDevice();
-        } catch (error) {
-          console.error("Failed to setup device after token refresh:", error);
-        }
-      } catch (err) {
-        console.error("Error refreshing token", err);
-        store.dispatch(setState({ refreshing: false }));
-      }
-    };
-
-    // Authentication state listener - checks cookies and manages auth state
+    // Reflect the current portal session into Redux + the popup, and provision
+    // the device once a session exists. The token itself lives in
+    // browser.storage.local (managed by oidcAuth); this mirrors it into
+    // ciState.accessToken so the capture guards and popup keep working during
+    // migration. Runs on the auth-check alarm, on load, and on popup demand.
     async function checkAuthenticationState() {
       try {
-        const currentState = store.getState().ciState;
-        const { serverDomain } = currentState;
+        const { serverDomain } = store.getState().ciState;
 
-        // Nothing to check until the user has configured a server domain;
-        // without this guard cookies.getAll throws on "https://" every tick
+        // Nothing to check until the user has configured a server domain
         if (!serverDomain) {
           return;
         }
 
-        const result = await browser.cookies.getAll({
-          url: `https://${serverDomain}`,
-        });
+        // Phase 3: the access token comes from the portal OIDC session.
+        // getAccessToken refreshes within the skew window and returns null when
+        // there is no usable session (signed out / refresh failed).
+        const token = await getAccessToken(oidcConfig());
 
-        const sessionToken = result.find(
-          (cookie) => cookie.name === SESSION_TOKEN_KEY,
-        );
-
-        let authStateChanged = false;
-
-        //If the user has logged out, or switches domains, and no cookies are found,
-        //then clear state so that they aren't shown as logged in, and to avoid
-        //making requests with an invalid token
-        if (!sessionToken) {
-          store.dispatch(setState({ accessToken: null }));
+        if (token !== store.getState().ciState.accessToken) {
+          store.dispatch(setState({ accessToken: token }));
         }
 
-        // Get updated state after potential changes
-        let { accessToken, deviceId } = store.getState().ciState;
+        let { deviceId } = store.getState().ciState;
 
-        // Check if authentication is valid
-        const accessDecoded = accessToken
-          ? (jwtDecode(accessToken) as { exp?: number })
-          : null;
-        const isAuthExpired = accessDecoded?.exp
-          ? Date.now() >= (accessDecoded.exp - 5) * 1000
-          : true;
-        const sessionDecoded = sessionToken?.value
-          ? (jwtDecode(sessionToken.value) as { exp?: number })
-          : null;
-        const isSessionExpired = sessionDecoded?.exp
-          ? Date.now() >= sessionDecoded.exp * 1000
-          : true;
-
-        const isAuthenticated = !isAuthExpired && !isSessionExpired;
-
-        // Handle token refresh if needed
-        // Only refresh if:
-        // 1. We have a valid session token cookie (not expired)
-        // 2. Either we don't have an access token cookie OR the access token is expired
-        if (sessionToken) {
-          const sessionTokenDecoded = jwtDecode(sessionToken.value) as any;
-          const isSessionTokenExpired = sessionTokenDecoded?.exp
-            ? Date.now() >= sessionTokenDecoded.exp * 1000
-            : true;
-
-          if (!isSessionTokenExpired && (!accessToken || isAuthExpired)) {
-            console.log("Refreshing access token...");
-            await refreshAccessToken();
-            authStateChanged = true;
-          } else if (isSessionTokenExpired) {
-            console.log("Session token expired, not attempting refresh");
-            browser.runtime
-              .sendMessage({
-                action: "AUTH_STATE_UPDATED",
-                payload: {
-                  accessToken,
-                  deviceId,
-                },
-              })
-              .catch((error) => {
-                console.log(
-                  "No receiver for message, probably because popup not open",
-                );
-                console.log(error);
-              });
-          }
-        } else {
-          console.log("No session token found, not attempting refresh");
-          browser.runtime
-            .sendMessage({
-              action: "AUTH_STATE_UPDATED",
-              payload: {
-                accessToken,
-                deviceId,
-              },
-            })
-            .catch((error) => {
-              console.log(
-                "No receiver for message, probably because popup not open",
-              );
-              console.log(error);
-            });
-        }
-
-        // Check if we have valid authentication but no device ID
-        if (isAuthenticated && !deviceId) {
-          console.log(
-            "Authentication detected but no device ID, setting up device...",
-          );
+        // Provision the device once we have a valid session
+        if (token && !deviceId) {
+          console.log("Authenticated but no device ID, setting up device...");
           try {
             await setupDevice();
-            authStateChanged = true;
-            console.log("Device setup completed");
-
-            // Get updated state after device setup
-            const updatedState = store.getState().ciState;
-            deviceId = updatedState.deviceId;
+            deviceId = store.getState().ciState.deviceId;
+            store.dispatch(saveUserSettings());
           } catch (error) {
             console.error(
               "Failed to setup device after authentication:",
@@ -2123,51 +1835,32 @@ export default defineBackground({
           }
         }
 
-        // Save settings if auth state changed
-        if (authStateChanged) {
-          store.dispatch(saveUserSettings());
-          console.log("Authentication state updated");
-
-          // Get updated state after potential changes
-          ({ accessToken } = store.getState().ciState);
-          browser.runtime
-            .sendMessage({
-              action: "AUTH_STATE_UPDATED",
-              payload: {
-                accessToken,
-                deviceId,
-              },
-            })
-            .catch((error) => {
-              console.log(
-                "No receiver for message, probably because popup not open",
-              );
-              console.log(error);
-            });
-        }
+        // Notify any open popup of the current auth state
+        browser.runtime
+          .sendMessage({
+            action: "AUTH_STATE_UPDATED",
+            payload: {
+              accessToken: store.getState().ciState.accessToken,
+              deviceId,
+            },
+          })
+          .catch(() => {
+            console.log("No receiver for AUTH_STATE_UPDATED (popup closed)");
+          });
       } catch (error) {
         console.error("Error checking authentication state:", error);
       }
     }
 
-    // Auth state is event-driven instead of polled: cookie changes on the
-    // configured server domain trigger an immediate check, and a periodic
-    // alarm acts as a safety net. Alarms survive MV3 service-worker
-    // suspension; setInterval does not.
-    browser.cookies.onChanged.addListener(({ cookie }) => {
-      if (
-        cookie.name !== SESSION_TOKEN_KEY &&
-        cookie.name !== CSRF_COOKIE_NAME
-      ) {
-        return;
-      }
-
-      const { serverDomain } = store.getState().ciState;
-      const cookieDomain = cookie.domain.replace(/^\./, "");
-      if (serverDomain && serverDomain.endsWith(cookieDomain)) {
-        checkAuthenticationState();
-      }
-    });
+    // Interactive sign-in, triggered by the popup's "Authorize with Companion"
+    // action. The OIDC Auth-Code + PKCE flow runs here in the background rather
+    // than the popup, which is torn down when launchWebAuthFlow takes focus.
+    // On success the token is mirrored into Redux and the device is provisioned.
+    async function authorizeWithPortal(): Promise<void> {
+      const tokens = await signIn(oidcConfig());
+      store.dispatch(setState({ accessToken: tokens.access_token }));
+      await checkAuthenticationState();
+    }
 
     browser.alarms.create(AUTH_CHECK_ALARM, { periodInMinutes: 1 });
     browser.alarms.create(AUTO_SYNC_ALARM, { periodInMinutes: 10 });
@@ -2316,6 +2009,22 @@ export default defineBackground({
             .catch((error) => {
               console.error("Error checking auth status:", error);
               sendResponse({ success: false, error: error.message });
+            });
+
+          return true;
+        }
+
+        if (message.action === "AUTHORIZE") {
+          authorizeWithPortal()
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Authorization failed:", error);
+              sendResponse({
+                success: false,
+                error: error?.message || String(error),
+              });
             });
 
           return true;

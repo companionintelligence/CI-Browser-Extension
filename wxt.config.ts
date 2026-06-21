@@ -22,10 +22,11 @@ export default defineConfig({
       "alarms",
       "bookmarks",
       "contextMenus",
-      "cookies",
       "downloads",
       "history",
       // OIDC Auth-Code+PKCE via chrome.identity.launchWebAuthFlow (Phase 3).
+      // Replaces the legacy CI-Server cookie/CSRF session flow, so the
+      // "cookies" permission is no longer needed.
       "identity",
       "storage",
       "tabs",

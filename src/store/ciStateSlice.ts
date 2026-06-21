@@ -20,6 +20,7 @@ export const loadUserSettings = createAsyncThunk(
       "historySyncEnabled",
       "serverDomain",
       "serverEnvironmentId",
+      "portalIssuer",
     ]);
   },
 );
@@ -36,6 +37,9 @@ interface CiState {
   refreshing: boolean;
   serverDomain: string;
   serverEnvironmentId: string | null;
+  // Optional OIDC issuer override; when unset the issuer is derived from
+  // serverDomain (see services/portalConfig).
+  portalIssuer: string | null;
   settingsLoaded: boolean;
   autoSyncEnabled: boolean;
   siteBlacklist: string[];
@@ -63,6 +67,7 @@ export const ciStateSlice = createSlice({
     refreshing: false,
     serverDomain: "",
     serverEnvironmentId: null,
+    portalIssuer: null,
     settingsLoaded: false,
     autoSyncEnabled: false,
     siteBlacklist: [],
@@ -217,6 +222,7 @@ export const ciStateSlice = createSlice({
           historySyncEnabled: state.historySyncEnabled,
           serverDomain: state.serverDomain,
           serverEnvironmentId: state.serverEnvironmentId,
+          portalIssuer: state.portalIssuer,
         }),
       );
       browser.storage.local.set(parsed);

@@ -54,6 +54,14 @@ describe("sourceIdFor", () => {
     );
   });
 
+  it("honors an explicit source_id (e.g. distinct scrape items on one page)", () => {
+    expect(
+      sourceIdFor(
+        activity({ action_type: "scrape", properties: { source_id: "s7" } }),
+      ),
+    ).toBe("scrape:s7");
+  });
+
   it("is stable across calls (idempotency key)", () => {
     expect(sourceIdFor(activity())).toBe(sourceIdFor(activity()));
   });
