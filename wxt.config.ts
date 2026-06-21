@@ -25,6 +25,8 @@ export default defineConfig({
       "cookies",
       "downloads",
       "history",
+      // OIDC Auth-Code+PKCE via chrome.identity.launchWebAuthFlow (Phase 3).
+      "identity",
       "storage",
       "tabs",
       "webNavigation",
