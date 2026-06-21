@@ -14,7 +14,7 @@ import {
   sendCaptureEvents,
   type BrowserActivity,
 } from "@/services/captureEvents";
-import { getAccessToken, signIn } from "@/services/oidcAuth";
+import { getIdToken, signIn } from "@/services/oidcAuth";
 import { portalOidcConfig } from "@/services/portalConfig";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
@@ -45,7 +45,7 @@ async function runAutoSync() {
     const state = store.getState().ciState;
 
     if (state.autoSyncEnabled && !state.historySyncInProgress) {
-      const token = await resolveAccessToken();
+      const token = await resolveServerToken();
 
       if (token) {
         await triggerManualSync({
@@ -68,13 +68,16 @@ function oidcConfig() {
   return portalOidcConfig({ serverDomain, portalIssuer });
 }
 
-// Resolve a Bearer for CI-Server: prefer the portal OIDC session (refreshing
-// within the skew window), and fall back to a legacy CI-Server token still
-// mirrored in Redux during the migration. Returns null when signed out.
-async function resolveAccessToken(): Promise<string | null> {
-  const portalToken = await getAccessToken(oidcConfig());
-  if (portalToken) {
-    return portalToken;
+// Resolve the Bearer for CI-Server: prefer the portal OIDC **id_token** — the
+// JWKS-signed JWT CI-Server's `/v1/events` validates. The opaque OAuth
+// access_token is NOT usable here (CI-Server's jwtVerify rejects it; this was the
+// Phase 3 blocker fixed by getIdToken in #51). Falls back to a legacy CI-Server
+// token still mirrored in Redux during the migration. Returns null when there is
+// no usable session (or the id_token has expired — the user re-authorizes).
+async function resolveServerToken(): Promise<string | null> {
+  const idToken = await getIdToken(oidcConfig());
+  if (idToken) {
+    return idToken;
   }
 
   return store.getState().ciState.accessToken ?? null;
@@ -94,7 +97,7 @@ async function postCaptureEvents(activities: BrowserActivity[]): Promise<void> {
     return;
   }
 
-  const token = await resolveAccessToken();
+  const token = await resolveServerToken();
   if (!token) {
     throw new Error("No access token available for capture upload");
   }
@@ -163,7 +166,7 @@ function isValidUrl(url: string): boolean {
 
 const recordHit = async function (e: any) {
   // Don't make API calls if the user has no usable session
-  if (!(await resolveAccessToken())) {
+  if (!(await resolveServerToken())) {
     return;
   }
 
@@ -240,7 +243,7 @@ async function getDeviceId(): Promise<string> {
 async function updateDeviceLastSeen(deviceId: string): Promise<void> {
   try {
     const { serverDomain } = store.getState().ciState;
-    const token = await resolveAccessToken();
+    const token = await resolveServerToken();
 
     if (!token || !serverDomain) {
       return;
@@ -268,7 +271,7 @@ async function updateDeviceLastSeen(deviceId: string): Promise<void> {
 async function fetchDeviceFromServer(): Promise<string | null> {
   try {
     const { serverDomain } = store.getState().ciState;
-    const token = await resolveAccessToken();
+    const token = await resolveServerToken();
 
     if (!token) {
       return null;
@@ -354,7 +357,7 @@ async function fetchDeviceFromServer(): Promise<string | null> {
 
 async function createDeviceOnServer(): Promise<string> {
   const { serverDomain } = store.getState().ciState;
-  const token = await resolveAccessToken();
+  const token = await resolveServerToken();
 
   if (!token) {
     throw new Error("Cannot create device: No access token available");
@@ -421,7 +424,7 @@ async function setupDevice(): Promise<string> {
   deviceSetupInProgress = true;
 
   try {
-    const token = await resolveAccessToken();
+    const token = await resolveServerToken();
 
     if (!token) {
       throw new Error("No access token available. Please log in first.");
@@ -616,7 +619,7 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
     state;
 
   // Don't sync if user is not authenticated
-  if (!(await resolveAccessToken())) {
+  if (!(await resolveServerToken())) {
     store.dispatch(
       setState({
         historySyncInProgress: false,
@@ -713,7 +716,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
   // No need to check historySyncInProgress here as it's already set by the caller
 
   // Check authentication (portal OIDC session, refreshing if needed)
-  const token = await resolveAccessToken();
+  const token = await resolveServerToken();
 
   console.log("Authentication check:", { hasToken: !!token });
 
@@ -1263,7 +1266,7 @@ async function createDownloadEvent(
 }
 
 async function syncDownloadsToServer() {
-  if (!(await resolveAccessToken())) {
+  if (!(await resolveServerToken())) {
     return;
   }
 
@@ -1353,7 +1356,7 @@ async function syncDownloadsToServer() {
 async function handleDownloadCreated(download: any) {
   const state = store.getState().ciState;
 
-  if (!state.downloadSyncEnabled || !(await resolveAccessToken())) {
+  if (!state.downloadSyncEnabled || !(await resolveServerToken())) {
     return;
   }
 
@@ -1369,7 +1372,7 @@ async function handleDownloadCreated(download: any) {
 async function handleScrapedData(scrapeResult: ScrapeResult) {
   const { deviceId } = store.getState().ciState;
 
-  if (!(await resolveAccessToken())) {
+  if (!(await resolveServerToken())) {
     return;
   }
 
@@ -1426,7 +1429,7 @@ async function handleSaveHighlight(
 ) {
   const { serverDomain, deviceId } = store.getState().ciState;
 
-  if (!serverDomain || !info.selectionText || !(await resolveAccessToken())) {
+  if (!serverDomain || !info.selectionText || !(await resolveServerToken())) {
     return;
   }
 
@@ -1532,7 +1535,7 @@ async function createBookmarkEvent(
 async function syncBookmarksToServer() {
   const { deviceId } = store.getState().ciState;
 
-  if (!(await resolveAccessToken())) {
+  if (!(await resolveServerToken())) {
     console.log("No access token available for bookmark sync");
 
     return;
@@ -1706,7 +1709,7 @@ async function syncBookmarksToServer() {
 }
 
 async function handleBookmarkCreated(id: string, bookmark: any) {
-  if (!bookmark.url || !(await resolveAccessToken())) {
+  if (!bookmark.url || !(await resolveServerToken())) {
     return; // Skip folders or if not authenticated
   }
 
@@ -1719,7 +1722,7 @@ async function handleBookmarkCreated(id: string, bookmark: any) {
 }
 
 async function handleBookmarkChanged(id: string) {
-  if (!(await resolveAccessToken())) {
+  if (!(await resolveServerToken())) {
     return;
   }
 
@@ -1741,7 +1744,7 @@ async function handleBookmarkChanged(id: string) {
 async function handleBookmarkRemoved(id: string, removeInfo: any) {
   const { deviceId } = store.getState().ciState;
 
-  if (!removeInfo.node?.url || !(await resolveAccessToken())) {
+  if (!removeInfo.node?.url || !(await resolveServerToken())) {
     return; // Skip folders or if not authenticated
   }
 
@@ -1809,15 +1812,21 @@ export default defineBackground({
           return;
         }
 
-        // Phase 3: the access token comes from the portal OIDC session.
-        // getAccessToken refreshes within the skew window and returns null when
-        // there is no usable session (signed out / refresh failed).
-        const token = await getAccessToken(oidcConfig());
+        // Phase 3: the CI-Server bearer is the portal **id_token** (the opaque
+        // OAuth access_token is rejected by CI-Server's JWKS verify). getIdToken
+        // returns null when there is no usable session or once the id_token has
+        // expired (the refresh grant does not reissue one — the user re-signs in).
+        const idToken = await getIdToken(oidcConfig());
 
-        if (token !== store.getState().ciState.accessToken) {
-          store.dispatch(setState({ accessToken: token }));
+        // Mirror a portal id_token into Redux so the capture guards + popup
+        // reflect the session. Don't overwrite a legacy CI-Server token (loaded
+        // from storage during migration) with null — resolveServerToken still
+        // falls back to it until it expires.
+        if (idToken && idToken !== store.getState().ciState.accessToken) {
+          store.dispatch(setState({ accessToken: idToken }));
         }
 
+        const token = idToken ?? store.getState().ciState.accessToken;
         let { deviceId } = store.getState().ciState;
 
         // Provision the device once we have a valid session
@@ -1855,10 +1864,10 @@ export default defineBackground({
     // Interactive sign-in, triggered by the popup's "Authorize with Companion"
     // action. The OIDC Auth-Code + PKCE flow runs here in the background rather
     // than the popup, which is torn down when launchWebAuthFlow takes focus.
-    // On success the token is mirrored into Redux and the device is provisioned.
+    // signIn persists the tokens; checkAuthenticationState then mirrors the
+    // id_token into Redux and provisions the device via the shared auth path.
     async function authorizeWithPortal(): Promise<void> {
-      const tokens = await signIn(oidcConfig());
-      store.dispatch(setState({ accessToken: tokens.access_token }));
+      await signIn(oidcConfig());
       await checkAuthenticationState();
     }
 
