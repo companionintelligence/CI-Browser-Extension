@@ -72,6 +72,8 @@ export default function App() {
   const [showSyncLogs, setShowSyncLogs] = useState(false);
   const [token, setToken] = useState(accessToken);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
+  const [authorizing, setAuthorizing] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // First-run onboarding: once persisted settings have loaded, if no
   // CI-Server is configured yet, surface the setup wizard. Choosing a server
@@ -194,6 +196,27 @@ export default function App() {
     dispatch(saveUserSettings());
   };
 
+  // Kick off the OIDC Auth-Code + PKCE sign-in. The flow runs in the background
+  // service worker (the popup is torn down when launchWebAuthFlow takes focus);
+  // the resulting token arrives back via the AUTH_STATE_UPDATED broadcast.
+  const handleAuthorize = async () => {
+    setAuthorizing(true);
+    setAuthError(null);
+    try {
+      const response = await browser.runtime.sendMessage({
+        action: "AUTHORIZE",
+      });
+
+      if (!response?.success) {
+        setAuthError(response?.error || "Authorization failed");
+      }
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAuthorizing(false);
+    }
+  };
+
   const handleDomainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDomain(e.target.value);
   };
@@ -309,17 +332,30 @@ export default function App() {
         </form>
       </div>
 
-      {domain?.length > 0 && (
-        <Button
-          className="text-center mb-4 size-4 p-2 text-[#888] rounded-lg h-10 border-t bg-[rgba(75,167,166,0.1)] block w-full font-medium no-underline hover:bg-[rgba(75,167,166,0.15)] transition-colors"
-          onClick={() => {
-            window.open(`https://${serverDomain}`, "_blank");
-          }}
-        >
-          {!token
-            ? "Log in to continue"
-            : "Logged in to Companion Intelligence"}
-        </Button>
+      {domain?.length > 0 &&
+        (token ? (
+          <Button
+            className="text-center mb-4 size-4 p-2 text-[#888] rounded-lg h-10 border-t bg-[rgba(75,167,166,0.1)] block w-full font-medium no-underline hover:bg-[rgba(75,167,166,0.15)] transition-colors"
+            onClick={() => {
+              window.open(`https://${serverDomain}`, "_blank");
+            }}
+          >
+            Authorized with Companion Intelligence
+          </Button>
+        ) : (
+          <Button
+            onClick={handleAuthorize}
+            disabled={authorizing}
+            className="text-center mb-4 p-2 rounded-lg h-10 block w-full font-medium no-underline transition-colors bg-[#4ba7a6] text-white border-[#4ba7a6] hover:bg-[#2f6b7e] hover:border-[#2f6b7e] disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {authorizing ? "Authorizing…" : "Authorize with Companion"}
+          </Button>
+        ))}
+
+      {authError && (
+        <div className="mb-4 p-2 rounded text-[0.85em] text-[#dc3545] bg-[rgba(220,53,69,0.1)]">
+          {authError}
+        </div>
       )}
 
       {token && (

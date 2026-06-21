@@ -44,6 +44,7 @@ describe("ciStateSlice", () => {
         refreshing: false,
         serverDomain: "",
         serverEnvironmentId: null,
+        portalIssuer: null,
         settingsLoaded: false,
         autoSyncEnabled: false,
         siteBlacklist: [],
@@ -177,6 +178,7 @@ describe("ciStateSlice", () => {
         "historySyncEnabled",
         "serverDomain",
         "serverEnvironmentId",
+        "portalIssuer",
       ]);
     });
   });

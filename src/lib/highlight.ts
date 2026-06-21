@@ -1,28 +1,21 @@
+import type { BrowserActivity } from "@/services/captureEvents";
 import { parseUrl } from "@/utils";
 
 // Keep stored highlights a sane size; selections beyond this are truncated
 export const MAX_HIGHLIGHT_LENGTH = 10000;
 
-export interface HighlightEvent {
-  name: string;
-  start_time: string;
-  type: "Highlight";
-  content: Array<{
-    type: "Highlight";
-    mimetype: "text/plain";
-    url: string;
-    title?: string;
-    text: string;
-  }>;
-}
-
-// Same event family as the domain-scraper uploads handled by
-// handleScrapedData, so CI-Server ingests both through one path
-export function buildHighlightEvent(
+/**
+ * Build a CaptureEvent-ready browser activity for a saved text selection.
+ *
+ * Phase 3: highlights ride the same unified `/v1/events` path as every other
+ * capture (kind `browser.highlight`), replacing the legacy event envelope.
+ */
+export function buildHighlightActivity(
   selectionText: string,
   url: string,
+  deviceId: string,
   title?: string,
-): HighlightEvent {
+): BrowserActivity {
   const text =
     selectionText.length > MAX_HIGHLIGHT_LENGTH
       ? selectionText.slice(0, MAX_HIGHLIGHT_LENGTH)
@@ -31,17 +24,14 @@ export function buildHighlightEvent(
   const source = title || parseUrl(url)?.hostname || url;
 
   return {
-    name: `Highlight from ${source}`,
-    start_time: new Date().toISOString(),
-    type: "Highlight",
-    content: [
-      {
-        type: "Highlight",
-        mimetype: "text/plain",
-        url: url,
-        title: title,
-        text: text,
-      },
-    ],
+    time: new Date().toISOString(),
+    device_id: deviceId,
+    url: url,
+    title: title,
+    action_type: "highlight",
+    properties: {
+      description: `Highlight from ${source}`,
+      text: text,
+    },
   };
 }

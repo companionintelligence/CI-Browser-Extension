@@ -21,7 +21,11 @@ export interface BrowserActivity {
     | "bookmark"
     | "search"
     | "download"
-    | "form_submit";
+    | "form_submit"
+    // Phase 3: highlight + domain-scrape captures converged onto this envelope
+    // from the legacy `/api/browser-activity` event shape.
+    | "highlight"
+    | "scrape";
   properties?: Record<string, unknown>;
   duration_seconds?: number;
   scroll_depth_percent?: number;
@@ -74,7 +78,10 @@ function toInstant(s: string): string {
  * key from the action, instant, and URL so a re-sent activity dedups.
  */
 export function sourceIdFor(a: BrowserActivity): string {
-  const explicit = a.properties?.bookmark_id ?? a.properties?.download_id;
+  const explicit =
+    a.properties?.source_id ??
+    a.properties?.bookmark_id ??
+    a.properties?.download_id;
   if (typeof explicit === "string" && explicit) {
     return `${a.action_type}:${explicit}`;
   }
