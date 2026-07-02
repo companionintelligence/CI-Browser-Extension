@@ -39,8 +39,9 @@ third-party trackers.
   those domains.
 - **Reliable background sync** — uses the `chrome.alarms` lifecycle so scheduled
   work survives MV3 service-worker suspension.
-- **Self-hosted & token-secured** — point it at any CI Server domain; auth uses
-  the server's session cookie + short-lived access tokens.
+- **Self-hosted & OIDC-secured** — point it at any CI Server domain; auth is a
+  CI-Portal OIDC sign-in (Auth-Code + PKCE), and the extension sends the Portal
+  `id_token` as a Bearer to CI-Server. No infrastructure credentials on device.
 
 See [`PRIVACY.md`](PRIVACY.md) for the full data-handling disclosure and
 [`CHANGELOG.md`](CHANGELOG.md) for release notes.
@@ -79,8 +80,9 @@ yarn build:firefox       # Firefox MV2 → .output/firefox-mv2
 
 1. Open the popup and enter your **CI Server URL** (e.g. `my-ci.example.com`),
    then **Save**.
-2. Click **Log in to continue** — this opens your CI Server's web login. Once
-   signed in, the popup shows **Logged in** and your device.
+2. Click **Log in to continue** — this starts a CI-Portal OIDC sign-in
+   (Auth-Code + PKCE) in the browser. Once authorized, the popup shows
+   **Logged in** and your device.
 3. Choose a **sync time range** and click **Start History Sync**, or enable
    **Auto-sync** to run in the background.
 4. Toggle **History / Bookmarks / Downloads** to control what's captured.
@@ -119,7 +121,8 @@ store-assets/                   # store + README art (regenerate via render.sh)
 - **UI:** React 19 + TypeScript + Tailwind/shadcn
 - **State:** Redux Toolkit + `webext-redux` (shared across popup/background)
 - **Storage:** IndexedDB queue + `browser.storage.local`
-- **HTTP:** Axios to your CI Server's `/api/browser-activity` and `/api/devices`
+- **HTTP:** captures POST to your CI Server's unified `/v1/events` CaptureEvent
+  endpoint (`src/services/captureEvents.ts`); device setup uses `/api/devices`
 
 **Browser builds:** Chrome MV3 (primary), Firefox MV2, Safari MV3, plus
 Edge/Opera/Brave/DuckDuckGo (Chromium, identical manifest). `yarn build:<target>`.
@@ -127,23 +130,32 @@ Edge/Opera/Brave/DuckDuckGo (Chromium, identical manifest). `yarn build:<target>
 ### Data flow
 1. Navigation events and manual/auto sync collect activity (minus your ignore lists).
 2. Items are de-duplicated against local sync bookkeeping.
-3. Batches POST to your CI Server with a short-lived bearer token.
+3. Batches POST as CaptureEvents to your CI Server's `/v1/events`, carrying the
+   CI-Portal OIDC `id_token` as the Bearer. The endpoint is idempotent on
+   `(source_system, source_id)`, so a re-sent activity dedups rather than
+   duplicates.
 4. Page title/description come from the page itself (a content-script read) — no
    third-party metadata service.
 
 ### Security & privacy
 - Data is sent only to **your** configured CI Server; no third-party analytics.
-- Auth: the CI Server's `sessionToken`/`csrfToken` cookies (read on that domain
-  only) → `POST /api/authenticate/refresh` → short-lived access token.
+- Auth: **CI-Portal OIDC** (Auth-Code + PKCE). The extension holds the OIDC
+  tokens in `browser.storage.local` and sends the JWKS-signed **`id_token`** as a
+  Bearer to CI-Server, which validates it as an OIDC resource server. No CI-Server
+  session cookies and no infrastructure credentials are used. See the auth
+  backbone PRs [CI-Server #1473] and [CI-Server #1476].
 - No passwords or form contents are collected. See [`PRIVACY.md`](PRIVACY.md).
+
+[CI-Server #1473]: https://github.com/companionintelligence/CI-Server/pull/1473
+[CI-Server #1476]: https://github.com/companionintelligence/CI-Server/pull/1476
 
 ## 🗺️ Roadmap
 
 Tracked in `CI-Engineering/projects/ci-browser-extension`. Highlights: local-first
 outbox/queue, diagnostics panel and setup wizard, broader scrape-profile coverage,
-participation in platform **SSO once CI-Server federates to the CI-Portal OIDC
-identity provider** (the extension will continue to ride CI-Server sessions —
-see the OIDC/SSO audit), and Browser-Use bidirectional control.
+richer CaptureEvent envelope coverage as CI-Server's `/v1/events` contract grows
+(kinds, media, entity hints), and Browser-Use bidirectional control. The extension
+already rides the platform's **CI-Portal OIDC** identity plane end to end.
 
 ## 🤝 Contributing
 
