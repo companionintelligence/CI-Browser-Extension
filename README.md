@@ -39,8 +39,9 @@ third-party trackers.
   those domains.
 - **Reliable background sync** — uses the `chrome.alarms` lifecycle so scheduled
   work survives MV3 service-worker suspension.
-- **Self-hosted & token-secured** — point it at any CI Server domain; auth uses
-  the server's session cookie + short-lived access tokens.
+- **Self-hosted & token-secured** — point it at any CI Server domain; auth is a
+  standard CI-Portal OIDC (Authorization-Code + PKCE) login that yields a
+  short-lived portal `id_token`.
 
 See [`PRIVACY.md`](PRIVACY.md) for the full data-handling disclosure and
 [`CHANGELOG.md`](CHANGELOG.md) for release notes.
@@ -79,8 +80,8 @@ yarn build:firefox       # Firefox MV2 → .output/firefox-mv2
 
 1. Open the popup and enter your **CI Server URL** (e.g. `my-ci.example.com`),
    then **Save**.
-2. Click **Log in to continue** — this opens your CI Server's web login. Once
-   signed in, the popup shows **Logged in** and your device.
+2. Click **Log in to continue** — this opens the CI-Portal OIDC login (PKCE).
+   Once signed in, the popup shows **Logged in** and your device.
 3. Choose a **sync time range** and click **Start History Sync**, or enable
    **Auto-sync** to run in the background.
 4. Toggle **History / Bookmarks / Downloads** to control what's captured.
@@ -119,7 +120,9 @@ store-assets/                   # store + README art (regenerate via render.sh)
 - **UI:** React 19 + TypeScript + Tailwind/shadcn
 - **State:** Redux Toolkit + `webext-redux` (shared across popup/background)
 - **Storage:** IndexedDB queue + `browser.storage.local`
-- **HTTP:** Axios to your CI Server's `/api/browser-activity` and `/api/devices`
+- **HTTP:** posts captured activity as CaptureEvents to your CI Server's unified
+  `POST /v1/events` ingest path (the same envelope every capture source writes
+  through); device registration via `/api/devices`
 
 **Browser builds:** Chrome MV3 (primary), Firefox MV2, Safari MV3, plus
 Edge/Opera/Brave/DuckDuckGo (Chromium, identical manifest). `yarn build:<target>`.
@@ -127,14 +130,18 @@ Edge/Opera/Brave/DuckDuckGo (Chromium, identical manifest). `yarn build:<target>
 ### Data flow
 1. Navigation events and manual/auto sync collect activity (minus your ignore lists).
 2. Items are de-duplicated against local sync bookkeeping.
-3. Batches POST to your CI Server with a short-lived bearer token.
+3. Batches POST to your CI Server's `/v1/events` with the portal `id_token` as
+   the Bearer; the server dedups on `(source_system, source_id)`.
 4. Page title/description come from the page itself (a content-script read) — no
    third-party metadata service.
 
 ### Security & privacy
 - Data is sent only to **your** configured CI Server; no third-party analytics.
-- Auth: the CI Server's `sessionToken`/`csrfToken` cookies (read on that domain
-  only) → `POST /api/authenticate/refresh` → short-lived access token.
+- Auth: a CI-Portal OIDC Authorization-Code + PKCE login (public client
+  `ci-browser-extension`). The extension sends the portal-issued, JWKS-signed
+  `id_token` as the Bearer to CI-Server's `/v1/events`; no passwords, session
+  cookies, or CSRF tokens are read or stored. (Replaces the retired
+  cookie/CSRF/`/api/authenticate/refresh` flow.)
 - No passwords or form contents are collected. See [`PRIVACY.md`](PRIVACY.md).
 
 ## 🗺️ Roadmap
