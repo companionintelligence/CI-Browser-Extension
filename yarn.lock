@@ -472,6 +472,7 @@ __metadata:
   dependencies:
     "@ci/shadcn": "workspace:*"
     "@eslint/js": "npm:^9.27.0"
+    "@fontsource/montserrat": "npm:^5.2.8"
     "@reduxjs/toolkit": "npm:^2.8.2"
     "@tailwindcss/typography": "npm:^0.5.19"
     "@tailwindcss/vite": "npm:^4.1.18"
@@ -497,6 +498,7 @@ __metadata:
     jwt-decode: "npm:^4.0.0"
     lint-staged: "npm:^16.1.2"
     moment: "npm:^2.30.1"
+    next-themes: "npm:^0.4.6"
     prettier: "npm:^3.5.3"
     react: "npm:^19.1.0"
     react-dom: "npm:^19.1.0"
@@ -983,6 +985,13 @@ __metadata:
   version: 0.2.10
   resolution: "@floating-ui/utils@npm:0.2.10"
   checksum: 10c0/e9bc2a1730ede1ee25843937e911ab6e846a733a4488623cd353f94721b05ec2c9ec6437613a2ac9379a94c2fd40c797a2ba6fa1df2716f5ce4aa6ddb1cf9ea4
+  languageName: node
+  linkType: hard
+
+"@fontsource/montserrat@npm:^5.2.8":
+  version: 5.2.8
+  resolution: "@fontsource/montserrat@npm:5.2.8"
+  checksum: 10c0/a38ebdebbc4c14f9b48deb15609323b7125da76214e765c83fac879ffcc577abf4ce06a47d5a712d42b3116658a395e18beb6d360e7d73417ec197e21194870e
   languageName: node
   linkType: hard
 
