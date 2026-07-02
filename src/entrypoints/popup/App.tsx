@@ -13,7 +13,7 @@ import "@/theme.css";
 import bowser from "bowser";
 import BlacklistManager from "./BlacklistManager";
 import SetupWizard from "./SetupWizard";
-import { Button, Checkbox, Field, Label, Input, Card } from "@ci/shadcn";
+import { Button, Checkbox, Field, Label, Input, Card, Toaster } from "@ci/shadcn";
 
 export default function App() {
   const dispatch = useDispatch();
@@ -275,31 +275,39 @@ export default function App() {
 
   if (showSetupWizard) {
     return (
-      <div
-        className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[400px]"} mx-auto p-4 box-border`}
-      >
-        <SetupWizard
-          onComplete={() => setShowSetupWizard(false)}
-          onSkip={() => setShowSetupWizard(false)}
-        />
-      </div>
+      <>
+        <Toaster />
+        <div
+          className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[400px]"} mx-auto p-4 box-border`}
+        >
+          <SetupWizard
+            onComplete={() => setShowSetupWizard(false)}
+            onSkip={() => setShowSetupWizard(false)}
+          />
+        </div>
+      </>
     );
   }
 
   if (showBlacklistManager) {
     return (
-      <div
-        className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[400px]"} mx-auto p-4 box-border`}
-      >
-        <BlacklistManager onBack={() => setShowBlacklistManager(false)} />
-      </div>
+      <>
+        <Toaster />
+        <div
+          className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[400px]"} mx-auto p-4 box-border`}
+        >
+          <BlacklistManager onBack={() => setShowBlacklistManager(false)} />
+        </div>
+      </>
     );
   }
 
   return (
-    <div
-      className={`min-w-[280px] ${isMobile ? "w-full max-w-full p-2" : "w-[350px] max-w-[400px]"} mx-auto p-4 box-border`}
-    >
+    <>
+      <Toaster />
+      <div
+        className={`min-w-[280px] ${isMobile ? "w-full max-w-full p-2" : "w-[350px] max-w-[400px]"} mx-auto p-4 box-border`}
+      >
       {/* CI Server URL Section */}
       <div className="mb-6">
         <h4 className="m-0 mb-2 text-[#4ba7a6] text-[1.25em] font-semibold">
@@ -601,6 +609,7 @@ export default function App() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
