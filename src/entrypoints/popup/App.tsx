@@ -138,50 +138,6 @@ export default function App() {
     });
   }, []);
 
-  // const triggerManualSync = async function () {
-  //   console.log(
-  //     "triggerManualSync called, historySyncInProgress:",
-  //     historySyncInProgress,
-  //   );
-  //
-  //   if (historySyncInProgress) {
-  //     console.log("Sync already in progress, returning");
-  //
-  //     return;
-  //   }
-  //
-  //   try {
-  //     // If auto-sync is enabled, just trigger the background periodic sync
-  //     if (autoSyncEnabled) {
-  //       console.log("Auto-sync enabled, triggering background sync");
-  //       const response = await browser.runtime.sendMessage({
-  //         action: "TRIGGER_BACKGROUND_SYNC",
-  //       });
-  //
-  //       console.log("Background sync response:", response);
-  //       if (!response.success) {
-  //         console.error("Background sync failed:", response.error);
-  //       }
-  //     } else {
-  //       // If auto-sync is disabled, do a full manual sync
-  //       console.log("Auto-sync disabled, triggering manual sync");
-  //       const response = await browser.runtime.sendMessage({
-  //         action: "TRIGGER_MANUAL_SYNC",
-  //         options: {
-  //           timeRange: 7 * 24 * 60 * 60 * 1000, // Last 7 days
-  //         },
-  //       });
-  //
-  //       console.log("Manual sync response:", response);
-  //       if (!response.success) {
-  //         console.error("Manual history sync failed:", response.error);
-  //       }
-  //     }
-  //   } catch (error) {
-  //     console.error("Error triggering sync:", error);
-  //   }
-  // };
-
   const handleAutoSyncToggle = () => {
     dispatch(toggleAutoSync());
   };
@@ -574,7 +530,7 @@ export default function App() {
                         }) => (
                           <div
                             key={log.id}
-                            className="grid gap-2 p-2 text-background border-b border-border text-xs items-center last:border-b-0 even:bg-white/[0.02] grid-cols-[2fr_1fr_1fr]"
+                            className="grid gap-2 p-2 text-card-foreground border-b border-border text-xs items-center last:border-b-0 even:bg-white/[0.02] grid-cols-[2fr_1fr_1fr]"
                           >
                             <div className="font-mono text-xs truncate">
                               {new Date(log.timestamp).toLocaleString()}
