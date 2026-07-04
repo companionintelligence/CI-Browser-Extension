@@ -6,7 +6,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed — Design system
+
+- **CI canonical teal theme.** The popup `--primary` now maps to the CI
+  canonical teal — light `#0f717a`, dark `#abd4d8` (expressed in OKLCH in
+  `src/theme.css`) — replacing the previous non-canonical brand color. A
+  design-canon lint gate enforces this going forward (#55).
+- **Montserrat type.** Self-hosted via `@fontsource/montserrat` (weights
+  200/400/500/600/700), imported in `src/entrypoints/popup/main.tsx` and set as
+  `--font-sans`. Bundled by Vite so it is MV3/CSP-safe with no CDN or Google
+  Fonts request. The popup root is wrapped in a `next-themes` `ThemeProvider`
+  (`attribute="class"`, `storageKey="vite-ui-theme"`, `defaultTheme="system"`)
+  so the dark theme activates and persists (#55).
+- **Enriched design tokens v0.2.0** in `src/theme.css` — additive, no existing
+  token changed:
+  - full brand-teal ramp (`--teal-50` … `--teal-950`) plus `--aqua`,
+    `--aqua-light`, and `--mint` accents;
+  - semantic status colors (`--success`, `--warning`, `--info`) with
+    foregrounds, tuned per light/dark;
+  - brand / hero / aurora gradients (`--gradient-brand`, `--gradient-hero`,
+    `--gradient-aurora`) and an elevation shadow scale (`--shadow-sm/md/lg`);
+  - a radius scale (`--radius-sm` … `--radius-2xl`).
+  The semantic and teal-utility tokens are wired into the Tailwind `@theme
+  inline` block (`--color-success`, `--color-teal-500/600`, …) (#55).
+
+### Added — CI
+
+- **Design-canon lint gate.** `scripts/lint-canon.mjs` fails the build if a
+  resolvable `--primary` is not CI teal (hardcoded hex uses are reported as
+  non-blocking warnings), run by `.github/workflows/style-canon-lint.yml` on
+  every push and pull request (#55).
+
+### Notes
+
+- Refreshed light/dark before-after UI board committed at
+  `docs/style-audit/CI-Browser-Extension-before-after.png` (#55).
+- Tokens are defined inline in `src/theme.css`; this repo does not yet depend on
+  a shared `@companionintelligence/tokens` package.
 
 ## [1.4.0] — 2026-06-10
 
