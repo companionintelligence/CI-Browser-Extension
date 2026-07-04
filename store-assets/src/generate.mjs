@@ -2,7 +2,7 @@
 // design system. Output SVGs are rendered to PNG/GIF by render.sh.
 import { writeFileSync } from "node:fs";
 import { LOGO_B64 } from "./logo.mjs";
-import { T, renderPopup, renderIgnored, framedPopup, POPUP_W } from "./popup.mjs";
+import { T, renderPopup, renderIgnored, framedPopup, POPUP_W, BRAND_GRAD_DEF } from "./popup.mjs";
 
 const FRAMES = new URL("../frames/", import.meta.url).pathname;
 const OUT = new URL("../out/", import.meta.url).pathname;
@@ -11,14 +11,15 @@ const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 // ---- shared defs: brand gradient bg, shadows, grid ----
 function defs() {
   return `<defs>
+    ${BRAND_GRAD_DEF}
     <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0c1418"/>
       <stop offset="0.55" stop-color="#102a30"/>
       <stop offset="1" stop-color="#0a1518"/>
     </linearGradient>
     <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="${T.teal}" stop-opacity="0.35"/>
-      <stop offset="1" stop-color="${T.teal}" stop-opacity="0"/>
+      <stop offset="0" stop-color="${T.brandMid}" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="${T.brandMid}" stop-opacity="0"/>
     </radialGradient>
     <filter id="winShadow" x="-30%" y="-30%" width="160%" height="160%">
       <feDropShadow dx="0" dy="18" stdDeviation="26" flood-color="#000" flood-opacity="0.55"/>
@@ -27,14 +28,14 @@ function defs() {
       <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#000" flood-opacity="0.4"/>
     </filter>
     <linearGradient id="tealText" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#7fe0d8"/><stop offset="1" stop-color="${T.teal}"/>
+      <stop offset="0" stop-color="${T.brandLight}"/><stop offset="1" stop-color="${T.gradFrom}"/>
     </linearGradient>
   </defs>`;
 }
 
 function dotGrid(w, h, gap = 34, op = 0.06) {
   let d = "";
-  for (let x = gap; x < w; x += gap) for (let y = gap; y < h; y += gap) d += `<circle cx="${x}" cy="${y}" r="1" fill="#4ba7a6" opacity="${op}"/>`;
+  for (let x = gap; x < w; x += gap) for (let y = gap; y < h; y += gap) d += `<circle cx="${x}" cy="${y}" r="1" fill="${T.teal}" opacity="${op}"/>`;
   return `<g>${d}</g>`;
 }
 
@@ -44,11 +45,11 @@ function tx(x, y, s, { size = 24, fill = T.text, weight = 400, anchor = "start",
 
 function pill(x, y, label) {
   const w = 16 + label.length * 8.2;
-  return `<g><rect x="${x}" y="${y}" width="${w}" height="30" rx="15" fill="rgba(75,167,166,0.12)" stroke="${T.teal}" stroke-opacity="0.4"/><text x="${x + w / 2}" y="${y + 20}" font-family="${T.font}" font-size="13" fill="${T.teal}" text-anchor="middle" font-weight="600">${esc(label)}</text></g>`;
+  return `<g><rect x="${x}" y="${y}" width="${w}" height="30" rx="15" fill="rgba(171,212,216,0.12)" stroke="${T.teal}" stroke-opacity="0.4"/><text x="${x + w / 2}" y="${y + 20}" font-family="${T.font}" font-size="13" fill="${T.teal}" text-anchor="middle" font-weight="600">${esc(label)}</text></g>`;
 }
 
 function checkRow(x, y, label, { size = 18, gap = 30 } = {}) {
-  return `<circle cx="${x + 10}" cy="${y - 5}" r="10" fill="rgba(75,167,166,0.15)"/><path d="M ${x + 5} ${y - 5} l 3.5 3.5 l 7 -8" stroke="${T.teal}" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>` + tx(x + gap, y, label, { size, fill: T.text });
+  return `<circle cx="${x + 10}" cy="${y - 5}" r="10" fill="rgba(171,212,216,0.15)"/><path d="M ${x + 5} ${y - 5} l 3.5 3.5 l 7 -8" stroke="${T.teal}" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>` + tx(x + gap, y, label, { size, fill: T.text });
 }
 
 // ============ README hero (1280x640) ============
