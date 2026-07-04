@@ -1,3 +1,11 @@
+/*
+ * BlacklistManager styles — CI design-system tokens.
+ * Colors reference the theme.css custom properties (--primary teal, semantic
+ * surfaces, etc.), so light/dark tracks next-themes' `.dark` class just like
+ * the rest of the popup. (Replaces the hardcoded hex + the standalone
+ * `prefers-color-scheme` block, which ignored the app's theme toggle.)
+ */
+
 .blacklist-manager {
   width: 100%;
   max-width: 400px;
@@ -10,7 +18,7 @@
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 1.5rem;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border);
   padding-bottom: 1rem;
 }
 
@@ -19,15 +27,15 @@
   font-size: 1.3em;
   font-weight: 600;
   flex: 1;
-  color: #fff;
+  color: var(--foreground);
 }
 
 .back-button {
   width: 32px;
   height: 32px;
   padding: 0;
-  background-color: #444;
-  color: white;
+  background-color: var(--secondary);
+  color: var(--secondary-foreground);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -40,7 +48,7 @@
 }
 
 .back-button:hover {
-  background-color: #555;
+  background-color: color-mix(in srgb, var(--secondary), var(--foreground) 12%);
   transform: translateX(-1px);
 }
 
@@ -51,7 +59,7 @@
 .blacklist-description {
   margin-bottom: 1rem;
   font-size: 0.85em;
-  color: #888;
+  color: var(--muted-foreground);
   text-align: left;
 }
 
@@ -59,8 +67,8 @@
   display: flex;
   gap: 0.25rem;
   margin-bottom: 1.5rem;
-  border-bottom: 1px solid #333;
-  background-color: rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid var(--border);
+  background-color: var(--muted);
   border-radius: 8px;
   padding: 0.25rem;
 }
@@ -69,7 +77,7 @@
   flex: 1;
   padding: 0.75em 1em;
   background-color: transparent;
-  color: #888;
+  color: var(--muted-foreground);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -80,13 +88,13 @@
 }
 
 .tab:hover {
-  color: #aaa;
-  background-color: rgba(75, 167, 166, 0.1);
+  color: var(--foreground);
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
 .tab.active {
-  color: #4ba7a6;
-  background-color: rgba(75, 167, 166, 0.15);
+  color: var(--primary);
+  background-color: color-mix(in srgb, var(--primary) 15%, transparent);
   font-weight: 600;
 }
 
@@ -112,6 +120,18 @@
   transition: all 0.2s ease;
 }
 
+/* "Add Current …" primary action */
+.current-actions .primary {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid var(--primary);
+  cursor: pointer;
+}
+
+.current-actions .primary:hover {
+  background-color: color-mix(in srgb, var(--primary) 90%, transparent);
+}
+
 .add-entry {
   display: flex;
   flex-direction: column;
@@ -128,31 +148,31 @@
 .text-input {
   flex: 1;
   padding: 0.75em 1em;
-  border: 1px solid #444;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background-color: #1a1a1a;
-  color: white;
+  background-color: transparent;
+  color: var(--foreground);
   font-size: 0.9em;
   outline: none;
   transition: all 0.2s ease;
 }
 
 .text-input:focus {
-  border-color: #4ba7a6;
-  box-shadow: 0 0 0 3px rgba(75, 167, 166, 0.15);
-  background-color: #1f1f1f;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 50%, transparent);
+  background-color: color-mix(in srgb, var(--primary) 4%, transparent);
 }
 
 .text-input::placeholder {
-  color: #666;
+  color: var(--muted-foreground);
 }
 
 .add-button {
   width: 44px;
   height: 44px;
   padding: 0;
-  background-color: #4ba7a6;
-  color: white;
+  background-color: var(--primary);
+  color: var(--primary-foreground);
   border: none;
   border-radius: 6px;
   font-size: 1.4em;
@@ -166,7 +186,7 @@
 }
 
 .add-button:hover {
-  background-color: #2f6b7e;
+  background-color: color-mix(in srgb, var(--primary) 90%, transparent);
   transform: scale(1.05);
 }
 
@@ -175,7 +195,7 @@
 }
 
 .error {
-  color: #ff4757;
+  color: var(--destructive);
   font-size: 0.85em;
   text-align: left;
 }
@@ -187,14 +207,14 @@
   max-height: 300px;
   overflow-y: auto;
   padding: 1rem;
-  background-color: rgba(0, 0, 0, 0.15);
+  background-color: var(--muted);
   border-radius: 8px;
-  border: 1px solid #333;
+  border: 1px solid var(--border);
 }
 
 .empty-state {
   text-align: center;
-  color: #666;
+  color: var(--muted-foreground);
   padding: 2.5rem 1rem;
   font-style: italic;
   font-size: 0.9em;
@@ -205,16 +225,16 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.875em 1em;
-  background-color: #1a1a1a;
-  border: 1px solid #333;
+  background-color: var(--card);
+  border: 1px solid var(--border);
   border-radius: 6px;
   gap: 0.75rem;
   transition: all 0.2s ease;
 }
 
 .entry:hover {
-  background-color: #252525;
-  border-color: #444;
+  background-color: var(--accent);
+  border-color: color-mix(in srgb, var(--border), var(--foreground) 15%);
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
@@ -224,7 +244,7 @@
   word-break: break-all;
   font-size: 0.9em;
   text-align: left;
-  color: #e0e0e0;
+  color: var(--card-foreground);
   line-height: 1.4;
 }
 
@@ -232,8 +252,8 @@
   width: 32px;
   height: 32px;
   padding: 0;
-  background-color: #ff4757;
-  color: white;
+  background-color: var(--destructive);
+  color: var(--destructive-foreground);
   border: none;
   border-radius: 6px;
   font-size: 1.2em;
@@ -247,94 +267,12 @@
 }
 
 .delete-button:hover {
-  background-color: #ff3838;
+  background-color: color-mix(in srgb, var(--destructive) 90%, transparent);
   transform: scale(1.1);
 }
 
 .delete-button:active {
   transform: scale(0.95);
-}
-
-/* Light mode */
-@media (prefers-color-scheme: light) {
-  .blacklist-header {
-    border-bottom-color: #ddd;
-  }
-
-  .blacklist-header h2 {
-    color: #213547;
-  }
-
-  .blacklist-description {
-    color: #666;
-  }
-
-  .tab-selector {
-    border-bottom-color: #ddd;
-    background-color: rgba(0, 0, 0, 0.05);
-  }
-
-  .tab {
-    color: #666;
-  }
-
-  .tab:hover {
-    color: #444;
-    background-color: rgba(75, 167, 166, 0.1);
-  }
-
-  .tab.active {
-    color: #4ba7a6;
-    background-color: rgba(75, 167, 166, 0.15);
-  }
-
-  .text-input {
-    background-color: #f9f9f9;
-    border-color: #ddd;
-    color: #213547;
-  }
-
-  .text-input:focus {
-    border-color: #4ba7a6;
-    background-color: #fff;
-  }
-
-  .text-input::placeholder {
-    color: #999;
-  }
-
-  .blacklist-entries {
-    background-color: rgba(0, 0, 0, 0.03);
-    border-color: #ddd;
-  }
-
-  .empty-state {
-    color: #999;
-  }
-
-  .entry {
-    background-color: white;
-    border-color: #ddd;
-  }
-
-  .entry:hover {
-    background-color: #f8f9fa;
-    border-color: #ccc;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
-
-  .entry-text {
-    color: #213547;
-  }
-
-  .back-button {
-    background-color: #e0e0e0;
-    color: #213547;
-  }
-
-  .back-button:hover {
-    background-color: #d0d0d0;
-  }
 }
 
 /* Mobile responsive */
@@ -392,4 +330,3 @@
     padding: 0.75rem;
   }
 }
-

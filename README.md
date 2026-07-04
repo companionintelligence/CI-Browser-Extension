@@ -148,9 +148,9 @@ Edge/Opera/Brave/DuckDuckGo (Chromium, identical manifest). `yarn build:<target>
 
 Tracked in `CI-Engineering/projects/ci-browser-extension`. Highlights: local-first
 outbox/queue, diagnostics panel and setup wizard, broader scrape-profile coverage,
-participation in platform **SSO once CI-Server federates to the CI-Portal OIDC
-identity provider** (the extension will continue to ride CI-Server sessions —
-see the OIDC/SSO audit), and Browser-Use bidirectional control.
+richer CaptureEvent envelope coverage as CI-Server's `/v1/events` contract grows,
+and Browser-Use bidirectional control. The extension already authenticates through
+the platform's **CI-Portal OIDC** identity provider (Authorization-Code + PKCE).
 
 ## 🤝 Contributing
 
