@@ -85,10 +85,10 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-[#4ba7a6] text-base font-semibold m-0">
+        <h2 className="text-primary text-base font-semibold m-0">
           Welcome to Companion Intelligence
         </h2>
-        <p className="text-[0.9em] text-[#888] m-0 mt-1">
+        <p className="text-[0.9em] text-muted-foreground m-0 mt-1">
           Pick the CI-Server this extension should sync to. You can change it
           later under Settings.
         </p>
@@ -101,8 +101,8 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
             key={env.id}
             className={`flex items-start gap-2 p-2 rounded border cursor-pointer ${
               selectedId === env.id
-                ? "border-[#4ba7a6] bg-[rgba(75,167,166,0.08)]"
-                : "border-[#333] hover:border-[#4ba7a6]/60"
+                ? "border-primary bg-primary/10"
+                : "border-border hover:border-primary/60"
             }`}
           >
             <input
@@ -111,12 +111,16 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
               value={env.id}
               checked={selectedId === env.id}
               onChange={() => setSelectedId(env.id)}
-              className="mt-1 accent-[#4ba7a6]"
+              className="mt-1 accent-primary"
             />
             <div className="flex-1">
-              <div className="text-sm font-medium text-[#eee]">{env.label}</div>
-              <div className="text-[0.8em] text-[#888]">{env.description}</div>
-              <div className="text-[0.75em] text-[#666] font-mono">
+              <div className="text-sm font-medium text-foreground">
+                {env.label}
+              </div>
+              <div className="text-[0.8em] text-muted-foreground">
+                {env.description}
+              </div>
+              <div className="text-[0.75em] text-muted-foreground font-mono">
                 {env.domain}
               </div>
             </div>
@@ -126,8 +130,8 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
         <label
           className={`flex items-start gap-2 p-2 rounded border cursor-pointer ${
             selectedId === "custom"
-              ? "border-[#4ba7a6] bg-[rgba(75,167,166,0.08)]"
-              : "border-[#333] hover:border-[#4ba7a6]/60"
+              ? "border-primary bg-primary/10"
+              : "border-border hover:border-primary/60"
           }`}
         >
           <input
@@ -136,11 +140,13 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
             value="custom"
             checked={selectedId === "custom"}
             onChange={() => setSelectedId("custom")}
-            className="mt-1 accent-[#4ba7a6]"
+            className="mt-1 accent-primary"
           />
           <div className="flex-1">
-            <div className="text-sm font-medium text-[#eee]">Custom domain</div>
-            <div className="text-[0.8em] text-[#888]">
+            <div className="text-sm font-medium text-foreground">
+              Custom domain
+            </div>
+            <div className="text-[0.8em] text-muted-foreground">
               Self-hosted CI-Server
             </div>
             {selectedId === "custom" && (
@@ -168,7 +174,7 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
         <Button
           onClick={acceptDomain}
           disabled={!effectiveDomain}
-          className="text-xs bg-[#4ba7a6] hover:bg-[#2f6b7e] text-white border-[#4ba7a6]"
+          className="text-xs"
         >
           Use this server
         </Button>
@@ -181,8 +187,8 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
         <div
           className={`p-2 rounded text-[0.85em] border ${
             probe.ok
-              ? "border-[#4ba7a6] text-[#4ba7a6]"
-              : "border-[#dc3545] text-[#dc3545]"
+              ? "border-primary text-primary"
+              : "border-destructive text-destructive"
           }`}
         >
           {probe.ok ? (
@@ -194,7 +200,7 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
             <>
               ✗ {probe.error ?? `HTTP ${probe.status}`} (in {probe.latencyMs}{" "}
               ms)
-              <div className="text-[0.8em] text-[#888] mt-1 font-mono">
+              <div className="text-[0.8em] text-muted-foreground mt-1 font-mono">
                 {effectiveDomain}
               </div>
             </>
@@ -203,7 +209,7 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
       )}
 
       {selectedId === "local" && (
-        <p className="text-[0.8em] text-[#888] m-0">
+        <p className="text-[0.8em] text-muted-foreground m-0">
           ℹ️ Local development requires importing the nginx self-signed cert
           (see the README) before the extension can connect.
         </p>
