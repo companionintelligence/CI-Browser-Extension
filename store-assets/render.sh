@@ -2,7 +2,9 @@
 # Renders generated SVGs to PNG (rsvg-convert) and assembles the demo GIF.
 set -euo pipefail
 cd "$(dirname "$0")"
-BG="#1a1a1a"
+# GIF canvas padding — matches the popup's canonical --background (dark theme)
+# so shorter frames pad seamlessly. Keep in sync with T.bg in src/popup.mjs.
+BG="#020618"
 
 echo "== embed logo (regenerated, not committed) =="
 { printf 'export const LOGO_B64 = "data:image/png;base64,'; base64 -i ../public/logo.png | tr -d '\n'; printf '";\n'; } > src/logo.mjs

@@ -80,8 +80,8 @@ yarn build:firefox       # Firefox MV2 → .output/firefox-mv2
 
 1. Open the popup and enter your **CI Server URL** (e.g. `my-ci.example.com`),
    then **Save**.
-2. Click **Log in to continue** — this opens the CI-Portal OIDC login (PKCE).
-   Once signed in, the popup shows **Logged in** and your device.
+2. Click **Authorize with Companion** — this opens the CI-Portal OIDC login (PKCE).
+   Once signed in, the popup shows **Authorized with Companion Intelligence** and your device.
 3. Choose a **sync time range** and click **Start History Sync**, or enable
    **Auto-sync** to run in the background.
 4. Toggle **History / Bookmarks / Downloads** to control what's captured.
