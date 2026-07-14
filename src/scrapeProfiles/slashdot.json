@@ -1,0 +1,56 @@
+{
+  "domain": "slashdot.org",
+  "name": "Slashdot History Scraper",
+  "description": "Scrapes Slashdot articles and reading history",
+  "targetUrl": [
+    "https://slashdot.org/*",
+    "https://*.slashdot.org/*"
+  ],
+  "dataSelectors": {
+    "articles": {
+      "container": "article, .article, .story",
+      "fields": {
+        "title": {
+          "selector": ".story-title a, h2 a, .title a, header h2 a",
+          "type": "text",
+          "transform": "trim"
+        },
+        "url": {
+          "selector": ".story-title a, h2 a, .title a, header h2 a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "summary": {
+          "selector": ".p, .summary, .intro",
+          "type": "text",
+          "transform": "trim"
+        },
+        "timestamp": {
+          "selector": "time, .story-date, .date, header time",
+          "type": "text",
+          "transform": "trim"
+        },
+        "department": {
+          "selector": ".dept, .department",
+          "type": "text",
+          "transform": "trim"
+        },
+        "commentCount": {
+          "selector": ".comment-bubble, .commentcount",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "articles",
+      "description": "Slashdot articles and stories viewed",
+      "personalDataType": "browsing_history"
+    }
+  ]
+}
+
+

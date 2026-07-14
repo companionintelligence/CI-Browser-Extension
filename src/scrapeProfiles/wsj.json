@@ -1,0 +1,85 @@
+{
+  "domain": "wsj.com",
+  "name": "Wall Street Journal Data Scraper",
+  "description": "Scrapes WSJ articles, headlines, and subscription content",
+  "targetUrl": [
+    "https://www.wsj.com/*",
+    "https://www.wsj.com/news/*",
+    "https://www.wsj.com/markets/*"
+  ],
+  "dataSelectors": {
+    "articles": {
+      "container": "[data-testid='article'], .article, .WSJTheme--story, .story-item",
+      "fields": {
+        "headline": {
+          "selector": "[data-testid='headline'], .headline, h1, h2, .WSJTheme--headline",
+          "type": "text",
+          "transform": "trim"
+        },
+        "articleUrl": {
+          "selector": "a",
+          "type": "attribute",
+          "attribute": "href",
+          "transform": "absoluteUrl"
+        },
+        "summary": {
+          "selector": "[data-testid='summary'], .summary, .dek, .WSJTheme--summary, p",
+          "type": "text",
+          "transform": "trim"
+        },
+        "author": {
+          "selector": "[data-testid='author'], .author, .byline, .WSJTheme--byline",
+          "type": "text",
+          "transform": "trim"
+        },
+        "publishDate": {
+          "selector": "[data-testid='timestamp'], .timestamp, time, .WSJTheme--timestamp",
+          "type": "text",
+          "transform": "trim"
+        },
+        "section": {
+          "selector": "[data-testid='section'], .section, .WSJTheme--section",
+          "type": "text",
+          "transform": "trim"
+        },
+        "isPremium": {
+          "selector": ".premium-flag, .subscriber-only, .WSJTheme--premium",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    },
+    "markets": {
+      "container": ".market-data, .quote, .WSJTheme--market-data",
+      "fields": {
+        "symbol": {
+          "selector": ".symbol, .ticker, .WSJTheme--symbol",
+          "type": "text",
+          "transform": "trim"
+        },
+        "price": {
+          "selector": ".price, .last-price, .WSJTheme--price",
+          "type": "text",
+          "transform": "trim"
+        },
+        "change": {
+          "selector": ".change, .price-change, .WSJTheme--change",
+          "type": "text",
+          "transform": "trim"
+        }
+      }
+    }
+  },
+  "dataTypes": [
+    {
+      "name": "news_articles",
+      "description": "Wall Street Journal articles and financial news",
+      "personalDataType": "news_consumption"
+    },
+    {
+      "name": "market_data",
+      "description": "Financial market data and stock information viewed",
+      "personalDataType": "financial_interests"
+    }
+  ]
+}

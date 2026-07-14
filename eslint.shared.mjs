@@ -20,7 +20,10 @@ export default [
         ecmaVersion: "latest",
         sourceType: "module",
       },
-      globals: globals.node,
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+      },
     },
 
     plugins: {
@@ -63,6 +66,12 @@ export default [
           disallowTypeAnnotations: false,
         },
       ],
+    },
+  },
+  {
+    files: ["src/entrypoints/background.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
 ];

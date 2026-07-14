@@ -1,0 +1,55 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+
+    - name: Enable Corepack (yarn 4)
+      run: corepack enable
+
+    - name: Install dependencies
+      run: yarn install --immutable
+
+    - name: Run linting
+      run: yarn lint
+
+    - name: Run type checking
+      run: yarn compile
+
+    - name: Run tests
+      run: yarn test
+
+    - name: Build Chrome extension
+      run: yarn build
+
+    - name: Build Firefox extension
+      run: yarn build:firefox
+
+    - name: Upload Chrome build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: chrome-extension
+        path: .output/chrome-mv3
+        retention-days: 30
+
+    - name: Upload Firefox build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: firefox-extension
+        path: .output/firefox-mv2
+        retention-days: 30

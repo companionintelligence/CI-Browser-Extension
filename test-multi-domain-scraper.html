@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Domain Scraper Test Page</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        .section { margin: 30px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        .netflix { border-left: 5px solid #e50914; }
+        .hulu { border-left: 5px solid #1ce783; }
+        .disney { border-left: 5px solid #0063e5; }
+        .title-card { display: inline-block; margin: 10px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; width: 180px; }
+        .retableRow { display: flex; padding: 10px; border-bottom: 1px solid #eee; align-items: center; }
+        .retableRow > div { margin-right: 20px; flex: 1; }
+        .account-info > div, .watch-history-item > div, .watchlist-item > div { margin: 8px 0; }
+        .content-tile { display: inline-block; margin: 10px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; width: 160px; }
+        .continue-watching-item { padding: 15px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+        .progress-bar { height: 4px; background: #0063e5; border-radius: 2px; }
+        button { background: #007bff; color: white; border: none; padding: 12px 24px; cursor: pointer; border-radius: 5px; font-size: 16px; }
+        button:hover { background: #0056b3; }
+        img { max-width: 100%; height: auto; }
+        a { color: inherit; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .results { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px; }
+        pre { background: white; padding: 10px; border-radius: 3px; overflow-x: auto; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>🎬 Multi-Domain Scraper Test</h1>
+    <p>This page simulates content from Netflix, Hulu, and Disney+ for testing the enhanced domain scraper with support for multiple streaming platforms.</p>
+
+    <div class="section netflix">
+        <h2>📺 Netflix Test Content</h2>
+        <h3>Viewing History Simulation:</h3>
+        <div class="retableRow" data-uia="retableRow">
+            <div data-uia="date" class="date">6/25/25</div>
+            <div data-uia="title" class="title">
+                <a href="https://www.netflix.com/title/81763679">Trainwreck: Poop Cruise</a>
+            </div>
+            <div><a href="/reportproblem/81763679">Report Problem</a></div>
+        </div>
+        <div class="retableRow" data-uia="retableRow">
+            <div data-uia="date" class="date">6/20/25</div>
+            <div data-uia="title" class="title">
+                <a href="https://www.netflix.com/title/81234567">Stranger Things 5</a>
+            </div>
+            <div><a href="/reportproblem/81234567">Report Problem</a></div>
+        </div>
+        <div class="retableRow" data-uia="retableRow">
+            <div data-uia="date" class="date">6/18/25</div>
+            <div data-uia="title" class="title">
+                <a href="https://www.netflix.com/title/81555888">Wednesday Season 2</a>
+            </div>
+            <div><a href="/reportproblem/81555888">Report Problem</a></div>
+        </div>
+
+        <h3>My List / Watchlist Simulation:</h3>
+        <div class="title-card" data-uia="title-card">
+            <img src="https://via.placeholder.com/150x220/e50914/ffffff?text=Netflix" alt="poster">
+            <div class="fallback-text" data-uia="title-card-name">The Witcher</div>
+            <a href="/title/80189685" data-uia="title-card-link">Watch Now</a>
+        </div>
+        <div class="title-card" data-uia="title-card">
+            <img src="https://via.placeholder.com/150x220/e50914/ffffff?text=Netflix" alt="poster">
+            <div class="fallback-text" data-uia="title-card-name">Ozark</div>
+            <a href="/title/80117552" data-uia="title-card-link">Watch Now</a>
+        </div>
+        <div class="title-card" data-uia="title-card">
+            <img src="https://via.placeholder.com/150x220/e50914/ffffff?text=Netflix" alt="poster">
+            <div class="fallback-text" data-uia="title-card-name">Dark</div>
+            <a href="/title/80100172" data-uia="title-card-link">Watch Now</a>
+        </div>
+    </div>
+
+    <div class="section hulu">
+        <h2>🟢 Hulu Test Content</h2>
+        <h3>Account Information Simulation:</h3>
+        <div class="account-info">
+            <div class="email">test@example.com</div>
+            <div class="plan-type">Hulu (No Ads) + Live TV</div>
+            <div class="billing-date">Next billing: July 1, 2025</div>
+            <div class="account-since">Member since: January 2020</div>
+        </div>
+
+        <h3>Watch History Simulation:</h3>
+        <div class="watch-history-item">
+            <div class="title"><a href="/watch/abc123">The Handmaid's Tale</a></div>
+            <div class="date">June 25, 2025</div>
+            <div class="episode">Season 5, Episode 8: "Under His Eye"</div>
+            <div class="progress">Watched: 45 min of 48 min</div>
+        </div>
+        <div class="watch-history-item">
+            <div class="title"><a href="/watch/xyz789">The Bear</a></div>
+            <div class="date">June 24, 2025</div>
+            <div class="episode">Season 3, Episode 4: "Partners"</div>
+            <div class="progress">Watched: 28 min of 30 min</div>
+        </div>
+
+        <h3>My Stuff / Watchlist Simulation:</h3>
+        <div class="watchlist-item">
+            <img src="https://via.placeholder.com/100x150/1ce783/ffffff?text=Hulu" alt="poster">
+            <div class="title">Only Murders in the Building</div>
+            <div class="added-date">Added: June 20, 2025</div>
+            <div class="description">Three strangers share an obsession with true crime podcasts.</div>
+        </div>
+        <div class="watchlist-item">
+            <img src="https://via.placeholder.com/100x150/1ce783/ffffff?text=Hulu" alt="poster">
+            <div class="title">Abbott Elementary</div>
+            <div class="added-date">Added: June 15, 2025</div>
+            <div class="description">A workplace mockumentary about a group of dedicated teachers.</div>
+        </div>
+    </div>
+
+    <div class="section disney">
+        <h2>🏰 Disney+ Test Content</h2>
+        <h3>Watchlist Simulation:</h3>
+        <div class="content-tile" data-testid="content-tile">
+            <img src="https://via.placeholder.com/150x220/0063e5/ffffff?text=Disney" alt="poster">
+            <div class="content-title" data-testid="content-title">The Mandalorian</div>
+            <a href="/series/the-mandalorian" data-testid="content-link">Watch</a>
+            <div class="content-type" data-testid="content-type">Series</div>
+            <div class="duration" data-testid="duration">8 Episodes</div>
+            <div class="release-year" data-testid="release-year">2019</div>
+        </div>
+        <div class="content-tile" data-testid="content-tile">
+            <img src="https://via.placeholder.com/150x220/0063e5/ffffff?text=Disney" alt="poster">
+            <div class="content-title" data-testid="content-title">Encanto</div>
+            <a href="/movies/encanto" data-testid="content-link">Watch</a>
+            <div class="content-type" data-testid="content-type">Movie</div>
+            <div class="duration" data-testid="duration">102 min</div>
+            <div class="release-year" data-testid="release-year">2021</div>
+        </div>
+
+        <h3>Continue Watching Simulation:</h3>
+        <div class="continue-watching-item" data-testid="continue-watching">
+            <div class="content-title" data-testid="content-title">Loki</div>
+            <a href="/series/loki" data-testid="content-link">Continue Watching</a>
+            <div class="progress-bar" data-testid="progress" style="width: 45%"></div>
+            <div class="time-remaining" data-testid="time-remaining">28 min remaining</div>
+            <div class="last-watched" data-testid="last-watched">Last watched: 2 days ago</div>
+        </div>
+        <div class="continue-watching-item" data-testid="continue-watching">
+            <div class="content-title" data-testid="content-title">WandaVision</div>
+            <a href="/series/wandavision" data-testid="content-link">Continue Watching</a>
+            <div class="progress-bar" data-testid="progress" style="width: 78%"></div>
+            <div class="time-remaining" data-testid="time-remaining">12 min remaining</div>
+            <div class="last-watched" data-testid="last-watched">Last watched: 1 week ago</div>
+        </div>
+
+        <h3>Recommendations Simulation:</h3>
+        <div class="recommended-item" data-testid="recommended-content">
+            <div class="content-title" data-testid="content-title">Ahsoka</div>
+            <a href="/series/ahsoka" data-testid="content-link">Watch</a>
+            <div class="category" data-testid="category">Star Wars</div>
+            <div class="recommendation-reason" data-testid="reason">Because you watched The Mandalorian</div>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin: 40px 0;">
+        <button onclick="testScraper()">🔍 Test Multi-Domain Scraper</button>
+    </div>
+
+    <div id="scrape-results" class="results" style="display: none;">
+        <h3>📊 Scraping Results:</h3>
+        <div id="results-summary"></div>
+        <details>
+            <summary>View Raw Data</summary>
+            <pre id="results-output"></pre>
+        </details>
+    </div>
+
+    <script>
+        function testScraper() {
+            console.log('🚀 Testing multi-domain scraper...');
+            
+            // Simulate what the domain scraper would extract
+            const results = {
+                netflix: extractNetflixData(),
+                hulu: extractHuluData(),
+                disney: extractDisneyData()
+            };
+            
+            displayResults(results);
+            
+            // Also trigger manual scraping for the actual extension
+            window.postMessage({ type: 'MANUAL_SCRAPE_REQUEST' }, '*');
+        }
+        
+        function extractNetflixData() {
+            const viewingHistory = [];
+            const watchlist = [];
+            
+            // Extract viewing history
+            document.querySelectorAll('.netflix .retableRow').forEach(row => {
+                const date = row.querySelector('[data-uia="date"]')?.textContent?.trim();
+                const titleEl = row.querySelector('[data-uia="title"] a');
+                if (date && titleEl) {
+                    viewingHistory.push({
+                        date: date,
+                        title: titleEl.textContent.trim(),
+                        titleUrl: titleEl.href,
+                        watchedDateTime: date // Would be transformed to ISO in real scraper
+                    });
+                }
+            });
+            
+            // Extract watchlist
+            document.querySelectorAll('.netflix [data-uia="title-card"]').forEach(card => {
+                const titleEl = card.querySelector('[data-uia="title-card-name"]');
+                const linkEl = card.querySelector('[data-uia="title-card-link"]');
+                if (titleEl && linkEl) {
+                    watchlist.push({
+                        title: titleEl.textContent.trim(),
+                        titleUrl: linkEl.href
+                    });
+                }
+            });
+            
+            return { viewingHistory, watchlist };
+        }
+        
+        function extractHuluData() {
+            const accountInfo = [];
+            const watchHistory = [];
+            const watchlist = [];
+            
+            // Extract account info
+            const accountEl = document.querySelector('.hulu .account-info');
+            if (accountEl) {
+                accountInfo.push({
+                    email: accountEl.querySelector('.email')?.textContent?.trim() || '',
+                    planType: accountEl.querySelector('.plan-type')?.textContent?.trim() || '',
+                    billingDate: accountEl.querySelector('.billing-date')?.textContent?.trim() || '',
+                    accountSince: accountEl.querySelector('.account-since')?.textContent?.trim() || ''
+                });
+            }
+            
+            // Extract watch history
+            document.querySelectorAll('.hulu .watch-history-item').forEach(item => {
+                const titleEl = item.querySelector('.title a');
+                if (titleEl) {
+                    watchHistory.push({
+                        title: titleEl.textContent.trim(),
+                        titleUrl: titleEl.href,
+                        watchedDate: item.querySelector('.date')?.textContent?.trim() || '',
+                        episode: item.querySelector('.episode')?.textContent?.trim() || '',
+                        progress: item.querySelector('.progress')?.textContent?.trim() || ''
+                    });
+                }
+            });
+            
+            // Extract watchlist
+            document.querySelectorAll('.hulu .watchlist-item').forEach(item => {
+                const title = item.querySelector('.title')?.textContent?.trim();
+                if (title) {
+                    watchlist.push({
+                        title: title,
+                        addedDate: item.querySelector('.added-date')?.textContent?.trim() || '',
+                        description: item.querySelector('.description')?.textContent?.trim() || ''
+                    });
+                }
+            });
+            
+            return { accountInfo, watchHistory, watchlist };
+        }
+        
+        function extractDisneyData() {
+            const watchlist = [];
+            const continueWatching = [];
+            const recommendations = [];
+            
+            // Extract watchlist
+            document.querySelectorAll('.disney [data-testid="content-tile"]').forEach(tile => {
+                const titleEl = tile.querySelector('[data-testid="content-title"]');
+                const linkEl = tile.querySelector('[data-testid="content-link"]');
+                if (titleEl && linkEl) {
+                    watchlist.push({
+                        title: titleEl.textContent.trim(),
+                        titleUrl: linkEl.href,
+                        contentType: tile.querySelector('[data-testid="content-type"]')?.textContent?.trim() || '',
+                        duration: tile.querySelector('[data-testid="duration"]')?.textContent?.trim() || '',
+                        releaseYear: tile.querySelector('[data-testid="release-year"]')?.textContent?.trim() || ''
+                    });
+                }
+            });
+            
+            // Extract continue watching
+            document.querySelectorAll('.disney [data-testid="continue-watching"]').forEach(item => {
+                const titleEl = item.querySelector('[data-testid="content-title"]');
+                if (titleEl) {
+                    continueWatching.push({
+                        title: titleEl.textContent.trim(),
+                        titleUrl: item.querySelector('[data-testid="content-link"]')?.href || '',
+                        timeRemaining: item.querySelector('[data-testid="time-remaining"]')?.textContent?.trim() || '',
+                        lastWatched: item.querySelector('[data-testid="last-watched"]')?.textContent?.trim() || ''
+                    });
+                }
+            });
+            
+            // Extract recommendations
+            document.querySelectorAll('.disney [data-testid="recommended-content"]').forEach(item => {
+                const titleEl = item.querySelector('[data-testid="content-title"]');
+                if (titleEl) {
+                    recommendations.push({
+                        title: titleEl.textContent.trim(),
+                        titleUrl: item.querySelector('[data-testid="content-link"]')?.href || '',
+                        category: item.querySelector('[data-testid="category"]')?.textContent?.trim() || '',
+                        recommendationReason: item.querySelector('[data-testid="reason"]')?.textContent?.trim() || ''
+                    });
+                }
+            });
+            
+            return { watchlist, continueWatching, recommendations };
+        }
+        
+        function displayResults(results) {
+            const resultsDiv = document.getElementById('scrape-results');
+            const summaryDiv = document.getElementById('results-summary');
+            const outputDiv = document.getElementById('results-output');
+            
+            // Create summary
+            let summary = '';
+            summary += `<h4>📺 Netflix:</h4><ul>`;
+            summary += `<li>Viewing History: ${results.netflix.viewingHistory.length} items</li>`;
+            summary += `<li>Watchlist: ${results.netflix.watchlist.length} items</li></ul>`;
+            
+            summary += `<h4>🟢 Hulu:</h4><ul>`;
+            summary += `<li>Account Info: ${results.hulu.accountInfo.length} items</li>`;
+            summary += `<li>Watch History: ${results.hulu.watchHistory.length} items</li>`;
+            summary += `<li>Watchlist: ${results.hulu.watchlist.length} items</li></ul>`;
+            
+            summary += `<h4>🏰 Disney+:</h4><ul>`;
+            summary += `<li>Watchlist: ${results.disney.watchlist.length} items</li>`;
+            summary += `<li>Continue Watching: ${results.disney.continueWatching.length} items</li>`;
+            summary += `<li>Recommendations: ${results.disney.recommendations.length} items</li></ul>`;
+            
+            summaryDiv.innerHTML = summary;
+            outputDiv.textContent = JSON.stringify(results, null, 2);
+            resultsDiv.style.display = 'block';
+            
+            console.log('✅ Multi-domain scraping complete:', results);
+        }
+        
+        console.log('🎬 Multi-domain scraper test page loaded');
+        console.log('📊 Available test data:');
+        console.log('  📺 Netflix: viewing history (3 items), watchlist (3 items)');
+        console.log('  🟢 Hulu: account info, watch history (2 items), watchlist (2 items)');
+        console.log('  🏰 Disney+: watchlist (2 items), continue watching (2 items), recommendations (1 item)');
+    </script>
+</body>
+</html>
