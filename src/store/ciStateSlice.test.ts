@@ -44,8 +44,10 @@ describe("ciStateSlice", () => {
         syncHistoryLogs: [],
         refreshing: false,
         serverURL: "",
-        serverEnvironmentId: null,
+        serverURLSource: null,
+        portalUrl: "https://hub.ci.computer",
         portalIssuer: null,
+        discoveryHint: null,
         settingsLoaded: false,
         autoSyncEnabled: false,
         siteBlacklist: [],
@@ -130,6 +132,23 @@ describe("ciStateSlice", () => {
       const persisted = mockBrowserStorage.local.set.mock.calls[0][0];
       expect(persisted).not.toHaveProperty("accessToken");
     });
+
+    it("persists portalUrl and serverURLSource but not the legacy portalIssuer", () => {
+      (store.dispatch as (action: unknown) => unknown)(
+        setState({
+          portalUrl: "https://hub.companionintel.com",
+          serverURLSource: "auto",
+          portalIssuer: "https://legacy.example.com/api/auth",
+        }),
+      );
+      (store.dispatch as (action: unknown) => unknown)(saveUserSettings());
+
+      const persisted = mockBrowserStorage.local.set.mock.calls[0][0];
+      expect(persisted.portalUrl).toBe("https://hub.companionintel.com");
+      expect(persisted.serverURLSource).toBe("auto");
+      expect(persisted).not.toHaveProperty("portalIssuer");
+      expect(persisted).not.toHaveProperty("discoveryHint");
+    });
   });
 
   describe("loadUserSettings", () => {
@@ -178,9 +197,11 @@ describe("ciStateSlice", () => {
         "downloadSyncEnabled",
         "historySyncEnabled",
         "serverURL",
+        "serverURLSource",
         "serverDomain",
-        "serverEnvironmentId",
+        "portalUrl",
         "portalIssuer",
+        "oidcTokens",
       ]);
     });
 
@@ -202,6 +223,118 @@ describe("ciStateSlice", () => {
       });
       expect(mockBrowserStorage.local.remove).toHaveBeenCalledWith(
         "serverDomain",
+      );
+    });
+
+    it("migrates a legacy portalIssuer to portalUrl", async () => {
+      mockBrowserStorage.local.get.mockResolvedValue({
+        portalIssuer: "https://portal.example.com/api/auth",
+      });
+
+      await (store.dispatch as (action: unknown) => unknown)(
+        loadUserSettings(),
+      );
+
+      const state = (store.getState() as { ciState: unknown }).ciState as {
+        portalUrl: string;
+        portalIssuer: string | null;
+      };
+      expect(state.portalUrl).toBe("https://portal.example.com");
+      expect(state.portalIssuer).toBeNull();
+      expect(mockBrowserStorage.local.set).toHaveBeenCalledWith({
+        portalUrl: "https://portal.example.com",
+      });
+      expect(mockBrowserStorage.local.remove).toHaveBeenCalledWith(
+        "portalIssuer",
+      );
+    });
+
+    it("keeps a non-standard portalIssuer as a legacy override", async () => {
+      mockBrowserStorage.local.get.mockResolvedValue({
+        portalIssuer: "https://portal.example.com/custom-issuer",
+      });
+
+      await (store.dispatch as (action: unknown) => unknown)(
+        loadUserSettings(),
+      );
+
+      const state = (store.getState() as { ciState: unknown }).ciState as {
+        portalUrl: string;
+        portalIssuer: string | null;
+      };
+      expect(state.portalUrl).toBe("https://hub.ci.computer");
+      expect(state.portalIssuer).toBe(
+        "https://portal.example.com/custom-issuer",
+      );
+      expect(mockBrowserStorage.local.remove).not.toHaveBeenCalledWith(
+        "portalIssuer",
+      );
+    });
+
+    it("derives portalUrl from serverURL for a live pre-portalUrl session", async () => {
+      mockBrowserStorage.local.get.mockResolvedValue({
+        serverURL: "https://dev.ci.computer",
+        oidcTokens: { access_token: "at", id_token: "it" },
+      });
+
+      await (store.dispatch as (action: unknown) => unknown)(
+        loadUserSettings(),
+      );
+
+      const state = (store.getState() as { ciState: unknown }).ciState as {
+        portalUrl: string;
+        serverURLSource: string | null;
+      };
+      expect(state.portalUrl).toBe("https://dev.ci.computer");
+      expect(mockBrowserStorage.local.set).toHaveBeenCalledWith({
+        portalUrl: "https://dev.ci.computer",
+      });
+      // The stored token blob must never be copied into Redux
+      expect(state).not.toHaveProperty("oidcTokens");
+    });
+
+    it("defaults portalUrl to prod when there is no prior session", async () => {
+      mockBrowserStorage.local.get.mockResolvedValue({
+        serverURL: "https://dev.ci.computer",
+      });
+
+      await (store.dispatch as (action: unknown) => unknown)(
+        loadUserSettings(),
+      );
+
+      const state = (store.getState() as { ciState: unknown }).ciState as {
+        portalUrl: string;
+      };
+      expect(state.portalUrl).toBe("https://hub.ci.computer");
+    });
+
+    it("marks a pre-existing serverURL as manually configured", async () => {
+      mockBrowserStorage.local.get.mockResolvedValue({
+        serverURL: "https://ci.example.com",
+      });
+
+      await (store.dispatch as (action: unknown) => unknown)(
+        loadUserSettings(),
+      );
+
+      const state = (store.getState() as { ciState: unknown }).ciState as {
+        serverURLSource: string | null;
+      };
+      expect(state.serverURLSource).toBe("manual");
+      expect(mockBrowserStorage.local.set).toHaveBeenCalledWith({
+        serverURLSource: "manual",
+      });
+    });
+
+    it("removes the obsolete serverEnvironmentId key", async () => {
+      mockBrowserStorage.local.get.mockResolvedValue({});
+
+      await (store.dispatch as (action: unknown) => unknown)(
+        loadUserSettings(),
+      );
+
+      expect(mockBrowserStorage.local.remove).toHaveBeenCalledWith(
+        "serverEnvironmentId",
       );
     });
   });

@@ -16,7 +16,7 @@ import {
   type BrowserActivity,
 } from "@/services/captureEvents";
 import {
-  deriveIssuer,
+  issuerFromPortalUrl,
   resolvePortalIssuer,
   portalOidcConfig,
   DEFAULT_PORTAL_ISSUER,
@@ -99,25 +99,25 @@ describe("Background Script", () => {
   });
 
   describe("Portal OIDC issuer derivation (Phase 3)", () => {
-    it("derives the issuer from a server URL (with or without trailing slash)", () => {
-      expect(deriveIssuer("https://hub.ci.computer")).toBe(
+    it("derives the issuer from a portal URL (with or without trailing slash)", () => {
+      expect(issuerFromPortalUrl("https://hub.ci.computer")).toBe(
         "https://hub.ci.computer/api/auth",
       );
-      expect(deriveIssuer("https://hub.ci.computer/")).toBe(
+      expect(issuerFromPortalUrl("https://hub.ci.computer/")).toBe(
         "https://hub.ci.computer/api/auth",
       );
     });
 
-    it("prefers an explicit portalIssuer override, then derives, then prod", () => {
+    it("prefers a legacy portalIssuer override, then derives, then prod", () => {
       expect(
         resolvePortalIssuer({
-          serverURL: "https://hub.ci.computer",
+          portalUrl: "https://hub.ci.computer",
           portalIssuer: "https://portal.example.com/api/auth",
         }),
       ).toBe("https://portal.example.com/api/auth");
 
       expect(
-        resolvePortalIssuer({ serverURL: "https://dev.ci.computer" }),
+        resolvePortalIssuer({ portalUrl: "https://dev.ci.computer" }),
       ).toBe("https://dev.ci.computer/api/auth");
 
       expect(resolvePortalIssuer({})).toBe(DEFAULT_PORTAL_ISSUER);
@@ -125,7 +125,7 @@ describe("Background Script", () => {
 
     it("builds the full OIDC client config for the extension", () => {
       expect(
-        portalOidcConfig({ serverURL: "https://hub.ci.computer" }),
+        portalOidcConfig({ portalUrl: "https://hub.ci.computer" }),
       ).toEqual({
         issuer: "https://hub.ci.computer/api/auth",
         clientId: OIDC_CLIENT_ID,

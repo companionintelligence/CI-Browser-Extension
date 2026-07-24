@@ -6,23 +6,14 @@ import {
   toggleDownloadSync,
   toggleHistorySync,
   clearSyncHistoryLogs,
-  setState,
-  saveUserSettings,
 } from "@/store/ciStateSlice";
 import "@/theme.css";
-import { normalizeServerUrl } from "@/utils";
+import { DEFAULT_PORTAL_URL } from "@/services/portalConfig";
+import { parseUrl } from "@/utils";
 import bowser from "bowser";
 import BlacklistManager from "./BlacklistManager";
-import SetupWizard from "./SetupWizard";
-import {
-  Button,
-  Checkbox,
-  Field,
-  Label,
-  Input,
-  Card,
-  Toaster,
-} from "@ci/shadcn";
+import AdvancedSettings from "./AdvancedSettings";
+import { Button, Checkbox, Field, Label, Card, Toaster } from "@ci/shadcn";
 
 export default function App() {
   const dispatch = useDispatch();
@@ -36,6 +27,8 @@ export default function App() {
     historySyncStatus: string | null;
     lastHistorySync: string | null;
     serverURL: string;
+    portalUrl: string;
+    discoveryHint: string | null;
     settingsLoaded: boolean;
     autoSyncEnabled: boolean;
     siteBlacklist: string[];
@@ -63,6 +56,8 @@ export default function App() {
     historySyncStatus,
     lastHistorySync,
     serverURL,
+    portalUrl,
+    discoveryHint,
     settingsLoaded,
     autoSyncEnabled,
     siteBlacklist,
@@ -76,24 +71,15 @@ export default function App() {
   } = ciState;
 
   const [showBlacklistManager, setShowBlacklistManager] = useState(false);
-  const [url, setUrl] = useState(serverURL);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
   const [token, setToken] = useState(accessToken);
-  const [showSetupWizard, setShowSetupWizard] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [authorizing, setAuthorizing] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // First-run onboarding: once persisted settings have loaded, if no
-  // CI-Server is configured yet, surface the setup wizard. Choosing a server
-  // or skipping closes it (skip lets the user fall back to manual entry).
   useEffect(() => {
-    if (settingsLoaded && !serverURL) {
-      setShowSetupWizard(true);
-    }
-
     if (serverURL) {
-      setUrl(serverURL);
       browser.runtime.sendMessage({
         action: "CHECK_AUTH_STATUS",
       });
@@ -155,14 +141,6 @@ export default function App() {
     dispatch(toggleHistorySync());
   };
 
-  const changeServerUrl = (e?: { preventDefault?: () => void }) => {
-    e?.preventDefault?.();
-    const normalized = normalizeServerUrl(url);
-    setUrl(normalized);
-    dispatch(setState({ serverURL: normalized }));
-    dispatch(saveUserSettings());
-  };
-
   // Kick off the OIDC Auth-Code + PKCE sign-in. The flow runs in the background
   // service worker (the popup is torn down when launchWebAuthFlow takes focus);
   // the resulting token arrives back via the AUTH_STATE_UPDATED broadcast.
@@ -182,10 +160,6 @@ export default function App() {
     } finally {
       setAuthorizing(false);
     }
-  };
-
-  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setUrl(e.target.value);
   };
 
   const triggerHistorySync = async () => {
@@ -242,22 +216,6 @@ export default function App() {
     }
   };
 
-  if (showSetupWizard) {
-    return (
-      <>
-        <Toaster />
-        <div
-          className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[400px]"} mx-auto p-4 box-border`}
-        >
-          <SetupWizard
-            onComplete={() => setShowSetupWizard(false)}
-            onSkip={() => setShowSetupWizard(false)}
-          />
-        </div>
-      </>
-    );
-  }
-
   if (showBlacklistManager) {
     return (
       <>
@@ -277,62 +235,46 @@ export default function App() {
       <div
         className={`min-w-[280px] ${isMobile ? "w-full max-w-full p-2" : "w-[350px] max-w-[400px]"} mx-auto p-4 box-border`}
       >
-        {/* CI Server URL Section */}
-        <div className="mb-6">
-          <h4 className="m-0 mb-2 text-primary text-[1.25em] font-semibold">
-            CI Server URL
-          </h4>
-          <p className="mb-3 text-[1em] text-muted-foreground">
-            Enter the URL of your CI server
-          </p>
-          <form onSubmit={changeServerUrl} className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex-1 min-w-[150px]">
-                <Input
-                  value={url}
-                  onChange={handleUrlChange}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      changeServerUrl(e);
-                    }
-                  }}
-                  className="w-full min-h-[44px] text-base"
-                />
-              </div>
-              <Button
-                onClick={changeServerUrl}
-                className="min-h-[44px] active:translate-y-[1px] transition-all"
-              >
-                Save
-              </Button>
-            </div>
-          </form>
-        </div>
+        {!token && (
+          <div className="mb-4 text-center">
+            <h4 className="m-0 mb-1 text-primary text-[1.25em] font-semibold">
+              Companion Intelligence
+            </h4>
+            <p className="m-0 mb-3 text-[0.9em] text-muted-foreground">
+              Sync your browsing to your Companion memory.
+            </p>
+          </div>
+        )}
 
-        {url?.length > 0 &&
-          (token ? (
-            <Button
-              className="text-center mb-4 size-4 p-2 text-muted-foreground rounded-lg h-10 border-t bg-primary/10 block w-full font-medium no-underline hover:bg-primary/15 transition-colors"
-              onClick={() => {
-                window.open(serverURL, "_blank");
-              }}
-            >
-              Authorized with Companion Intelligence
-            </Button>
-          ) : (
-            <Button
-              onClick={handleAuthorize}
-              disabled={authorizing}
-              style={{ background: "var(--gradient-brand)" }}
-              className="text-center mb-4 p-2 rounded-lg h-10 block w-full font-medium no-underline transition-all text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {authorizing ? "Authorizing…" : "Authorize with Companion"}
-            </Button>
-          ))}
+        {token ? (
+          <Button
+            className="text-center mb-4 size-4 p-2 text-muted-foreground rounded-lg h-10 border-t bg-primary/10 block w-full font-medium no-underline hover:bg-primary/15 transition-colors"
+            onClick={() => {
+              window.open(serverURL || portalUrl, "_blank");
+            }}
+          >
+            Authorized with Companion Intelligence
+          </Button>
+        ) : (
+          <Button
+            onClick={handleAuthorize}
+            disabled={authorizing}
+            style={{ background: "var(--gradient-brand)" }}
+            className="text-center mb-4 p-2 rounded-lg h-10 block w-full font-medium no-underline transition-all text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {authorizing ? "Signing in…" : "Sign in with Companion account"}
+          </Button>
+        )}
 
         {authError && (
           <div className="mb-4 p-2 rounded text-[0.85em] text-destructive bg-destructive/10">
             {authError}
+          </div>
+        )}
+
+        {discoveryHint && (!token || !serverURL) && (
+          <div className="mb-4 p-2 rounded text-[0.85em] text-muted-foreground bg-primary/10">
+            {discoveryHint}
           </div>
         )}
 
@@ -585,6 +527,20 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* Unobtrusive connection settings (Portal + Memory server URL) */}
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="text-xs text-muted-foreground bg-transparent border-0 p-0 cursor-pointer underline underline-offset-2 hover:text-primary transition-colors"
+          >
+            {!token && portalUrl !== DEFAULT_PORTAL_URL
+              ? `Signing in to ${parseUrl(portalUrl)?.host ?? portalUrl} — change`
+              : "Advanced"}
+          </button>
+          {showAdvanced && <AdvancedSettings />}
+        </div>
       </div>
     </>
   );
