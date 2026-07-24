@@ -83,10 +83,11 @@ yarn build:firefox       # Firefox MV2 → .output/firefox-mv2
    For dev work, the small **Advanced** link on the logged-out view switches the
    Portal (staging / dev / local presets, or a custom URL).
 2. After sign-in the extension asks the Portal where your **Memory** app runs
-   and configures the server URL automatically. If your Portal doesn't support
-   discovery (or you run an unusual setup), set the **Memory server URL**
-   manually under **Advanced**. Once signed in, the popup shows
-   **Authorized with Companion Intelligence** and your device.
+   and configures the server URL automatically. If Memory is installed on more
+   than one of your devices, the popup asks which one to use. If your Portal
+   doesn't support discovery (or you run an unusual setup), set the
+   **Memory server URL** manually under **Advanced**. Once signed in, the popup
+   shows **Authorized with Companion Intelligence** and your device.
 3. Choose a **sync time range** and click **Start History Sync**, or enable
    **Auto-sync** to run in the background.
 4. Toggle **History / Bookmarks / Downloads** to control what's captured.

@@ -22,7 +22,7 @@ import {
   signOut,
 } from "@/services/oidcAuth";
 import { portalOidcConfig } from "@/services/portalConfig";
-import { fetchPortalApps, selectMemoryAppUrl } from "@/services/portalApps";
+import { fetchPortalApps, memoryAppsFrom } from "@/services/portalApps";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
 import { database } from "@/indexeddb";
@@ -79,7 +79,9 @@ function oidcConfig() {
 // serverURL from it. Never throws and never fails a sign-in: on any miss it
 // leaves serverURL alone and, when none is configured, surfaces a hint in the
 // popup instead. A manually-set serverURL (serverURLSource "manual") is never
-// overwritten.
+// overwritten. When Memory runs on several devices and there is no valid
+// choice yet, the candidates go to memoryAppChoices and the popup asks the
+// user which to use.
 async function discoverMemoryServer(): Promise<void> {
   try {
     const accessToken = await getAccessToken(oidcConfig());
@@ -91,35 +93,64 @@ async function discoverMemoryServer(): Promise<void> {
     const result = await fetchPortalApps(portalUrl, accessToken);
 
     if (result.status === "ok") {
-      const memoryUrl = selectMemoryAppUrl(result.apps);
+      const memoryApps = memoryAppsFrom(result.apps);
 
-      if (memoryUrl) {
-        if (!serverURL || serverURLSource === "auto") {
-          if (memoryUrl !== serverURL) {
-            console.log("[CI] Memory server discovered via portal:", memoryUrl);
-          }
-
-          store.dispatch(
-            setState({
-              serverURL: memoryUrl,
-              serverURLSource: "auto",
-              discoveryHint: null,
-            }),
-          );
-          store.dispatch(saveUserSettings());
-        }
+      if (memoryApps.length === 0) {
+        store.dispatch(
+          setState({
+            memoryAppChoices: null,
+            discoveryHint: serverURL
+              ? null
+              : "Signed in, but no Memory app was found on your Companion account. Install Memory from the Portal, or set the Memory server URL under Advanced.",
+          }),
+        );
 
         return;
       }
 
-      if (!serverURL) {
+      // A deliberate manual choice is never touched or second-guessed.
+      if (serverURL && serverURLSource === "manual") {
+        store.dispatch(setState({ memoryAppChoices: null }));
+
+        return;
+      }
+
+      // The auto-configured server is still one of the user's Memory apps.
+      if (serverURL && memoryApps.some((app) => app.url === serverURL)) {
+        store.dispatch(
+          setState({ memoryAppChoices: null, discoveryHint: null }),
+        );
+
+        return;
+      }
+
+      if (memoryApps.length === 1) {
+        console.log(
+          "[CI] Memory server discovered via portal:",
+          memoryApps[0].url,
+        );
         store.dispatch(
           setState({
-            discoveryHint:
-              "Signed in, but no Memory app was found on your Companion account. Install Memory from the Portal, or set the Memory server URL under Advanced.",
+            serverURL: memoryApps[0].url,
+            serverURLSource: "auto",
+            memoryAppChoices: null,
+            discoveryHint: null,
           }),
         );
+        store.dispatch(saveUserSettings());
+
+        return;
       }
+
+      // Several devices run Memory and none is configured (or the old auto
+      // choice vanished) — let the user pick in the popup.
+      console.log(
+        "[CI] Multiple Memory apps found; asking the user:",
+        memoryApps.map((app) => `${app.url} (${app.deviceName ?? "unknown"})`),
+      );
+      store.dispatch(
+        setState({ memoryAppChoices: memoryApps, discoveryHint: null }),
+      );
 
       return;
     }
@@ -1960,7 +1991,12 @@ export default defineBackground({
       // The device registration lives on the old portal's server; a fresh
       // sign-in provisions a new one where the next serverURL points.
       store.dispatch(
-        setState({ accessToken: null, deviceId: null, discoveryHint: null }),
+        setState({
+          accessToken: null,
+          deviceId: null,
+          discoveryHint: null,
+          memoryAppChoices: null,
+        }),
       );
       store.dispatch(saveUserSettings());
       browser.runtime

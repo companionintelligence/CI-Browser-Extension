@@ -91,6 +91,7 @@ export default function AdvancedSettings() {
         serverURL: normalized,
         serverURLSource: normalized ? "manual" : null,
         discoveryHint: null,
+        memoryAppChoices: null,
       }),
     );
     dispatch(saveUserSettings());

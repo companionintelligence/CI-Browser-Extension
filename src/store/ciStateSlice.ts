@@ -113,6 +113,10 @@ interface CiState {
   portalIssuer: string | null;
   // Transient post-sign-in guidance (e.g. "no Memory app found"); not persisted.
   discoveryHint: string | null;
+  // Memory candidates needing a user decision (Memory installed on several
+  // devices and no valid serverURL); transient, not persisted — discovery
+  // repopulates it after a service-worker restart.
+  memoryAppChoices: { slug: string; url: string; deviceName?: string }[] | null;
   settingsLoaded: boolean;
   autoSyncEnabled: boolean;
   siteBlacklist: string[];
@@ -143,6 +147,7 @@ export const ciStateSlice = createSlice({
     portalUrl: DEFAULT_PORTAL_URL,
     portalIssuer: null,
     discoveryHint: null,
+    memoryAppChoices: null,
     settingsLoaded: false,
     autoSyncEnabled: false,
     siteBlacklist: [],

@@ -75,25 +75,28 @@ export async function fetchPortalApps(
 }
 
 /**
- * The Memory server URL to auto-configure, or null when the user has no
- * ci-memory app. Multiple devices can each run Memory; the Portal's response
- * order is authoritative and the first entry wins.
+ * The user's Memory candidates: ci-memory entries with normalized URLs,
+ * deduplicated by URL. One entry → auto-configure it; several (Memory
+ * installed on more than one device) → the popup asks the user which to use.
  */
-export function selectMemoryAppUrl(apps: PortalApp[]): string | null {
-  const memoryApps = apps.filter(
-    (app) => app.slug === MEMORY_APP_SLUG && typeof app.url === "string",
-  );
+export function memoryAppsFrom(apps: PortalApp[]): PortalApp[] {
+  const seen = new Set<string>();
+  const memoryApps: PortalApp[] = [];
 
-  if (memoryApps.length === 0) {
-    return null;
+  for (const app of apps) {
+    if (app.slug !== MEMORY_APP_SLUG || typeof app.url !== "string") {
+      continue;
+    }
+
+    const url = normalizeServerUrl(app.url);
+
+    if (!url || seen.has(url)) {
+      continue;
+    }
+
+    seen.add(url);
+    memoryApps.push({ ...app, url });
   }
 
-  if (memoryApps.length > 1) {
-    console.log(
-      "[CI] Multiple Memory apps found; using the first:",
-      memoryApps.map((app) => `${app.url} (${app.deviceName ?? "unknown"})`),
-    );
-  }
-
-  return normalizeServerUrl(memoryApps[0].url);
+  return memoryApps;
 }

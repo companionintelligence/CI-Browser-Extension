@@ -48,6 +48,7 @@ describe("ciStateSlice", () => {
         portalUrl: "https://hub.ci.computer",
         portalIssuer: null,
         discoveryHint: null,
+        memoryAppChoices: null,
         settingsLoaded: false,
         autoSyncEnabled: false,
         siteBlacklist: [],
@@ -148,6 +149,7 @@ describe("ciStateSlice", () => {
       expect(persisted.serverURLSource).toBe("auto");
       expect(persisted).not.toHaveProperty("portalIssuer");
       expect(persisted).not.toHaveProperty("discoveryHint");
+      expect(persisted).not.toHaveProperty("memoryAppChoices");
     });
   });
 

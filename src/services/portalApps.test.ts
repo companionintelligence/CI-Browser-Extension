@@ -1,7 +1,7 @@
 import {
   fetchPortalApps,
   meAppsUrl,
-  selectMemoryAppUrl,
+  memoryAppsFrom,
   MEMORY_APP_SLUG,
 } from "./portalApps";
 
@@ -104,29 +104,44 @@ describe("portalApps", () => {
     });
   });
 
-  describe("selectMemoryAppUrl", () => {
-    it("returns null when there is no memory app", () => {
-      expect(selectMemoryAppUrl([])).toBeNull();
+  describe("memoryAppsFrom", () => {
+    it("returns an empty list when there is no memory app", () => {
+      expect(memoryAppsFrom([])).toEqual([]);
       expect(
-        selectMemoryAppUrl([{ slug: "hub", url: "https://hub.example.com" }]),
-      ).toBeNull();
+        memoryAppsFrom([{ slug: "hub", url: "https://hub.example.com" }]),
+      ).toEqual([]);
     });
 
-    it("returns the normalized URL of the memory app", () => {
+    it("returns memory apps with normalized URLs", () => {
       expect(
-        selectMemoryAppUrl([
-          { slug: MEMORY_APP_SLUG, url: "https://mem.example.com/" },
+        memoryAppsFrom([
+          {
+            slug: MEMORY_APP_SLUG,
+            url: "https://mem.example.com/",
+            deviceName: "Den",
+          },
         ]),
-      ).toBe("https://mem.example.com");
+      ).toEqual([
+        {
+          slug: MEMORY_APP_SLUG,
+          url: "https://mem.example.com",
+          deviceName: "Den",
+        },
+      ]);
     });
 
-    it("prefers the first memory app when several devices run one", () => {
-      expect(
-        selectMemoryAppUrl([
-          { slug: MEMORY_APP_SLUG, url: "https://one.example.com" },
-          { slug: MEMORY_APP_SLUG, url: "https://two.example.com" },
-        ]),
-      ).toBe("https://one.example.com");
+    it("keeps one entry per device, deduplicated by URL", () => {
+      const apps = memoryAppsFrom([
+        { slug: MEMORY_APP_SLUG, url: "https://one.example.com" },
+        { slug: MEMORY_APP_SLUG, url: "https://two.example.com" },
+        { slug: MEMORY_APP_SLUG, url: "https://one.example.com/" },
+        { slug: "hub", url: "https://hub.example.com" },
+      ]);
+
+      expect(apps.map((app) => app.url)).toEqual([
+        "https://one.example.com",
+        "https://two.example.com",
+      ]);
     });
   });
 });

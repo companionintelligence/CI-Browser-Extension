@@ -6,6 +6,8 @@ import {
   toggleDownloadSync,
   toggleHistorySync,
   clearSyncHistoryLogs,
+  setState,
+  saveUserSettings,
 } from "@/store/ciStateSlice";
 import "@/theme.css";
 import { DEFAULT_PORTAL_URL } from "@/services/portalConfig";
@@ -29,6 +31,9 @@ export default function App() {
     serverURL: string;
     portalUrl: string;
     discoveryHint: string | null;
+    memoryAppChoices:
+      | { slug: string; url: string; deviceName?: string }[]
+      | null;
     settingsLoaded: boolean;
     autoSyncEnabled: boolean;
     siteBlacklist: string[];
@@ -58,6 +63,7 @@ export default function App() {
     serverURL,
     portalUrl,
     discoveryHint,
+    memoryAppChoices,
     settingsLoaded,
     autoSyncEnabled,
     siteBlacklist,
@@ -160,6 +166,23 @@ export default function App() {
     } finally {
       setAuthorizing(false);
     }
+  };
+
+  // Multi-device pick: an explicit user choice, so it's saved as "manual" and
+  // later discoveries never silently switch it.
+  const chooseMemory = (choice: { url: string }) => {
+    dispatch(
+      setState({
+        serverURL: choice.url,
+        serverURLSource: "manual",
+        memoryAppChoices: null,
+        discoveryHint: null,
+      }),
+    );
+    dispatch(saveUserSettings());
+    browser.runtime
+      .sendMessage({ action: "CHECK_AUTH_STATUS" })
+      .catch(console.error);
   };
 
   const triggerHistorySync = async () => {
@@ -275,6 +298,37 @@ export default function App() {
         {discoveryHint && (!token || !serverURL) && (
           <div className="mb-4 p-2 rounded text-[0.85em] text-muted-foreground bg-primary/10">
             {discoveryHint}
+          </div>
+        )}
+
+        {/* Memory runs on several devices — ask which one to sync to */}
+        {token && memoryAppChoices && memoryAppChoices.length > 0 && (
+          <div className="mb-4 p-3 rounded-lg bg-primary/5 text-left">
+            <p className="m-0 mb-1 text-[0.9em] font-semibold text-primary">
+              Choose your Memory
+            </p>
+            <p className="m-0 mb-2 text-[0.8em] text-muted-foreground">
+              Your Companion account has Memory on more than one device.
+            </p>
+            <div className="flex flex-col gap-2">
+              {memoryAppChoices.map((choice) => (
+                <Button
+                  key={choice.url}
+                  variant="outline"
+                  onClick={() => chooseMemory(choice)}
+                  className="w-full min-h-[40px] px-3 py-2 flex flex-col items-start gap-0 bg-transparent text-left border-border hover:bg-primary/10 hover:border-primary transition-colors"
+                >
+                  <span className="text-[0.9em] font-medium text-foreground">
+                    {choice.deviceName ??
+                      parseUrl(choice.url)?.host ??
+                      choice.url}
+                  </span>
+                  <span className="text-[0.75em] text-muted-foreground">
+                    {parseUrl(choice.url)?.host ?? choice.url}
+                  </span>
+                </Button>
+              ))}
+            </div>
           </div>
         )}
 
