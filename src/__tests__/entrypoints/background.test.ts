@@ -68,7 +68,7 @@ describe("Background Script", () => {
       (global as { fetch?: unknown }).fetch = fetchMock;
 
       const result = await sendCaptureEvents(
-        "dev.companionintelligence.com",
+        "https://dev.companionintelligence.com",
         "portal-jwt",
         [activity()],
       );
@@ -91,14 +91,16 @@ describe("Background Script", () => {
         .mockResolvedValue({ ok: false, status: 401 });
 
       await expect(
-        sendCaptureEvents("dev.companionintelligence.com", "t", [activity()]),
+        sendCaptureEvents("https://dev.companionintelligence.com", "t", [
+          activity(),
+        ]),
       ).rejects.toThrow(/HTTP 401/);
     });
   });
 
   describe("Portal OIDC issuer derivation (Phase 3)", () => {
-    it("derives the issuer from a server domain (bare host or URL)", () => {
-      expect(deriveIssuer("hub.ci.computer")).toBe(
+    it("derives the issuer from a server URL (with or without trailing slash)", () => {
+      expect(deriveIssuer("https://hub.ci.computer")).toBe(
         "https://hub.ci.computer/api/auth",
       );
       expect(deriveIssuer("https://hub.ci.computer/")).toBe(
@@ -109,20 +111,22 @@ describe("Background Script", () => {
     it("prefers an explicit portalIssuer override, then derives, then prod", () => {
       expect(
         resolvePortalIssuer({
-          serverDomain: "hub.ci.computer",
+          serverURL: "https://hub.ci.computer",
           portalIssuer: "https://portal.example.com/api/auth",
         }),
       ).toBe("https://portal.example.com/api/auth");
 
-      expect(resolvePortalIssuer({ serverDomain: "dev.ci.computer" })).toBe(
-        "https://dev.ci.computer/api/auth",
-      );
+      expect(
+        resolvePortalIssuer({ serverURL: "https://dev.ci.computer" }),
+      ).toBe("https://dev.ci.computer/api/auth");
 
       expect(resolvePortalIssuer({})).toBe(DEFAULT_PORTAL_ISSUER);
     });
 
     it("builds the full OIDC client config for the extension", () => {
-      expect(portalOidcConfig({ serverDomain: "hub.ci.computer" })).toEqual({
+      expect(
+        portalOidcConfig({ serverURL: "https://hub.ci.computer" }),
+      ).toEqual({
         issuer: "https://hub.ci.computer/api/auth",
         clientId: OIDC_CLIENT_ID,
         scopes: "openid profile email offline_access",

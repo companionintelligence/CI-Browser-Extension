@@ -18,15 +18,15 @@ function activity(over: Partial<BrowserActivity> = {}): BrowserActivity {
 }
 
 describe("eventsUrl", () => {
-  it("builds /v1/events from a bare host, a full URL, or a trailing slash", () => {
-    expect(eventsUrl("hub.ci.computer")).toBe(
-      "https://hub.ci.computer/v1/events",
-    );
+  it("builds /v1/events from a server URL, with or without a trailing slash", () => {
     expect(eventsUrl("https://hub.ci.computer")).toBe(
       "https://hub.ci.computer/v1/events",
     );
-    expect(eventsUrl("hub.ci.computer/")).toBe(
+    expect(eventsUrl("https://hub.ci.computer/")).toBe(
       "https://hub.ci.computer/v1/events",
+    );
+    expect(eventsUrl("http://localhost:8080")).toBe(
+      "http://localhost:8080/v1/events",
     );
   });
 });
@@ -122,9 +122,11 @@ describe("sendCaptureEvents", () => {
     });
     (global as { fetch?: unknown }).fetch = fetchMock;
 
-    const result = await sendCaptureEvents("hub.ci.computer", "portal-jwt", [
-      activity(),
-    ]);
+    const result = await sendCaptureEvents(
+      "https://hub.ci.computer",
+      "portal-jwt",
+      [activity()],
+    );
     expect(result).toEqual({ ingested: 1, duplicate: 0, rejected: [] });
 
     const [url, init] = fetchMock.mock.calls[0];
@@ -139,11 +141,13 @@ describe("sendCaptureEvents", () => {
   it("no-ops (no fetch) for an empty batch", async () => {
     const fetchMock = jest.fn();
     (global as { fetch?: unknown }).fetch = fetchMock;
-    expect(await sendCaptureEvents("hub.ci.computer", "t", [])).toEqual({
-      ingested: 0,
-      duplicate: 0,
-      rejected: [],
-    });
+    expect(await sendCaptureEvents("https://hub.ci.computer", "t", [])).toEqual(
+      {
+        ingested: 0,
+        duplicate: 0,
+        rejected: [],
+      },
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -152,7 +156,7 @@ describe("sendCaptureEvents", () => {
       .fn()
       .mockResolvedValue({ ok: false, status: 401 });
     await expect(
-      sendCaptureEvents("hub.ci.computer", "t", [activity()]),
+      sendCaptureEvents("https://hub.ci.computer", "t", [activity()]),
     ).rejects.toThrow(/HTTP 401/);
   });
 });

@@ -60,12 +60,12 @@ async function runAutoSync() {
 
 // ---- Unified identity + capture transport (Phase 3) ----
 
-// The portal OIDC client config, derived from the configured server domain (or
+// The portal OIDC client config, derived from the configured server URL (or
 // an explicit portalIssuer override). See services/portalConfig.
 function oidcConfig() {
-  const { serverDomain, portalIssuer } = store.getState().ciState;
+  const { serverURL, portalIssuer } = store.getState().ciState;
 
-  return portalOidcConfig({ serverDomain, portalIssuer });
+  return portalOidcConfig({ serverURL, portalIssuer });
 }
 
 // Resolve the Bearer for CI-Server: prefer the portal OIDC **id_token** — the
@@ -85,15 +85,15 @@ async function resolveServerToken(): Promise<string | null> {
 
 // Central capture transport: every browser-activity write goes through here as
 // CaptureEvents on CI-Server's unified `/v1/events` path (replacing the legacy
-// `POST /api/browser-activity`). No-ops without a server domain or batch;
+// `POST /api/browser-activity`). No-ops without a server URL or batch;
 // throws on a missing token or non-2xx so callers keep their retry/logging.
 async function postCaptureEvents(activities: BrowserActivity[]): Promise<void> {
   if (activities.length === 0) {
     return;
   }
 
-  const { serverDomain } = store.getState().ciState;
-  if (!serverDomain) {
+  const { serverURL } = store.getState().ciState;
+  if (!serverURL) {
     return;
   }
 
@@ -102,7 +102,7 @@ async function postCaptureEvents(activities: BrowserActivity[]): Promise<void> {
     throw new Error("No access token available for capture upload");
   }
 
-  await sendCaptureEvents(serverDomain, token, activities);
+  await sendCaptureEvents(serverURL, token, activities);
 }
 
 // Helper function to ensure proper ISO time format with milliseconds
@@ -242,15 +242,15 @@ async function getDeviceId(): Promise<string> {
 // Heartbeat so CI-Server can show device freshness; failures are non-critical
 async function updateDeviceLastSeen(deviceId: string): Promise<void> {
   try {
-    const { serverDomain } = store.getState().ciState;
+    const { serverURL } = store.getState().ciState;
     const token = await resolveServerToken();
 
-    if (!token || !serverDomain) {
+    if (!token || !serverURL) {
       return;
     }
 
     await axios.patch(
-      `https://${serverDomain}/api/devices/${deviceId}/last-seen`,
+      `${serverURL}/api/devices/${deviceId}/last-seen`,
       {},
       {
         headers: {
@@ -270,14 +270,14 @@ async function updateDeviceLastSeen(deviceId: string): Promise<void> {
 
 async function fetchDeviceFromServer(): Promise<string | null> {
   try {
-    const { serverDomain } = store.getState().ciState;
+    const { serverURL } = store.getState().ciState;
     const token = await resolveServerToken();
 
     if (!token) {
       return null;
     }
 
-    const response = await axios.get(`https://${serverDomain}/api/devices`, {
+    const response = await axios.get(`${serverURL}/api/devices`, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -356,7 +356,7 @@ async function fetchDeviceFromServer(): Promise<string | null> {
 }
 
 async function createDeviceOnServer(): Promise<string> {
-  const { serverDomain } = store.getState().ciState;
+  const { serverURL } = store.getState().ciState;
   const token = await resolveServerToken();
 
   if (!token) {
@@ -366,17 +366,13 @@ async function createDeviceOnServer(): Promise<string> {
   const deviceInfo = getDeviceInfo();
 
   try {
-    const response = await axios.post(
-      `https://${serverDomain}/api/devices`,
-      deviceInfo,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 10000, // 10 second timeout
+    const response = await axios.post(`${serverURL}/api/devices`, deviceInfo, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    );
+      timeout: 10000, // 10 second timeout
+    });
 
     // Handle both single device and array response (server supports both)
     const deviceData = Array.isArray(response.data)
@@ -1427,9 +1423,9 @@ async function handleSaveHighlight(
   },
   tab?: { url?: string; title?: string },
 ) {
-  const { serverDomain, deviceId } = store.getState().ciState;
+  const { serverURL, deviceId } = store.getState().ciState;
 
-  if (!serverDomain || !info.selectionText || !(await resolveServerToken())) {
+  if (!serverURL || !info.selectionText || !(await resolveServerToken())) {
     return;
   }
 
@@ -1795,7 +1791,7 @@ export default defineBackground({
       domain: null,
       lastUrl: null,
       accessToken: null,
-      serverDomain: "",
+      serverURL: "",
     };
 
     // Reflect the current portal session into Redux + the popup, and provision
@@ -1805,10 +1801,10 @@ export default defineBackground({
     // migration. Runs on the auth-check alarm, on load, and on popup demand.
     async function checkAuthenticationState() {
       try {
-        const { serverDomain } = store.getState().ciState;
+        const { serverURL } = store.getState().ciState;
 
-        // Nothing to check until the user has configured a server domain
-        if (!serverDomain) {
+        // Nothing to check until the user has configured a server URL
+        if (!serverURL) {
           return;
         }
 
@@ -1902,7 +1898,7 @@ export default defineBackground({
       }
     });
 
-    // Check auth once settings (incl. serverDomain) have been loaded
+    // Check auth once settings (incl. serverURL) have been loaded
     store.dispatch(loadUserSettings()).then(() => {
       checkAuthenticationState();
     });

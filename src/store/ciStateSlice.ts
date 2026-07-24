@@ -1,10 +1,10 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { parseUrl } from "@/utils";
+import { parseUrl, normalizeServerUrl } from "@/utils";
 
 export const loadUserSettings = createAsyncThunk(
   "ciState/loadUserSettings",
   async () => {
-    return await browser.storage.local.get<Record<string, unknown>>([
+    const settings = await browser.storage.local.get<Record<string, unknown>>([
       "accessToken",
       "lastHistorySync",
       "syncHistoryLogs",
@@ -18,10 +18,25 @@ export const loadUserSettings = createAsyncThunk(
       "bookmarkSyncEnabled",
       "downloadSyncEnabled",
       "historySyncEnabled",
+      "serverURL",
       "serverDomain",
       "serverEnvironmentId",
       "portalIssuer",
     ]);
+
+    // One-time migration: the pre-rename `serverDomain` key held a bare host;
+    // `serverURL` always carries a protocol.
+    if (
+      !settings.serverURL &&
+      typeof settings.serverDomain === "string" &&
+      settings.serverDomain
+    ) {
+      settings.serverURL = normalizeServerUrl(settings.serverDomain);
+      await browser.storage.local.set({ serverURL: settings.serverURL });
+      await browser.storage.local.remove("serverDomain");
+    }
+
+    return settings;
   },
 );
 
@@ -35,10 +50,10 @@ interface CiState {
   lastHistorySync: string | null;
   syncHistoryLogs: { status: string; timestamp: string }[];
   refreshing: boolean;
-  serverDomain: string;
+  serverURL: string;
   serverEnvironmentId: string | null;
   // Optional OIDC issuer override; when unset the issuer is derived from
-  // serverDomain (see services/portalConfig).
+  // serverURL (see services/portalConfig).
   portalIssuer: string | null;
   settingsLoaded: boolean;
   autoSyncEnabled: boolean;
@@ -65,7 +80,7 @@ export const ciStateSlice = createSlice({
     lastHistorySync: null,
     syncHistoryLogs: [],
     refreshing: false,
-    serverDomain: "",
+    serverURL: "",
     serverEnvironmentId: null,
     portalIssuer: null,
     settingsLoaded: false,
@@ -220,7 +235,7 @@ export const ciStateSlice = createSlice({
           bookmarkSyncEnabled: state.bookmarkSyncEnabled,
           downloadSyncEnabled: state.downloadSyncEnabled,
           historySyncEnabled: state.historySyncEnabled,
-          serverDomain: state.serverDomain,
+          serverURL: state.serverURL,
           serverEnvironmentId: state.serverEnvironmentId,
           portalIssuer: state.portalIssuer,
         }),

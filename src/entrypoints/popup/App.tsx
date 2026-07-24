@@ -10,6 +10,7 @@ import {
   saveUserSettings,
 } from "@/store/ciStateSlice";
 import "@/theme.css";
+import { normalizeServerUrl } from "@/utils";
 import bowser from "bowser";
 import BlacklistManager from "./BlacklistManager";
 import SetupWizard from "./SetupWizard";
@@ -34,7 +35,7 @@ export default function App() {
     historySyncInProgress: boolean;
     historySyncStatus: string | null;
     lastHistorySync: string | null;
-    serverDomain: string;
+    serverURL: string;
     settingsLoaded: boolean;
     autoSyncEnabled: boolean;
     siteBlacklist: string[];
@@ -61,7 +62,7 @@ export default function App() {
     historySyncInProgress,
     historySyncStatus,
     lastHistorySync,
-    serverDomain,
+    serverURL,
     settingsLoaded,
     autoSyncEnabled,
     siteBlacklist,
@@ -75,7 +76,7 @@ export default function App() {
   } = ciState;
 
   const [showBlacklistManager, setShowBlacklistManager] = useState(false);
-  const [domain, setDomain] = useState(serverDomain);
+  const [url, setUrl] = useState(serverURL);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
   const [token, setToken] = useState(accessToken);
@@ -87,17 +88,17 @@ export default function App() {
   // CI-Server is configured yet, surface the setup wizard. Choosing a server
   // or skipping closes it (skip lets the user fall back to manual entry).
   useEffect(() => {
-    if (settingsLoaded && !serverDomain) {
+    if (settingsLoaded && !serverURL) {
       setShowSetupWizard(true);
     }
 
-    if (serverDomain) {
-      setDomain(serverDomain);
+    if (serverURL) {
+      setUrl(serverURL);
       browser.runtime.sendMessage({
         action: "CHECK_AUTH_STATUS",
       });
     }
-  }, [settingsLoaded, serverDomain]);
+  }, [settingsLoaded, serverURL]);
 
   useEffect(() => {
     setToken(accessToken);
@@ -154,9 +155,11 @@ export default function App() {
     dispatch(toggleHistorySync());
   };
 
-  const changeDomain = (e?: { preventDefault?: () => void }) => {
+  const changeServerUrl = (e?: { preventDefault?: () => void }) => {
     e?.preventDefault?.();
-    dispatch(setState({ serverDomain: domain }));
+    const normalized = normalizeServerUrl(url);
+    setUrl(normalized);
+    dispatch(setState({ serverURL: normalized }));
     dispatch(saveUserSettings());
   };
 
@@ -181,8 +184,8 @@ export default function App() {
     }
   };
 
-  const handleDomainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setDomain(e.target.value);
+  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUrl(e.target.value);
   };
 
   const triggerHistorySync = async () => {
@@ -280,24 +283,24 @@ export default function App() {
             CI Server URL
           </h4>
           <p className="mb-3 text-[1em] text-muted-foreground">
-            Enter the domain of your CI server
+            Enter the URL of your CI server
           </p>
-          <form onSubmit={changeDomain} className="flex flex-col gap-2">
+          <form onSubmit={changeServerUrl} className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex-1 min-w-[150px]">
                 <Input
-                  value={domain}
-                  onChange={handleDomainChange}
+                  value={url}
+                  onChange={handleUrlChange}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
-                      changeDomain(e);
+                      changeServerUrl(e);
                     }
                   }}
                   className="w-full min-h-[44px] text-base"
                 />
               </div>
               <Button
-                onClick={changeDomain}
+                onClick={changeServerUrl}
                 className="min-h-[44px] active:translate-y-[1px] transition-all"
               >
                 Save
@@ -306,12 +309,12 @@ export default function App() {
           </form>
         </div>
 
-        {domain?.length > 0 &&
+        {url?.length > 0 &&
           (token ? (
             <Button
               className="text-center mb-4 size-4 p-2 text-muted-foreground rounded-lg h-10 border-t bg-primary/10 block w-full font-medium no-underline hover:bg-primary/15 transition-colors"
               onClick={() => {
-                window.open(`https://${serverDomain}`, "_blank");
+                window.open(serverURL, "_blank");
               }}
             >
               Authorized with Companion Intelligence

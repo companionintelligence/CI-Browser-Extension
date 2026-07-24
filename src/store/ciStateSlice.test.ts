@@ -10,6 +10,7 @@ const mockBrowserStorage = {
   local: {
     get: jest.fn(),
     set: jest.fn(),
+    remove: jest.fn(),
   },
 };
 
@@ -42,7 +43,7 @@ describe("ciStateSlice", () => {
         lastHistorySync: null,
         syncHistoryLogs: [],
         refreshing: false,
-        serverDomain: "",
+        serverURL: "",
         serverEnvironmentId: null,
         portalIssuer: null,
         settingsLoaded: false,
@@ -105,7 +106,7 @@ describe("ciStateSlice", () => {
       const testState = {
         siteBlacklist: ["example.com"],
         pageBlacklist: ["https://example.com"],
-        serverDomain: "ci.example.com",
+        serverURL: "https://ci.example.com",
       };
 
       (store.dispatch as (action: unknown) => unknown)(setState(testState));
@@ -115,7 +116,7 @@ describe("ciStateSlice", () => {
         expect.objectContaining({
           siteBlacklist: ["example.com"],
           pageBlacklist: ["https://example.com"],
-          serverDomain: "ci.example.com",
+          serverURL: "https://ci.example.com",
         }),
       );
     });
@@ -176,10 +177,32 @@ describe("ciStateSlice", () => {
         "bookmarkSyncEnabled",
         "downloadSyncEnabled",
         "historySyncEnabled",
+        "serverURL",
         "serverDomain",
         "serverEnvironmentId",
         "portalIssuer",
       ]);
+    });
+
+    it("migrates a legacy serverDomain (bare host) to serverURL", async () => {
+      mockBrowserStorage.local.get.mockResolvedValue({
+        serverDomain: "ci.example.com",
+      });
+
+      await (store.dispatch as (action: unknown) => unknown)(
+        loadUserSettings(),
+      );
+
+      const state = (store.getState() as { ciState: unknown }).ciState as {
+        serverURL: string;
+      };
+      expect(state.serverURL).toBe("https://ci.example.com");
+      expect(mockBrowserStorage.local.set).toHaveBeenCalledWith({
+        serverURL: "https://ci.example.com",
+      });
+      expect(mockBrowserStorage.local.remove).toHaveBeenCalledWith(
+        "serverDomain",
+      );
     });
   });
 });

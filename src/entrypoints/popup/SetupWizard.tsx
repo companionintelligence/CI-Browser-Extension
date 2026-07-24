@@ -1,6 +1,6 @@
 /**
  * First-run wizard. Picks a CI-Server environment (curated or custom),
- * probes it via `/api/health`, then writes `serverDomain` +
+ * probes it via `/api/health`, then writes `serverURL` +
  * `serverEnvironmentId` to the store.
  *
  * See planning/03-configurable-server.md.
@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
 import { Button, Input } from "@ci/shadcn";
 import { setState, saveUserSettings } from "@/store/ciStateSlice";
+import { normalizeServerUrl } from "@/utils";
 import {
   ENVIRONMENTS,
   probeServer,
@@ -33,28 +34,25 @@ interface SetupWizardProps {
 
 export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
   const dispatch = useDispatch();
-  const [selectedId, setSelectedId] = useState<EnvironmentId>("alpha");
-  const [customDomain, setCustomDomain] = useState("");
+  const [selectedId, setSelectedId] = useState<EnvironmentId>("prod");
+  const [customUrl, setCustomUrl] = useState("");
   const [probing, setProbing] = useState(false);
   const [probe, setProbe] = useState<HealthResult | null>(null);
 
   // Reset probe whenever the selection changes.
   useEffect(() => {
     setProbe(null);
-  }, [selectedId, customDomain]);
+  }, [selectedId, customUrl]);
 
-  const effectiveDomain = (() => {
+  const effectiveUrl = (() => {
     if (selectedId === "custom") {
-      return customDomain
-        .trim()
-        .replace(/^https?:\/\//, "")
-        .replace(/\/$/, "");
+      return normalizeServerUrl(customUrl);
     }
 
-    return ENVIRONMENTS.find((e) => e.id === selectedId)?.domain ?? "";
+    return ENVIRONMENTS.find((e) => e.id === selectedId)?.url ?? "";
   })();
 
-  const canTest = effectiveDomain.length > 0 && !probing;
+  const canTest = effectiveUrl.length > 0 && !probing;
 
   const testConnection = async () => {
     if (!canTest) {
@@ -64,17 +62,17 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
     setProbing(true);
     setProbe(null);
     try {
-      const result = await probeServer(effectiveDomain);
+      const result = await probeServer(effectiveUrl);
       setProbe(result);
     } finally {
       setProbing(false);
     }
   };
 
-  const acceptDomain = () => {
+  const acceptUrl = () => {
     dispatch(
       setState({
-        serverDomain: effectiveDomain,
+        serverURL: effectiveUrl,
         serverEnvironmentId: selectedId,
       }),
     );
@@ -121,7 +119,7 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                 {env.description}
               </div>
               <div className="text-[0.75em] text-muted-foreground font-mono">
-                {env.domain}
+                {env.url}
               </div>
             </div>
           </label>
@@ -144,18 +142,18 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
           />
           <div className="flex-1">
             <div className="text-sm font-medium text-foreground">
-              Custom domain
+              Custom URL
             </div>
             <div className="text-[0.8em] text-muted-foreground">
               Self-hosted CI-Server
             </div>
             {selectedId === "custom" && (
               <Input
-                value={customDomain}
-                onChange={(e) => setCustomDomain(e.target.value)}
-                placeholder="myci.example.com"
+                value={customUrl}
+                onChange={(e) => setCustomUrl(e.target.value)}
+                placeholder="https://myci.example.com"
                 className="mt-2 w-full"
-                aria-label="Custom server domain"
+                aria-label="Custom server URL"
               />
             )}
           </div>
@@ -172,8 +170,8 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
           {probing ? "Testing…" : "Test connection"}
         </Button>
         <Button
-          onClick={acceptDomain}
-          disabled={!effectiveDomain}
+          onClick={acceptUrl}
+          disabled={!effectiveUrl}
           className="text-xs"
         >
           Use this server
@@ -201,7 +199,7 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
               ✗ {probe.error ?? `HTTP ${probe.status}`} (in {probe.latencyMs}{" "}
               ms)
               <div className="text-[0.8em] text-muted-foreground mt-1 font-mono">
-                {effectiveDomain}
+                {effectiveUrl}
               </div>
             </>
           )}

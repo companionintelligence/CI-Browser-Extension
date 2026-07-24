@@ -1,7 +1,7 @@
 /**
  * Curated list of known CI-Server environments the user can pick during
  * setup. The `custom` entry is implicit — anything not matching one of
- * these IDs is treated as a user-provided domain.
+ * these IDs is treated as a user-provided server URL.
  *
  * See planning/03-configurable-server.md.
  */
@@ -12,7 +12,7 @@ export interface Environment {
   id: EnvironmentId;
   label: string;
   description: string;
-  domain: string;
+  url: string;
 }
 
 export const ENVIRONMENTS: ReadonlyArray<Environment> = [
@@ -20,26 +20,26 @@ export const ENVIRONMENTS: ReadonlyArray<Environment> = [
     id: "prod",
     label: "Companion Intelligence (Production)",
     description: "The production CI-Server",
-    domain: "app.companionintel.com",
+    url: "https://app.companionintel.com",
   },
   {
     id: "alpha",
     label: "Alpha / Demo",
     description: "Public alpha environment",
-    domain: "alpha.companionintel.com",
+    url: "https://alpha.companionintel.com",
   },
   {
     id: "dev",
     label: "Development",
     description: "Internal development server",
-    domain: "dev.companionintelligence.com",
+    url: "https://dev.companionintelligence.com",
   },
   {
     id: "local",
-    label: "Local (https://localhost)",
+    label: "Local (https://ci-server.localhost)",
     description:
       "A CI-Server running on this machine. Requires the nginx cert in dev mode.",
-    domain: "localhost",
+    url: "https://ci-server.localhost",
   },
 ];
 
@@ -63,17 +63,18 @@ export interface HealthResult {
 
 /**
  * Lightweight probe — fetches `/api/health` (or `/`) and reports timing.
- * Used by the setup wizard before accepting a domain. CORS must allow
- * the extension origin or this will fail; that's the desired signal.
+ * Used by the setup wizard before accepting a server URL (which always
+ * includes a protocol). CORS must allow the extension origin or this will
+ * fail; that's the desired signal.
  */
-export async function probeServer(domain: string): Promise<HealthResult> {
+export async function probeServer(serverURL: string): Promise<HealthResult> {
   const start = performance.now();
   try {
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), 5000);
     let res: Response;
     try {
-      res = await fetch(`https://${domain}/api/health`, {
+      res = await fetch(`${serverURL.replace(/\/+$/, "")}/api/health`, {
         method: "GET",
         mode: "cors",
         cache: "no-store",
