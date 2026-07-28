@@ -1,0 +1,28 @@
+/*
+ * Popup viewport.
+ *
+ * A browser-action popup panel sizes itself to the document, so the popup grows
+ * with its content and stops growing here. Capping `#root` (rather than giving
+ * the popup a fixed height) keeps short states — signed out, Advanced collapsed
+ * — from padding themselves out with empty space, while tall states scroll
+ * instead of running off the end of the panel.
+ *
+ * The document itself must not scroll: fixed-position overlays (anything Radix
+ * portals to `document.body` — Select, Popover, Dialog) position against the
+ * viewport, and a scrolling document slides the panel out from under them.
+ * Keeping `overflow: hidden` here and the scrolling inside `#root` keeps the
+ * viewport and the visible panel the same rectangle.
+ *
+ * Width stays in sync with the app container's `w-[350px]` (popup/App.tsx).
+ */
+html,
+body {
+  width: 350px;
+  margin: 0;
+  overflow: hidden;
+}
+
+#root {
+  max-height: 600px;
+  overflow-y: auto;
+}

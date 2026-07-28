@@ -4,10 +4,108 @@ import * as React from "react";
 
 import { cn } from "../../lib/utils";
 
+/**
+ * How recently the user must have asked for a close for one to be honoured.
+ *
+ * Radix Select closes itself from several paths that assume a normal page, and
+ * two of them misfire inside a Firefox extension popup:
+ *
+ *   - press-drag-release (SelectContentImpl): opening from the trigger's
+ *     `pointerdown` arms a document `pointerup` listener that measures pointer
+ *     travel and closes when it exceeds 10px. On an ordinary click in the
+ *     popup that measurement misfires, so the select opens and shuts in one
+ *     interaction and the trigger looks dead.
+ *   - `window.addEventListener("blur"/"resize", close)`: a popup panel sizes
+ *     itself to its document, so merely hovering an item — which focuses it —
+ *     can resize the panel and close the select.
+ *
+ * Neither reaches the dismissable layer, so `onPointerDownOutside` never sees
+ * them. Rather than special-casing each, a close is honoured only when the user
+ * actually asked for one within this window: a pointerdown, an Escape, or
+ * picking a value. Ambient events (resize, blur) carry no such signal and are
+ * ignored, while every real dismissal still works.
+ */
+const CLOSE_INTENT_MS = 400;
+
 function Select({
+  open,
+  defaultOpen,
+  onOpenChange,
+  onValueChange,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root data-slot="select" {...props} />;
+  // Vetoing a close means owning the state: an uncontrolled Root closes itself
+  // regardless of what this handler does.
+  const isControlled = open !== undefined;
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(
+    defaultOpen ?? false,
+  );
+  const isOpen = isControlled ? open : uncontrolledOpen;
+  const lastIntentAt = React.useRef(0);
+
+  // Only while open, and in the capture phase so the signal is recorded before
+  // Radix acts on the same event.
+  React.useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const mark = () => {
+      lastIntentAt.current = performance.now();
+    };
+
+    const markEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" || event.key === "Tab") {
+        mark();
+      }
+    };
+
+    document.addEventListener("pointerdown", mark, true);
+    document.addEventListener("keydown", markEscape, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", mark, true);
+      document.removeEventListener("keydown", markEscape, true);
+    };
+  }, [isOpen]);
+
+  const setOpen = (next: boolean) => {
+    if (!isControlled) {
+      setUncontrolledOpen(next);
+    }
+
+    onOpenChange?.(next);
+  };
+
+  return (
+    <SelectPrimitive.Root
+      data-slot="select"
+      open={isOpen}
+      onOpenChange={(next) => {
+        if (next) {
+          // Start each open with a clean slate, so intent recorded before this
+          // one (e.g. the click that closed a previous open) can't authorise a
+          // spurious close straight afterwards.
+          lastIntentAt.current = 0;
+          setOpen(true);
+
+          return;
+        }
+
+        if (performance.now() - lastIntentAt.current > CLOSE_INTENT_MS) {
+          return;
+        }
+
+        setOpen(false);
+      }}
+      onValueChange={(value) => {
+        // Picking a value is itself a request to close.
+        lastIntentAt.current = performance.now();
+        onValueChange?.(value);
+      }}
+      {...props}
+    />
+  );
 }
 
 function SelectGroup({

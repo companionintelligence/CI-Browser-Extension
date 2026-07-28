@@ -102,7 +102,7 @@ export default function AdvancedSettings() {
       <Field>
         <Field.Label className="text-[0.9em]">Portal</Field.Label>
         <Select value={selectedPortalId} onValueChange={handlePortalSelect}>
-          <Select.Trigger className="w-full min-h-[36px] text-sm">
+          <Select.Trigger className="w-full min-h-[36px] text-sm cursor-pointer">
             <Select.Value placeholder="Select a Portal" />
           </Select.Trigger>
           <Select.Content>
