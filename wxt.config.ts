@@ -70,6 +70,11 @@ export default defineConfig({
     name: "ci-browser-extension",
   },
   modules: ["@wxt-dev/module-react"],
+  // Don't auto-launch Chrome via web-ext — on Linux the CDP pipe often dies with
+  // ECONNRESET after a successful build. Load `.output/chrome-mv3-dev` unpacked instead.
+  webExt: {
+    disabled: true,
+  },
   // Output configurations for different browsers including mobile
   outDir: ".output",
   // Enable mobile browser builds
