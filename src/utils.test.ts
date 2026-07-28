@@ -1,6 +1,42 @@
-import { domainRegex, siteRegex, parseUrl, isUrlBlacklisted } from "./utils";
+import {
+  domainRegex,
+  siteRegex,
+  parseUrl,
+  isUrlBlacklisted,
+  normalizeServerUrl,
+} from "./utils";
 
 describe("Utils", () => {
+  describe("normalizeServerUrl", () => {
+    it("prepends https:// when no protocol is given", () => {
+      expect(normalizeServerUrl("myci.example.com")).toBe(
+        "https://myci.example.com",
+      );
+    });
+
+    it("keeps an existing protocol", () => {
+      expect(normalizeServerUrl("https://myci.example.com")).toBe(
+        "https://myci.example.com",
+      );
+      expect(normalizeServerUrl("http://localhost:8080")).toBe(
+        "http://localhost:8080",
+      );
+    });
+
+    it("trims whitespace and strips trailing slashes", () => {
+      expect(normalizeServerUrl("  myci.example.com/  ")).toBe(
+        "https://myci.example.com",
+      );
+      expect(normalizeServerUrl("https://myci.example.com///")).toBe(
+        "https://myci.example.com",
+      );
+    });
+
+    it("returns an empty string for blank input", () => {
+      expect(normalizeServerUrl("")).toBe("");
+      expect(normalizeServerUrl("   ")).toBe("");
+    });
+  });
   describe("domainRegex", () => {
     it("should match valid domains", () => {
       expect(domainRegex.test("google.com")).toBe(true);

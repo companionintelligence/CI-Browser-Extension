@@ -61,11 +61,9 @@ export interface IngestResult {
 /** Every browser activity shares one source so dedup is keyed per-activity below. */
 export const SOURCE_SYSTEM = "browser-extension";
 
-/** Derive the `/v1/events` URL from the stored server domain (bare host or URL). */
-export function eventsUrl(serverDomain: string): string {
-  const host = serverDomain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
-
-  return `https://${host}/v1/events`;
+/** Derive the `/v1/events` URL from the stored server URL (always has a protocol). */
+export function eventsUrl(serverURL: string): string {
+  return `${serverURL.replace(/\/+$/, "")}/v1/events`;
 }
 
 // occurred_at must satisfy the server's strict Zod `.datetime()` (Z form). A
@@ -150,7 +148,7 @@ export function toCaptureEvent(a: BrowserActivity): CaptureEvent {
  * caller can retry. An empty batch is a no-op.
  */
 export async function sendCaptureEvents(
-  serverDomain: string,
+  serverURL: string,
   accessToken: string,
   activities: BrowserActivity[],
 ): Promise<IngestResult> {
@@ -159,7 +157,7 @@ export async function sendCaptureEvents(
   }
 
   const events = activities.map(toCaptureEvent);
-  const res = await fetch(eventsUrl(serverDomain), {
+  const res = await fetch(eventsUrl(serverURL), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

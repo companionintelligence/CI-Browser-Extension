@@ -10,18 +10,12 @@ import {
   saveUserSettings,
 } from "@/store/ciStateSlice";
 import "@/theme.css";
+import { DEFAULT_PORTAL_URL } from "@/services/portalConfig";
+import { parseUrl } from "@/utils";
 import bowser from "bowser";
 import BlacklistManager from "./BlacklistManager";
-import SetupWizard from "./SetupWizard";
-import {
-  Button,
-  Checkbox,
-  Field,
-  Label,
-  Input,
-  Card,
-  Toaster,
-} from "@ci/shadcn";
+import AdvancedSettings from "./AdvancedSettings";
+import { Button, Checkbox, Field, Label, Card, Toaster } from "@ci/shadcn";
 
 export default function App() {
   const dispatch = useDispatch();
@@ -34,7 +28,12 @@ export default function App() {
     historySyncInProgress: boolean;
     historySyncStatus: string | null;
     lastHistorySync: string | null;
-    serverDomain: string;
+    serverURL: string;
+    portalUrl: string;
+    discoveryHint: string | null;
+    memoryAppChoices:
+      | { slug: string; url: string; deviceName?: string }[]
+      | null;
     settingsLoaded: boolean;
     autoSyncEnabled: boolean;
     siteBlacklist: string[];
@@ -61,7 +60,10 @@ export default function App() {
     historySyncInProgress,
     historySyncStatus,
     lastHistorySync,
-    serverDomain,
+    serverURL,
+    portalUrl,
+    discoveryHint,
+    memoryAppChoices,
     settingsLoaded,
     autoSyncEnabled,
     siteBlacklist,
@@ -75,29 +77,20 @@ export default function App() {
   } = ciState;
 
   const [showBlacklistManager, setShowBlacklistManager] = useState(false);
-  const [domain, setDomain] = useState(serverDomain);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
   const [token, setToken] = useState(accessToken);
-  const [showSetupWizard, setShowSetupWizard] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [authorizing, setAuthorizing] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // First-run onboarding: once persisted settings have loaded, if no
-  // CI-Server is configured yet, surface the setup wizard. Choosing a server
-  // or skipping closes it (skip lets the user fall back to manual entry).
   useEffect(() => {
-    if (settingsLoaded && !serverDomain) {
-      setShowSetupWizard(true);
-    }
-
-    if (serverDomain) {
-      setDomain(serverDomain);
+    if (serverURL) {
       browser.runtime.sendMessage({
         action: "CHECK_AUTH_STATUS",
       });
     }
-  }, [settingsLoaded, serverDomain]);
+  }, [settingsLoaded, serverURL]);
 
   useEffect(() => {
     setToken(accessToken);
@@ -154,12 +147,6 @@ export default function App() {
     dispatch(toggleHistorySync());
   };
 
-  const changeDomain = (e?: { preventDefault?: () => void }) => {
-    e?.preventDefault?.();
-    dispatch(setState({ serverDomain: domain }));
-    dispatch(saveUserSettings());
-  };
-
   // Kick off the OIDC Auth-Code + PKCE sign-in. The flow runs in the background
   // service worker (the popup is torn down when launchWebAuthFlow takes focus);
   // the resulting token arrives back via the AUTH_STATE_UPDATED broadcast.
@@ -181,8 +168,21 @@ export default function App() {
     }
   };
 
-  const handleDomainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setDomain(e.target.value);
+  // Multi-device pick: an explicit user choice, so it's saved as "manual" and
+  // later discoveries never silently switch it.
+  const chooseMemory = (choice: { url: string }) => {
+    dispatch(
+      setState({
+        serverURL: choice.url,
+        serverURLSource: "manual",
+        memoryAppChoices: null,
+        discoveryHint: null,
+      }),
+    );
+    dispatch(saveUserSettings());
+    browser.runtime
+      .sendMessage({ action: "CHECK_AUTH_STATUS" })
+      .catch(console.error);
   };
 
   const triggerHistorySync = async () => {
@@ -239,22 +239,6 @@ export default function App() {
     }
   };
 
-  if (showSetupWizard) {
-    return (
-      <>
-        <Toaster />
-        <div
-          className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[400px]"} mx-auto p-4 box-border`}
-        >
-          <SetupWizard
-            onComplete={() => setShowSetupWizard(false)}
-            onSkip={() => setShowSetupWizard(false)}
-          />
-        </div>
-      </>
-    );
-  }
-
   if (showBlacklistManager) {
     return (
       <>
@@ -274,62 +258,77 @@ export default function App() {
       <div
         className={`min-w-[280px] ${isMobile ? "w-full max-w-full p-2" : "w-[350px] max-w-[400px]"} mx-auto p-4 box-border`}
       >
-        {/* CI Server URL Section */}
-        <div className="mb-6">
-          <h4 className="m-0 mb-2 text-primary text-[1.25em] font-semibold">
-            CI Server URL
-          </h4>
-          <p className="mb-3 text-[1em] text-muted-foreground">
-            Enter the domain of your CI server
-          </p>
-          <form onSubmit={changeDomain} className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex-1 min-w-[150px]">
-                <Input
-                  value={domain}
-                  onChange={handleDomainChange}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      changeDomain(e);
-                    }
-                  }}
-                  className="w-full min-h-[44px] text-base"
-                />
-              </div>
-              <Button
-                onClick={changeDomain}
-                className="min-h-[44px] active:translate-y-[1px] transition-all"
-              >
-                Save
-              </Button>
-            </div>
-          </form>
-        </div>
+        {!token && (
+          <div className="mb-4 text-center">
+            <h4 className="m-0 mb-1 text-primary text-[1.25em] font-semibold">
+              Companion Intelligence
+            </h4>
+            <p className="m-0 mb-3 text-[0.9em] text-muted-foreground">
+              Sync your browsing to your Companion memory.
+            </p>
+          </div>
+        )}
 
-        {domain?.length > 0 &&
-          (token ? (
-            <Button
-              className="text-center mb-4 size-4 p-2 text-muted-foreground rounded-lg h-10 border-t bg-primary/10 block w-full font-medium no-underline hover:bg-primary/15 transition-colors"
-              onClick={() => {
-                window.open(`https://${serverDomain}`, "_blank");
-              }}
-            >
-              Authorized with Companion Intelligence
-            </Button>
-          ) : (
-            <Button
-              onClick={handleAuthorize}
-              disabled={authorizing}
-              style={{ background: "var(--gradient-brand)" }}
-              className="text-center mb-4 p-2 rounded-lg h-10 block w-full font-medium no-underline transition-all text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {authorizing ? "Authorizing…" : "Authorize with Companion"}
-            </Button>
-          ))}
+        {token ? (
+          <Button
+            className="text-center mb-4 size-4 p-2 text-muted-foreground rounded-lg h-10 border-t bg-primary/10 block w-full font-medium no-underline hover:bg-primary/15 transition-colors"
+            onClick={() => {
+              window.open(serverURL || portalUrl, "_blank");
+            }}
+          >
+            Authorized with Companion Intelligence
+          </Button>
+        ) : (
+          <Button
+            onClick={handleAuthorize}
+            disabled={authorizing}
+            style={{ background: "var(--gradient-brand)" }}
+            className="text-center mb-4 p-2 rounded-lg h-10 block w-full font-medium no-underline transition-all text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {authorizing ? "Signing in…" : "Sign in with Companion account"}
+          </Button>
+        )}
 
         {authError && (
           <div className="mb-4 p-2 rounded text-[0.85em] text-destructive bg-destructive/10">
             {authError}
+          </div>
+        )}
+
+        {discoveryHint && (!token || !serverURL) && (
+          <div className="mb-4 p-2 rounded text-[0.85em] text-muted-foreground bg-primary/10">
+            {discoveryHint}
+          </div>
+        )}
+
+        {/* Memory runs on several devices — ask which one to sync to */}
+        {token && memoryAppChoices && memoryAppChoices.length > 0 && (
+          <div className="mb-4 p-3 rounded-lg bg-primary/5 text-left">
+            <p className="m-0 mb-1 text-[0.9em] font-semibold text-primary">
+              Choose your Memory
+            </p>
+            <p className="m-0 mb-2 text-[0.8em] text-muted-foreground">
+              Your Companion account has Memory on more than one device.
+            </p>
+            <div className="flex flex-col gap-2">
+              {memoryAppChoices.map((choice) => (
+                <Button
+                  key={choice.url}
+                  variant="outline"
+                  onClick={() => chooseMemory(choice)}
+                  className="w-full min-h-[40px] px-3 py-2 flex flex-col items-start gap-0 bg-transparent text-left border-border hover:bg-primary/10 hover:border-primary transition-colors"
+                >
+                  <span className="text-[0.9em] font-medium text-foreground">
+                    {choice.deviceName ??
+                      parseUrl(choice.url)?.host ??
+                      choice.url}
+                  </span>
+                  <span className="text-[0.75em] text-muted-foreground">
+                    {parseUrl(choice.url)?.host ?? choice.url}
+                  </span>
+                </Button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -582,6 +581,20 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* Unobtrusive connection settings (Portal + Memory server URL) */}
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="text-xs text-muted-foreground bg-transparent border-0 p-0 cursor-pointer underline underline-offset-2 hover:text-primary transition-colors"
+          >
+            {!token && portalUrl !== DEFAULT_PORTAL_URL
+              ? `Signing in to ${parseUrl(portalUrl)?.host ?? portalUrl} — change`
+              : "Advanced"}
+          </button>
+          {showAdvanced && <AdvancedSettings />}
+        </div>
       </div>
     </>
   );

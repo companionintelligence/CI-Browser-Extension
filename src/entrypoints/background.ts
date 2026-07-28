@@ -14,8 +14,15 @@ import {
   sendCaptureEvents,
   type BrowserActivity,
 } from "@/services/captureEvents";
-import { getIdToken, signIn } from "@/services/oidcAuth";
+import {
+  getAccessToken,
+  getIdToken,
+  loadTokens,
+  signIn,
+  signOut,
+} from "@/services/oidcAuth";
 import { portalOidcConfig } from "@/services/portalConfig";
+import { fetchPortalApps, memoryAppsFrom } from "@/services/portalApps";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
 import { database } from "@/indexeddb";
@@ -60,12 +67,109 @@ async function runAutoSync() {
 
 // ---- Unified identity + capture transport (Phase 3) ----
 
-// The portal OIDC client config, derived from the configured server domain (or
-// an explicit portalIssuer override). See services/portalConfig.
+// The portal OIDC client config, derived from the configured Portal URL (or
+// a legacy explicit portalIssuer override). See services/portalConfig.
 function oidcConfig() {
-  const { serverDomain, portalIssuer } = store.getState().ciState;
+  const { portalUrl, portalIssuer } = store.getState().ciState;
 
-  return portalOidcConfig({ serverDomain, portalIssuer });
+  return portalOidcConfig({ portalUrl, portalIssuer });
+}
+
+// Ask the Portal where the user's Memory (ci-memory) app runs and auto-set
+// serverURL from it. Never throws and never fails a sign-in: on any miss it
+// leaves serverURL alone and, when none is configured, surfaces a hint in the
+// popup instead. A manually-set serverURL (serverURLSource "manual") is never
+// overwritten. When Memory runs on several devices and there is no valid
+// choice yet, the candidates go to memoryAppChoices and the popup asks the
+// user which to use.
+async function discoverMemoryServer(): Promise<void> {
+  try {
+    const accessToken = await getAccessToken(oidcConfig());
+    if (!accessToken) {
+      return;
+    }
+
+    const { portalUrl, serverURL, serverURLSource } = store.getState().ciState;
+    const result = await fetchPortalApps(portalUrl, accessToken);
+
+    if (result.status === "ok") {
+      const memoryApps = memoryAppsFrom(result.apps);
+
+      if (memoryApps.length === 0) {
+        store.dispatch(
+          setState({
+            memoryAppChoices: null,
+            discoveryHint: serverURL
+              ? null
+              : "Signed in, but no Memory app was found on your Companion account. Install Memory from the Portal, or set the Memory server URL under Advanced.",
+          }),
+        );
+
+        return;
+      }
+
+      // A deliberate manual choice is never touched or second-guessed.
+      if (serverURL && serverURLSource === "manual") {
+        store.dispatch(setState({ memoryAppChoices: null }));
+
+        return;
+      }
+
+      // The auto-configured server is still one of the user's Memory apps.
+      if (serverURL && memoryApps.some((app) => app.url === serverURL)) {
+        store.dispatch(
+          setState({ memoryAppChoices: null, discoveryHint: null }),
+        );
+
+        return;
+      }
+
+      if (memoryApps.length === 1) {
+        console.log(
+          "[CI] Memory server discovered via portal:",
+          memoryApps[0].url,
+        );
+        store.dispatch(
+          setState({
+            serverURL: memoryApps[0].url,
+            serverURLSource: "auto",
+            memoryAppChoices: null,
+            discoveryHint: null,
+          }),
+        );
+        store.dispatch(saveUserSettings());
+
+        return;
+      }
+
+      // Several devices run Memory and none is configured (or the old auto
+      // choice vanished) — let the user pick in the popup.
+      console.log(
+        "[CI] Multiple Memory apps found; asking the user:",
+        memoryApps.map((app) => `${app.url} (${app.deviceName ?? "unknown"})`),
+      );
+      store.dispatch(
+        setState({ memoryAppChoices: memoryApps, discoveryHint: null }),
+      );
+
+      return;
+    }
+
+    // unsupported / unauthorized / error: keep whatever is configured; only
+    // hint when nothing is.
+    if (!serverURL) {
+      store.dispatch(
+        setState({
+          discoveryHint:
+            result.status === "unsupported"
+              ? "Your Portal doesn't support app discovery — set the Memory server URL under Advanced."
+              : "Couldn't look up your Memory server from the Portal — set the Memory server URL under Advanced.",
+        }),
+      );
+    }
+  } catch (error) {
+    console.error("Memory server discovery failed:", error);
+  }
 }
 
 // Resolve the Bearer for CI-Server: prefer the portal OIDC **id_token** — the
@@ -85,7 +189,7 @@ async function resolveServerToken(): Promise<string | null> {
 
 // Central capture transport: every browser-activity write goes through here as
 // CaptureEvents on CI-Server's unified `/v1/events` path (replacing the legacy
-// `POST /api/browser-activity`). No-ops without a server domain or batch;
+// `POST /api/browser-activity`). No-ops without a server URL or batch;
 // throws on a missing token or non-2xx so callers keep their retry/logging.
 // Historical sync passes observedAt=now so the server records import time
 // separately from occurred_at (the Chrome visit / bookmark / download time).
@@ -97,8 +201,8 @@ async function postCaptureEvents(
     return;
   }
 
-  const { serverDomain } = store.getState().ciState;
-  if (!serverDomain) {
+  const { serverURL } = store.getState().ciState;
+  if (!serverURL) {
     return;
   }
 
@@ -114,7 +218,7 @@ async function postCaptureEvents(
       )
     : activities;
 
-  await sendCaptureEvents(serverDomain, token, batch);
+  await sendCaptureEvents(serverURL, token, batch);
 }
 
 /**
@@ -254,15 +358,15 @@ async function getDeviceId(): Promise<string> {
 // Heartbeat so CI-Server can show device freshness; failures are non-critical
 async function updateDeviceLastSeen(deviceId: string): Promise<void> {
   try {
-    const { serverDomain } = store.getState().ciState;
+    const { serverURL } = store.getState().ciState;
     const token = await resolveServerToken();
 
-    if (!token || !serverDomain) {
+    if (!token || !serverURL) {
       return;
     }
 
     await axios.patch(
-      `https://${serverDomain}/api/devices/${deviceId}/last-seen`,
+      `${serverURL}/api/devices/${deviceId}/last-seen`,
       {},
       {
         headers: {
@@ -282,14 +386,14 @@ async function updateDeviceLastSeen(deviceId: string): Promise<void> {
 
 async function fetchDeviceFromServer(): Promise<string | null> {
   try {
-    const { serverDomain } = store.getState().ciState;
+    const { serverURL } = store.getState().ciState;
     const token = await resolveServerToken();
 
     if (!token) {
       return null;
     }
 
-    const response = await axios.get(`https://${serverDomain}/api/devices`, {
+    const response = await axios.get(`${serverURL}/api/devices`, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -368,7 +472,7 @@ async function fetchDeviceFromServer(): Promise<string | null> {
 }
 
 async function createDeviceOnServer(): Promise<string> {
-  const { serverDomain } = store.getState().ciState;
+  const { serverURL } = store.getState().ciState;
   const token = await resolveServerToken();
 
   if (!token) {
@@ -378,17 +482,13 @@ async function createDeviceOnServer(): Promise<string> {
   const deviceInfo = getDeviceInfo();
 
   try {
-    const response = await axios.post(
-      `https://${serverDomain}/api/devices`,
-      deviceInfo,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 10000, // 10 second timeout
+    const response = await axios.post(`${serverURL}/api/devices`, deviceInfo, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    );
+      timeout: 10000, // 10 second timeout
+    });
 
     // Handle both single device and array response (server supports both)
     const deviceData = Array.isArray(response.data)
@@ -1446,9 +1546,9 @@ async function handleSaveHighlight(
   },
   tab?: { url?: string; title?: string },
 ) {
-  const { serverDomain, deviceId } = store.getState().ciState;
+  const { serverURL, deviceId } = store.getState().ciState;
 
-  if (!serverDomain || !info.selectionText || !(await resolveServerToken())) {
+  if (!serverURL || !info.selectionText || !(await resolveServerToken())) {
     return;
   }
 
@@ -1828,7 +1928,7 @@ export default defineBackground({
       domain: null,
       lastUrl: null,
       accessToken: null,
-      serverDomain: "",
+      serverURL: "",
     };
 
     // Reflect the current portal session into Redux + the popup, and provision
@@ -1838,13 +1938,6 @@ export default defineBackground({
     // migration. Runs on the auth-check alarm, on load, and on popup demand.
     async function checkAuthenticationState() {
       try {
-        const { serverDomain } = store.getState().ciState;
-
-        // Nothing to check until the user has configured a server domain
-        if (!serverDomain) {
-          return;
-        }
-
         // Phase 3: the CI-Server bearer is the portal **id_token** (the opaque
         // OAuth access_token is rejected by CI-Server's JWKS verify). getIdToken
         // returns null when there is no usable session or once the id_token has
@@ -1852,18 +1945,35 @@ export default defineBackground({
         const idToken = await getIdToken(oidcConfig());
 
         // Mirror a portal id_token into Redux so the capture guards + popup
-        // reflect the session. Don't overwrite a legacy CI-Server token (loaded
-        // from storage during migration) with null — resolveServerToken still
-        // falls back to it until it expires.
+        // reflect the session. For a portal-era user (stored oidcTokens exist)
+        // the mirror follows getIdToken exactly — including null on expiry, so
+        // the popup drops to the sign-in view as the re-auth CTA. A legacy
+        // CI-Server token (no stored oidcTokens) is left for resolveServerToken
+        // to fall back to until it expires.
         if (idToken && idToken !== store.getState().ciState.accessToken) {
           store.dispatch(setState({ accessToken: idToken }));
+        } else if (!idToken && store.getState().ciState.accessToken) {
+          const storedTokens = await loadTokens();
+
+          if (storedTokens) {
+            store.dispatch(setState({ accessToken: null }));
+          }
         }
 
         const token = idToken ?? store.getState().ciState.accessToken;
+
+        // A signed-in user without a configured server may have gained a
+        // Memory app (or a portal upgrade) since sign-in.
+        if (token && !store.getState().ciState.serverURL) {
+          await discoverMemoryServer();
+        }
+
+        const { serverURL } = store.getState().ciState;
         let { deviceId } = store.getState().ciState;
 
-        // Provision the device once we have a valid session
-        if (token && !deviceId) {
+        // Provision the device once we have a valid session and know where
+        // the server is (setupDevice posts to `${serverURL}/api/devices`)
+        if (token && serverURL && !deviceId) {
           console.log("Authenticated but no device ID, setting up device...");
           try {
             await setupDevice();
@@ -1894,14 +2004,42 @@ export default defineBackground({
       }
     }
 
-    // Interactive sign-in, triggered by the popup's "Authorize with Companion"
-    // action. The OIDC Auth-Code + PKCE flow runs here in the background rather
-    // than the popup, which is torn down when launchWebAuthFlow takes focus.
-    // signIn persists the tokens; checkAuthenticationState then mirrors the
-    // id_token into Redux and provisions the device via the shared auth path.
+    // Interactive sign-in, triggered by the popup's "Sign in with Companion
+    // account" action. The OIDC Auth-Code + PKCE flow runs here in the
+    // background rather than the popup, which is torn down when
+    // launchWebAuthFlow takes focus. signIn persists the tokens; the Portal is
+    // then asked where the user's Memory app runs (auto-setting serverURL);
+    // checkAuthenticationState mirrors the id_token into Redux and provisions
+    // the device via the shared auth path.
     async function authorizeWithPortal(): Promise<void> {
       await signIn(oidcConfig());
+      await discoverMemoryServer();
       await checkAuthenticationState();
+    }
+
+    // Explicit sign-out, e.g. when the user switches Portal: tokens from the
+    // old issuer are useless (and must not be sent) elsewhere.
+    async function signOutOfPortal(): Promise<void> {
+      await signOut();
+      // The device registration lives on the old portal's server; a fresh
+      // sign-in provisions a new one where the next serverURL points.
+      store.dispatch(
+        setState({
+          accessToken: null,
+          deviceId: null,
+          discoveryHint: null,
+          memoryAppChoices: null,
+        }),
+      );
+      store.dispatch(saveUserSettings());
+      browser.runtime
+        .sendMessage({
+          action: "AUTH_STATE_UPDATED",
+          payload: { accessToken: null, deviceId: null },
+        })
+        .catch(() => {
+          console.log("No receiver for AUTH_STATE_UPDATED (popup closed)");
+        });
     }
 
     browser.alarms.create(AUTH_CHECK_ALARM, { periodInMinutes: 1 });
@@ -1935,7 +2073,7 @@ export default defineBackground({
       }
     });
 
-    // Check auth once settings (incl. serverDomain) have been loaded
+    // Check auth once settings (incl. serverURL) have been loaded
     store.dispatch(loadUserSettings()).then(() => {
       checkAuthenticationState();
     });
@@ -2051,6 +2189,22 @@ export default defineBackground({
             .catch((error) => {
               console.error("Error checking auth status:", error);
               sendResponse({ success: false, error: error.message });
+            });
+
+          return true;
+        }
+
+        if (message.action === "SIGN_OUT") {
+          signOutOfPortal()
+            .then(() => {
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Sign-out failed:", error);
+              sendResponse({
+                success: false,
+                error: error?.message || String(error),
+              });
             });
 
           return true;

@@ -1,10 +1,11 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { parseUrl } from "@/utils";
+import { parseUrl, normalizeServerUrl } from "@/utils";
+import { DEFAULT_PORTAL_URL } from "@/services/portalConfig";
 
 export const loadUserSettings = createAsyncThunk(
   "ciState/loadUserSettings",
   async () => {
-    return await browser.storage.local.get<Record<string, unknown>>([
+    const settings = await browser.storage.local.get<Record<string, unknown>>([
       "accessToken",
       "lastHistorySync",
       "syncHistoryLogs",
@@ -18,10 +19,76 @@ export const loadUserSettings = createAsyncThunk(
       "bookmarkSyncEnabled",
       "downloadSyncEnabled",
       "historySyncEnabled",
+      "serverURL",
+      "serverURLSource",
       "serverDomain",
-      "serverEnvironmentId",
+      "portalUrl",
       "portalIssuer",
+      "oidcTokens",
     ]);
+
+    // One-time migration: the pre-rename `serverDomain` key held a bare host;
+    // `serverURL` always carries a protocol.
+    if (
+      !settings.serverURL &&
+      typeof settings.serverDomain === "string" &&
+      settings.serverDomain
+    ) {
+      settings.serverURL = normalizeServerUrl(settings.serverDomain);
+      await browser.storage.local.set({ serverURL: settings.serverURL });
+      await browser.storage.local.remove("serverDomain");
+    }
+
+    // One-time migration: portalUrl replaces the never-surfaced portalIssuer
+    // override (issuer = `${portalUrl}/api/auth`). A non-standard issuer that
+    // doesn't end in /api/auth stays as a legacy override.
+    if (
+      !settings.portalUrl &&
+      typeof settings.portalIssuer === "string" &&
+      settings.portalIssuer
+    ) {
+      const stripped = settings.portalIssuer.replace(/\/api\/auth\/?$/, "");
+
+      if (stripped !== settings.portalIssuer) {
+        settings.portalUrl = normalizeServerUrl(stripped);
+        await browser.storage.local.set({ portalUrl: settings.portalUrl });
+        await browser.storage.local.remove("portalIssuer");
+        delete settings.portalIssuer;
+      }
+    }
+
+    // One-time migration: before portalUrl existed the issuer was derived from
+    // serverURL, so a user with a live session on a non-prod server must keep
+    // that host as their portal — defaulting to prod would orphan their
+    // refresh tokens.
+    if (
+      !settings.portalUrl &&
+      settings.oidcTokens &&
+      typeof settings.serverURL === "string" &&
+      settings.serverURL
+    ) {
+      const origin = parseUrl(settings.serverURL)?.origin;
+
+      if (origin) {
+        settings.portalUrl = origin;
+        await browser.storage.local.set({ portalUrl: origin });
+      }
+    }
+
+    delete settings.oidcTokens;
+
+    // Existing serverURL values were configured by hand or the old wizard;
+    // mark them manual so portal app discovery never clobbers them.
+    if (settings.serverURL && !settings.serverURLSource) {
+      settings.serverURLSource = "manual";
+      await browser.storage.local.set({ serverURLSource: "manual" });
+    }
+
+    // The curated server-environment picker is gone (portal discovery
+    // replaced it).
+    await browser.storage.local.remove("serverEnvironmentId");
+
+    return settings;
   },
 );
 
@@ -35,11 +102,21 @@ interface CiState {
   lastHistorySync: string | null;
   syncHistoryLogs: { status: string; timestamp: string }[];
   refreshing: boolean;
-  serverDomain: string;
-  serverEnvironmentId: string | null;
-  // Optional OIDC issuer override; when unset the issuer is derived from
-  // serverDomain (see services/portalConfig).
+  serverURL: string;
+  // How serverURL was set: "auto" (portal app discovery) may be overwritten by
+  // a later discovery; "manual" never is.
+  serverURLSource: "auto" | "manual" | null;
+  // CI-Portal origin the OIDC flow runs against (issuer = `${portalUrl}/api/auth`).
+  portalUrl: string;
+  // Legacy explicit issuer override; still honored when present in storage but
+  // no longer written (see services/portalConfig).
   portalIssuer: string | null;
+  // Transient post-sign-in guidance (e.g. "no Memory app found"); not persisted.
+  discoveryHint: string | null;
+  // Memory candidates needing a user decision (Memory installed on several
+  // devices and no valid serverURL); transient, not persisted — discovery
+  // repopulates it after a service-worker restart.
+  memoryAppChoices: { slug: string; url: string; deviceName?: string }[] | null;
   settingsLoaded: boolean;
   autoSyncEnabled: boolean;
   siteBlacklist: string[];
@@ -65,9 +142,12 @@ export const ciStateSlice = createSlice({
     lastHistorySync: null,
     syncHistoryLogs: [],
     refreshing: false,
-    serverDomain: "",
-    serverEnvironmentId: null,
+    serverURL: "",
+    serverURLSource: null,
+    portalUrl: DEFAULT_PORTAL_URL,
     portalIssuer: null,
+    discoveryHint: null,
+    memoryAppChoices: null,
     settingsLoaded: false,
     autoSyncEnabled: false,
     siteBlacklist: [],
@@ -220,9 +300,9 @@ export const ciStateSlice = createSlice({
           bookmarkSyncEnabled: state.bookmarkSyncEnabled,
           downloadSyncEnabled: state.downloadSyncEnabled,
           historySyncEnabled: state.historySyncEnabled,
-          serverDomain: state.serverDomain,
-          serverEnvironmentId: state.serverEnvironmentId,
-          portalIssuer: state.portalIssuer,
+          serverURL: state.serverURL,
+          serverURLSource: state.serverURLSource,
+          portalUrl: state.portalUrl,
         }),
       );
       browser.storage.local.set(parsed);
