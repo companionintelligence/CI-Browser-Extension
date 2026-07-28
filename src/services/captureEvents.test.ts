@@ -109,6 +109,17 @@ describe("toCaptureEvent", () => {
       toCaptureEvent(activity({ time: "2024-03-04 05:06:07" })).occurred_at,
     ).toBe("2024-03-04T05:06:07.000Z");
   });
+
+  it("keeps occurred_at as the visit time and forwards observed_at separately", () => {
+    const e = toCaptureEvent(
+      activity({
+        time: "2024-01-02T03:04:05.000Z",
+        observed_at: "2026-07-27T18:00:00.000Z",
+      }),
+    );
+    expect(e.occurred_at).toBe("2024-01-02T03:04:05.000Z");
+    expect(e.observed_at).toBe("2026-07-27T18:00:00.000Z");
+  });
 });
 
 describe("sendCaptureEvents", () => {
