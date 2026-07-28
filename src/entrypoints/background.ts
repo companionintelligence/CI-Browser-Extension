@@ -87,7 +87,12 @@ async function resolveServerToken(): Promise<string | null> {
 // CaptureEvents on CI-Server's unified `/v1/events` path (replacing the legacy
 // `POST /api/browser-activity`). No-ops without a server domain or batch;
 // throws on a missing token or non-2xx so callers keep their retry/logging.
-async function postCaptureEvents(activities: BrowserActivity[]): Promise<void> {
+// Historical sync passes observedAt=now so the server records import time
+// separately from occurred_at (the Chrome visit / bookmark / download time).
+async function postCaptureEvents(
+  activities: BrowserActivity[],
+  opts?: { observedAt?: string },
+): Promise<void> {
   if (activities.length === 0) {
     return;
   }
@@ -102,27 +107,34 @@ async function postCaptureEvents(activities: BrowserActivity[]): Promise<void> {
     throw new Error("No access token available for capture upload");
   }
 
-  await sendCaptureEvents(serverDomain, token, activities);
+  const observedAt = opts?.observedAt;
+  const batch = observedAt
+    ? activities.map((a) =>
+        a.observed_at ? a : { ...a, observed_at: observedAt },
+      )
+    : activities;
+
+  await sendCaptureEvents(serverDomain, token, batch);
 }
 
-// Helper function to ensure proper ISO time format with milliseconds
-function ensureISOTimeFormat(
-  timestamp: number | string | undefined,
-  fallbackTo1970 = false,
-): string {
-  let time: number;
-
+/**
+ * Chrome/Firefox history, bookmark, and download times → ISO instant.
+ * Returns null when the browser did not provide a usable timestamp so callers
+ * can skip the item instead of inventing "now" (which made historical sync
+ * land on the sync day in Memory).
+ */
+function chromeTimeToISO(
+  timestamp: number | string | undefined | null,
+): string | null {
   if (timestamp === undefined || timestamp === null) {
-    time = fallbackTo1970 ? 0 : Date.now(); // 1970-01-01T00:00:00.000Z or current time
-  } else if (typeof timestamp === "string") {
-    time = new Date(timestamp).getTime();
-  } else {
-    time = timestamp;
+    return null;
   }
 
-  // Ensure we have a valid time
-  if (isNaN(time)) {
-    time = fallbackTo1970 ? 0 : Date.now();
+  const time =
+    typeof timestamp === "string" ? new Date(timestamp).getTime() : timestamp;
+
+  if (!Number.isFinite(time) || time <= 0 || Number.isNaN(time)) {
+    return null;
   }
 
   return new Date(time).toISOString();
@@ -596,8 +608,13 @@ async function convertToBrowserActivity(
     // Continue without description or scroll depth
   }
 
+  const time = chromeTimeToISO(visitTime);
+  if (!time) {
+    throw new Error(`Missing visit timestamp for URL: ${url}`);
+  }
+
   return {
-    time: ensureISOTimeFormat(visitTime),
+    time,
     device_id: deviceId,
     url: url,
     title: title,
@@ -841,15 +858,16 @@ async function syncHistory(options: { timeRange?: number } = {}) {
       }),
     );
 
-    // Process history entries directly (no need for getVisits - it's deprecated)
+    // Expand each URL into per-visit rows via history.getVisits so Memory gets
+    // the original visitTime, not lastVisitTime-only and never Date.now().
     const hydratedResults: Array<{ visitTime: number; url: string }> = [];
     let processed = 0;
     let blacklistedCount = 0;
+    let skippedMissingTime = 0;
     const { siteBlacklist = [], pageBlacklist = [] } = state;
 
     for (const item of allHistoryResults) {
       try {
-        // Check if this URL is blacklisted
         if (
           item.url &&
           isUrlBlacklisted(item.url, siteBlacklist, pageBlacklist)
@@ -864,23 +882,41 @@ async function syncHistory(options: { timeRange?: number } = {}) {
           continue;
         }
 
-        // Use the lastVisitTime from the search result directly, or fallback to current time
-        const visitTime = item.lastVisitTime || Date.now();
+        let addedForUrl = 0;
+        try {
+          const visits = await browser.history.getVisits({ url: item.url });
+          for (const visit of visits) {
+            if (
+              typeof visit.visitTime === "number" &&
+              visit.visitTime >= searchStartTime
+            ) {
+              hydratedResults.push({
+                visitTime: visit.visitTime,
+                url: item.url,
+              });
+              addedForUrl++;
+            }
+          }
+        } catch (err) {
+          console.log("getVisits failed, falling back to lastVisitTime:", err);
+        }
 
-        console.log("Processing item:", {
-          url: item.url,
-          lastVisitTime: item.lastVisitTime,
-          hasLastVisitTime: !!item.lastVisitTime,
-          usingVisitTime: visitTime,
-          visitTimeInRange: visitTime >= searchStartTime,
-          searchStartTime: searchStartTime,
-        });
-
-        if (visitTime >= searchStartTime) {
+        // Fallback only when getVisits is unavailable — still never invent "now".
+        if (
+          addedForUrl === 0 &&
+          typeof item.lastVisitTime === "number" &&
+          item.lastVisitTime >= searchStartTime
+        ) {
           hydratedResults.push({
-            visitTime: visitTime,
+            visitTime: item.lastVisitTime,
             url: item.url,
           });
+          addedForUrl++;
+        }
+
+        if (addedForUrl === 0) {
+          skippedMissingTime++;
+          console.log("No in-range visit times for history URL:", item.url);
         }
 
         processed++;
@@ -1019,6 +1055,8 @@ async function syncHistory(options: { timeRange?: number } = {}) {
 
     // Get device ID for browser activity
     const deviceId = await getDeviceId();
+    // Import/observe time only — Memory orders by occurred_at (Chrome visitTime).
+    const syncObservedAt = new Date().toISOString();
 
     // Process and upload in batches
     let uploaded = 0;
@@ -1029,32 +1067,34 @@ async function syncHistory(options: { timeRange?: number } = {}) {
       const slice = unsyncedResults.slice(i, i + SLICE_SIZE);
 
       try {
-        // Convert to BrowserActivity format
-        const browserActivities = await Promise.all(
-          slice.map(async (result) => {
-            return convertToBrowserActivity(
-              result.url,
-              result.visitTime,
-              deviceId,
+        const browserActivities: BrowserActivity[] = [];
+        const syncedIds: string[] = [];
+        for (const result of slice) {
+          try {
+            browserActivities.push(
+              await convertToBrowserActivity(
+                result.url,
+                result.visitTime,
+                deviceId,
+              ),
             );
-          }),
-        );
+            syncedIds.push(`${result.url}_${result.visitTime}`);
+          } catch (err) {
+            console.log("Skipping history row without usable timestamp:", err);
+          }
+        }
+
+        if (browserActivities.length === 0) {
+          continue;
+        }
 
         try {
-          // Log the data being sent for debugging
-          // console.log(
-          //   "Sending history activity:",
-          //   JSON.stringify(browserActivities, null, 2),
-          // );
-
-          await postCaptureEvents(browserActivities);
+          await postCaptureEvents(browserActivities, {
+            observedAt: syncObservedAt,
+          });
           uploaded = uploaded + browserActivities.length;
 
-          // Mark the whole slice as synced only after successful upload
-          await addSyncedItems(
-            SYNCED_HISTORY_KEY,
-            slice.map((result) => `${result.url}_${result.visitTime}`),
-          );
+          await addSyncedItems(SYNCED_HISTORY_KEY, syncedIds);
         } catch (error: any) {
           console.error("Error uploading history entry:", error);
           console.error("Failed activities:", browserActivities);
@@ -1247,8 +1287,15 @@ async function createDownloadEvent(
     throw new Error("Download URL is required");
   }
 
+  const time = chromeTimeToISO(download.startTime);
+  if (!time) {
+    throw new Error(
+      `Missing download startTime for id ${download.id}: ${download.url}`,
+    );
+  }
+
   return {
-    time: ensureISOTimeFormat(download.startTime),
+    time,
     device_id: deviceId || "",
     url: download.url,
     title: download.filename || "Unknown Download",
@@ -1297,47 +1344,21 @@ async function syncDownloadsToServer() {
     }
 
     console.log(`Syncing ${unsyncedDownloads.length} new downloads`);
+    const syncObservedAt = new Date().toISOString();
 
     // Process unsynced downloads in batches
     for (let i = 0; i < unsyncedDownloads.length; i += SLICE_SIZE) {
       const slice = unsyncedDownloads.slice(i, i + SLICE_SIZE);
-      const downloadEvents = await Promise.all(
-        slice.map((download) => createDownloadEvent(download, "sync")),
-      );
-
-      // Send each download event individually (server expects single object, not array)
       const syncedDownloadIds: string[] = [];
-      for (let j = 0; j < downloadEvents.length; j++) {
-        const event = downloadEvents[j];
-        const download = slice[j];
 
+      for (const download of slice) {
         try {
-          // Log the data being sent for debugging
-          console.log(
-            "Sending download event:",
-            JSON.stringify(event, null, 2),
-          );
-
-          await postCaptureEvents([event]);
-          console.log("Successfully sent download event:", event.url);
-
-          // Mark this specific download as synced only after successful upload
+          const event = await createDownloadEvent(download, "sync");
+          await postCaptureEvents([event], { observedAt: syncObservedAt });
           syncedDownloadIds.push(download.id.toString());
-        } catch (eventError: any) {
-          console.error("Error sending individual download event:", eventError);
-          console.error("Failed event:", event);
-          console.error("Server response:", eventError.response?.data);
-
-          // Log detailed validation errors if available
-          if (eventError.response?.data?.errors) {
-            console.error(
-              "Server validation errors:",
-              JSON.stringify(eventError.response.data.errors, null, 2),
-            );
-          }
-
-          // Continue with other events even if one fails
-          // Don't mark as synced if upload failed
+        } catch (eventError: unknown) {
+          console.error("Error syncing download:", eventError, download);
+          // Skip missing timestamps / upload failures; do not invent sync-time.
         }
       }
 
@@ -1517,8 +1538,15 @@ async function createBookmarkEvent(
     throw new Error("Device ID is required for bookmark sync");
   }
 
+  const time = chromeTimeToISO(bookmark.dateAdded);
+  if (!time) {
+    throw new Error(
+      `Missing bookmark dateAdded for id ${bookmark.id}: ${bookmark.url}`,
+    );
+  }
+
   return {
-    time: ensureISOTimeFormat(bookmark.dateAdded),
+    time,
     device_id: deviceId || "",
     url: bookmark.url,
     title: bookmark.title || "Untitled Bookmark",
@@ -1574,6 +1602,7 @@ async function syncBookmarksToServer() {
     }
 
     console.log(`Syncing ${unsyncedBookmarks.length} new bookmarks`);
+    const syncObservedAt = new Date().toISOString();
 
     // Process unsynced bookmarks in batches
     for (let i = 0; i < unsyncedBookmarks.length; i += SLICE_SIZE) {
@@ -1666,11 +1695,17 @@ async function syncBookmarksToServer() {
               JSON.stringify(event, null, 2),
             );
 
-            await postCaptureEvents([event]);
+            await postCaptureEvents([event], { observedAt: syncObservedAt });
             console.log("Successfully sent bookmark event:", event.url);
 
             // Mark this specific bookmark as synced only after successful upload
-            syncedBookmarkIds.push(bookmark.id);
+            const bookmarkId =
+              typeof event.properties?.bookmark_id === "string"
+                ? event.properties.bookmark_id
+                : bookmark?.id;
+            if (bookmarkId) {
+              syncedBookmarkIds.push(bookmarkId);
+            }
           } catch (eventError: any) {
             console.error(
               "Error sending individual bookmark event:",

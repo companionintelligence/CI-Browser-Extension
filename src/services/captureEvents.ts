@@ -11,7 +11,14 @@
 
 /** The browser-activity record the background builders already produce. */
 export interface BrowserActivity {
+  /** When the user actually visited / bookmarked / downloaded (domain time). */
   time: string;
+  /**
+   * When the extension observed or synced the activity. Distinct from `time`
+   * so a Wednesday history import does not rewrite Monday page views as
+   * Wednesday visits in Memory (`occurred_at` stays `time`).
+   */
+  observed_at?: string;
   device_id: string;
   url: string;
   title?: string;
@@ -39,6 +46,7 @@ export interface CaptureEvent {
   source_id: string;
   kind: string;
   occurred_at: string;
+  observed_at?: string;
   title?: string;
   description?: string;
   payload: Record<string, unknown>;
@@ -120,6 +128,10 @@ export function toCaptureEvent(a: BrowserActivity): CaptureEvent {
     occurred_at: toInstant(a.time),
     payload,
   };
+  if (a.observed_at) {
+    event.observed_at = toInstant(a.observed_at);
+  }
+
   if (a.title) {
     event.title = a.title;
   }
