@@ -863,7 +863,6 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     const hydratedResults: Array<{ visitTime: number; url: string }> = [];
     let processed = 0;
     let blacklistedCount = 0;
-    let skippedMissingTime = 0;
     const { siteBlacklist = [], pageBlacklist = [] } = state;
 
     for (const item of allHistoryResults) {
@@ -915,7 +914,6 @@ async function syncHistory(options: { timeRange?: number } = {}) {
         }
 
         if (addedForUrl === 0) {
-          skippedMissingTime++;
           console.log("No in-range visit times for history URL:", item.url);
         }
 
