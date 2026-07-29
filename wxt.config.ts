@@ -4,6 +4,24 @@ import { defineConfig } from "wxt";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 
+/**
+ * The extension icon, at every size the manifest advertises. Referenced from
+ * three places, which must agree:
+ *   - top-level `icons`          — about:addons / chrome://extensions entry
+ *   - `action.default_icon`      — the toolbar button on MV3 (Chrome)
+ *   - `browser_action.default_icon` — the toolbar button on MV2 (Firefox)
+ *
+ * The files are generated from public/icon/logo.png; they shipped for a while as
+ * the wxt template's green puzzle-piece placeholders.
+ */
+const ICONS = {
+  "16": "icon/16.png",
+  "32": "icon/32.png",
+  "48": "icon/48.png",
+  "96": "icon/96.png",
+  "128": "icon/128.png",
+} as const;
+
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   manifest: (env) => ({
@@ -55,18 +73,26 @@ export default defineConfig({
           },
         }
       : {}),
-    icons: {
-      "16": "icon/16.png",
-      "32": "icon/32.png",
-      "48": "icon/48.png",
-      "96": "icon/96.png",
-      "128": "icon/128.png",
-    },
+    icons: ICONS,
     // Mobile browser optimizations
     action: {
       default_title: "Companion Intelligence",
       default_popup: "popup.html",
+      // Not cosmetic: Chrome falls back to the top-level `icons` when an action
+      // declares no icon of its own, but Firefox does NOT — an MV2
+      // `browser_action` with no `default_icon` gets the browser's generic
+      // puzzle-piece button however correct `icons` is.
+      default_icon: ICONS,
     },
+    // wxt 0.20 builds the action block from the popup entrypoint (its
+    // `<meta name="manifest.type" content="browser_action">`) and, on the MV2
+    // path, converts `action` -> `browser_action` while DROPPING default_icon —
+    // verified: it survives in chrome-mv3 and vanishes in firefox-mv2. Setting
+    // the MV2 key directly is what actually reaches Firefox. Remove once wxt
+    // carries default_icon through the conversion.
+    ...(env.manifestVersion === 2
+      ? { browser_action: { default_icon: ICONS } }
+      : {}),
     // Add Android Chrome support
     minimum_chrome_version: "88",
   }),
