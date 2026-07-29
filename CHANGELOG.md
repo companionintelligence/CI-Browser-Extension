@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Xcode wrapper project itself is still generated manually per release,
   not committed to this repo). DEVELOPMENT.md and README.md document local
   Safari testing.
+- **Store auto-publish** — `release.yml` now publishes to Chrome Web Store,
+  Firefox AMO, and Microsoft Edge Add-ons on every `v*` tag, gated on
+  per-store secrets (skips cleanly if they're unset). Edge's release zip is
+  now attached to GitHub Releases too (previously built but never uploaded).
+  See PUBLISHING.md → "CI/CD Auto-Publish Setup" for which secrets each store
+  needs. The Edge step is unverified against a live account — flagged in the
+  workflow and docs.
 
 ### Fixed
 - **`release.yml` was broken** — it ran `npm ci`, which cannot install this
