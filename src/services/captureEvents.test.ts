@@ -18,15 +18,23 @@ function activity(over: Partial<BrowserActivity> = {}): BrowserActivity {
 }
 
 describe("eventsUrl", () => {
-  it("builds /v1/events from a server URL, with or without a trailing slash", () => {
+  // The `/api` prefix is the gateway's — CI-Server mounts the controller at `v1`
+  // and the gateway 405s a bare `/v1/events` without ever reaching the API.
+  it("builds /api/v1/events from a server URL, with or without a trailing slash", () => {
     expect(eventsUrl("https://hub.ci.computer")).toBe(
-      "https://hub.ci.computer/v1/events",
+      "https://hub.ci.computer/api/v1/events",
     );
     expect(eventsUrl("https://hub.ci.computer/")).toBe(
-      "https://hub.ci.computer/v1/events",
+      "https://hub.ci.computer/api/v1/events",
     );
     expect(eventsUrl("http://localhost:8080")).toBe(
-      "http://localhost:8080/v1/events",
+      "http://localhost:8080/api/v1/events",
+    );
+  });
+
+  it("collapses repeated trailing slashes rather than doubling into //api", () => {
+    expect(eventsUrl("http://localhost:8642///")).toBe(
+      "http://localhost:8642/api/v1/events",
     );
   });
 });
@@ -125,7 +133,7 @@ describe("toCaptureEvent", () => {
 describe("sendCaptureEvents", () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it("POSTs {events} to /v1/events with the Bearer token and returns the counts", async () => {
+  it("POSTs {events} to /api/v1/events with the Bearer token and returns the counts", async () => {
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -141,7 +149,7 @@ describe("sendCaptureEvents", () => {
     expect(result).toEqual({ ingested: 1, duplicate: 0, rejected: [] });
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("https://hub.ci.computer/v1/events");
+    expect(url).toBe("https://hub.ci.computer/api/v1/events");
     expect((init.headers as Record<string, string>).Authorization).toBe(
       "Bearer portal-jwt",
     );

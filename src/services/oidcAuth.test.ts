@@ -72,7 +72,7 @@ function installBrowser(launch: (url: string) => string | undefined) {
 
 /** Fetch mock: discovery doc for the well-known, tokens for the token endpoint. */
 function installFetch(tokenJson: Record<string, unknown>) {
-  const captured: { tokenBody?: string } = {};
+  const captured: { tokenBody?: string; tokenInit?: RequestInit } = {};
   const fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
     if (url.includes("/.well-known/openid-configuration")) {
       return {
@@ -88,6 +88,7 @@ function installFetch(tokenJson: Record<string, unknown>) {
     if (url.includes("/oauth2/token")) {
       captured.tokenBody =
         typeof init?.body === "string" ? init.body : undefined;
+      captured.tokenInit = init;
 
       return { ok: true, status: 200, json: async () => tokenJson };
     }
@@ -204,6 +205,51 @@ describe("signIn", () => {
     );
     installFetch({ access_token: "AT", expires_in: 3600 });
     await expect(signIn(CONFIG)).rejects.toThrow(/state mismatch/);
+  });
+
+  // The extension has host permissions for the portal origins, so Chrome would
+  // otherwise attach the portal session cookie to the exchange. CI-Portal's
+  // better-auth only runs its trustedOrigins check on cookie-bearing requests,
+  // and `chrome-extension://<id>` is not trusted — so a cookie here means 403
+  // "Invalid origin". PKCE authenticates this call; nothing else may.
+  it("sends no cookies on the token exchange", async () => {
+    installBrowser((url) => {
+      const state = new URL(url).searchParams.get("state");
+
+      return `https://abcd.chromiumapp.org/?code=AUTHCODE&state=${state}`;
+    });
+    const { captured } = installFetch({ access_token: "AT", expires_in: 3600 });
+
+    await signIn(CONFIG);
+    expect(captured.tokenInit?.credentials).toBe("omit");
+  });
+
+  it("includes the response body in the token-request error", async () => {
+    installBrowser((url) => {
+      const state = new URL(url).searchParams.get("state");
+
+      return `https://abcd.chromiumapp.org/?code=AUTHCODE&state=${state}`;
+    });
+    (global as { fetch?: unknown }).fetch = jest.fn(async (url: string) => {
+      if (url.includes("/.well-known/openid-configuration")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            authorization_endpoint: AUTHZ,
+            token_endpoint: TOKEN,
+          }),
+        };
+      }
+
+      return {
+        ok: false,
+        status: 403,
+        text: async () => '{"message":"Invalid origin"}',
+      };
+    });
+
+    await expect(signIn(CONFIG)).rejects.toThrow(/HTTP 403 — .*Invalid origin/);
   });
 });
 

@@ -7,7 +7,7 @@ export const MAX_HIGHLIGHT_LENGTH = 10000;
 /**
  * Build a CaptureEvent-ready browser activity for a saved text selection.
  *
- * Phase 3: highlights ride the same unified `/v1/events` path as every other
+ * Phase 3: highlights ride the same unified `/api/v1/events` path as every other
  * capture (kind `browser.highlight`), replacing the legacy event envelope.
  */
 export function buildHighlightActivity(

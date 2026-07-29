@@ -59,7 +59,7 @@ describe("Background Script", () => {
       });
     });
 
-    it("POSTs activities as {events} to /v1/events with the Bearer token", async () => {
+    it("POSTs activities as {events} to /api/v1/events with the Bearer token", async () => {
       const fetchMock = jest.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -76,7 +76,7 @@ describe("Background Script", () => {
       expect(result).toEqual({ ingested: 1, duplicate: 0, rejected: [] });
 
       const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe("https://dev.companionintelligence.com/v1/events");
+      expect(url).toBe("https://dev.companionintelligence.com/api/v1/events");
       expect((init.headers as Record<string, string>).Authorization).toBe(
         "Bearer portal-jwt",
       );
