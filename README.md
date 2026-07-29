@@ -72,6 +72,11 @@ yarn build:firefox       # Firefox MV2 → .output/firefox-mv2
   **Load unpacked** → select `.output/chrome-mv3`.
 - **Firefox**: `about:debugging` → This Firefox → **Load Temporary Add-on** →
   select `.output/firefox-mv2/manifest.json`.
+- **Safari**: no unpacked-load mode — `yarn build:safari` produces
+  `.output/safari-mv2`, which must be wrapped in an Xcode project via
+  `xcrun safari-web-extension-converter` before it can run. See
+  [`DEVELOPMENT.md`](DEVELOPMENT.md#safari) for local testing and
+  [`PUBLISHING.md`](PUBLISHING.md#apple-app-store-safari) for the release flow.
 
 > **Package manager:** this repo uses **yarn 4** (via corepack). It cannot be
 > installed with npm/pnpm because the workspace uses the `workspace:*` protocol.
@@ -130,8 +135,9 @@ store-assets/                   # store + README art (regenerate via render.sh)
   `POST /v1/events` ingest path (the same envelope every capture source writes
   through); device registration via `/api/devices`
 
-**Browser builds:** Chrome MV3 (primary), Firefox MV2, Safari MV3, plus
-Edge/Opera/Brave/DuckDuckGo (Chromium, identical manifest). `yarn build:<target>`.
+**Browser builds:** Chrome MV3 (primary), Firefox MV2, Safari MV2 (desktop) /
+MV3 (iOS via `build:safari-mobile`), plus Edge/Opera/Brave/DuckDuckGo
+(Chromium, identical manifest). `yarn build:<target>`.
 
 ### Data flow
 1. Navigation events and manual/auto sync collect activity (minus your ignore lists).

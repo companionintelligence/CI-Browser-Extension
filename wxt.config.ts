@@ -6,7 +6,7 @@ import react from "@vitejs/plugin-react-swc";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  manifest: {
+  manifest: (env) => ({
     name: "Companion Intelligence",
     host_permissions: [
       "*://*.companionintelligence.com/*",
@@ -33,21 +33,28 @@ export default defineConfig({
       "tabs",
       "webNavigation",
     ],
-    browser_specific_settings: {
-      // data_collection_permissions is an AMO disclosure requirement that
-      // WXT's manifest types don't model yet, hence the loose cast
-      gecko: {
-        id: "@ci-browser-extension",
-        data_collection_permissions: {
-          required: [
-            "bookmarksInfo",
-            "websiteActivity",
-            "websiteContent",
-            "browsingActivity",
-          ],
-        },
-      } as unknown as { id: string },
-    },
+    // AMO-only disclosure requirement — scoped to Firefox so it doesn't leak
+    // into the Chrome/Safari/Edge manifests (Safari's Xcode wrapper reads the
+    // Safari manifest verbatim, so stray Firefox keys would show up there too).
+    ...(env.browser === "firefox"
+      ? {
+          browser_specific_settings: {
+            // data_collection_permissions is an AMO disclosure requirement that
+            // WXT's manifest types don't model yet, hence the loose cast
+            gecko: {
+              id: "@ci-browser-extension",
+              data_collection_permissions: {
+                required: [
+                  "bookmarksInfo",
+                  "websiteActivity",
+                  "websiteContent",
+                  "browsingActivity",
+                ],
+              },
+            } as unknown as { id: string },
+          },
+        }
+      : {}),
     icons: {
       "16": "icon/16.png",
       "32": "icon/32.png",
@@ -62,7 +69,7 @@ export default defineConfig({
     },
     // Add Android Chrome support
     minimum_chrome_version: "88",
-  },
+  }),
   srcDir: "src",
   // Clean store-artifact names (the package is @ci/ci-browser-extension, which
   // would otherwise produce "cici-browser-extension-*.zip")

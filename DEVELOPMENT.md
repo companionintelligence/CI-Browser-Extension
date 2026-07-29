@@ -14,11 +14,21 @@
    
    # Firefox development
    npm run dev:firefox
+
+   # Safari development (builds the bundle; see step 3 — Safari can't load it unpacked)
+   npm run dev:safari
    ```
 
 3. **Load in Browser**
    - **Chrome**: Go to `chrome://extensions/`, enable "Developer mode", click "Load unpacked", select `.output/chrome-mv3`
    - **Firefox**: Go to `about:debugging`, click "This Firefox", click "Load Temporary Add-on", select any file in `.output/firefox-mv2`
+   - **Safari**: there is no unpacked-load mode. Safari only runs a web
+     extension wrapped in a native app built with Xcode. To test locally, run
+     `xcrun safari-web-extension-converter .output/safari-mv2` to scaffold the
+     Xcode wrapper, then build & run it from Xcode (Safari's Develop menu →
+     "Allow Unsigned Extensions" is needed for an ad-hoc-signed local build).
+     See [`PUBLISHING.md`](PUBLISHING.md#apple-app-store-safari) for the full
+     flow used for actual releases.
 
 ## Development Workflow
 
@@ -33,8 +43,10 @@ npm run compile     # Check TypeScript
 ### Building
 
 ```bash
-npm run build:all   # Build both Chrome and Firefox
-npm run clean       # Clean build output
+npm run build:all            # Build every target (Chrome, Firefox, Edge, Safari, Safari Mobile, …)
+npm run build:safari         # Safari desktop    → .output/safari-mv2
+npm run build:safari-mobile  # Safari iOS/mobile → .output/safari-mv3
+npm run clean                # Clean build output
 ```
 
 ### Store Publishing
@@ -74,6 +86,18 @@ npm run prepare:store  # Full pipeline: clean, lint, compile, zip
 2. Click "This Firefox"
 3. Click "Load Temporary Add-on..."
 4. Select any file in the `.output/firefox-mv2` folder
+
+### Safari
+Safari doesn't support loading an unpacked extension folder — every test run
+has to go through the Xcode wrapper:
+1. `npm run build:safari` (or `:safari-mobile` for iOS)
+2. `xcrun safari-web-extension-converter .output/safari-mv2` to scaffold the
+   Xcode project
+3. Build & run the generated app target from Xcode
+4. In Safari: Settings → Advanced → enable "Show features for web
+   developers", then Develop → "Allow Unsigned Extensions" (needed for an
+   ad-hoc/dev-signed build), then enable the extension in Settings →
+   Extensions
 
 ## Debugging
 

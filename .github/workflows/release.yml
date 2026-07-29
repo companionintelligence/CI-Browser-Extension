@@ -8,29 +8,31 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20.x'
-        cache: 'npm'
-        
+        node-version: '22.x'
+
+    - name: Enable Corepack (yarn 4)
+      run: corepack enable
+
     - name: Install dependencies
-      run: npm ci
-      
+      run: yarn install --immutable
+
     - name: Run linting
-      run: npm run lint
-      
+      run: yarn lint
+
     - name: Run type checking
-      run: npm run compile
-      
+      run: yarn compile
+
     - name: Create store packages
-      run: npm run zip:all
-      
+      run: yarn prepare:store
+
     - name: Create Release
       uses: actions/create-release@v1
       id: create_release
@@ -43,17 +45,23 @@ jobs:
         prerelease: false
         body: |
           Release ${{ github.ref }}
-          
+
           ## Chrome Web Store
           Use `ci-browser-extension-*-chrome.zip` for Chrome Web Store submission.
-          
+
           ## Firefox Add-ons
           Use `ci-browser-extension-*-firefox.zip` and `ci-browser-extension-*-sources.zip` for Firefox Add-ons submission.
-        
+
+          ## Safari (App Store)
+          `ci-browser-extension-*-safari.zip` (desktop) and `ci-browser-extension-*-safari-mobile.zip` (iOS) are
+          the raw web-extension bundles. Safari has no store-upload API — unzip one, run it through
+          `xcrun safari-web-extension-converter` to generate the Xcode wrapper, then archive/notarize/submit from
+          Xcode. See PUBLISHING.md for the full manual walkthrough.
+
     - name: Resolve Chrome Release Asset Path
       id: chrome_asset
       run: echo "asset=$(ls .output/ci-browser-extension-*-chrome.zip)" >> $GITHUB_OUTPUT
-        
+
     - name: Upload Chrome Release Asset
       uses: actions/upload-release-asset@v1
       env:
@@ -63,11 +71,11 @@ jobs:
         asset_path: ${{ steps.chrome_asset.outputs.asset }}
         asset_name: ci-browser-extension-${{ github.ref_name }}-chrome.zip
         asset_content_type: application/zip
-        
+
     - name: Resolve Firefox Release Asset Path
       id: firefox_asset
       run: echo "asset=$(ls .output/ci-browser-extension-*-firefox.zip)" >> $GITHUB_OUTPUT
-        
+
     - name: Upload Firefox Release Asset
       uses: actions/upload-release-asset@v1
       env:
@@ -77,11 +85,11 @@ jobs:
         asset_path: ${{ steps.firefox_asset.outputs.asset }}
         asset_name: ci-browser-extension-${{ github.ref_name }}-firefox.zip
         asset_content_type: application/zip
-        
+
     - name: Resolve Firefox Sources Asset Path
       id: sources_asset
       run: echo "asset=$(ls .output/ci-browser-extension-*-sources.zip)" >> $GITHUB_OUTPUT
-        
+
     - name: Upload Firefox Sources
       uses: actions/upload-release-asset@v1
       env:
@@ -90,4 +98,32 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.sources_asset.outputs.asset }}
         asset_name: ci-browser-extension-${{ github.ref_name }}-sources.zip
+        asset_content_type: application/zip
+
+    - name: Resolve Safari Release Asset Path
+      id: safari_asset
+      run: echo "asset=$(ls .output/ci-browser-extension-*-safari.zip)" >> $GITHUB_OUTPUT
+
+    - name: Upload Safari Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ steps.safari_asset.outputs.asset }}
+        asset_name: ci-browser-extension-${{ github.ref_name }}-safari.zip
+        asset_content_type: application/zip
+
+    - name: Resolve Safari Mobile Release Asset Path
+      id: safari_mobile_asset
+      run: echo "asset=$(ls .output/ci-browser-extension-*-safari-mobile.zip)" >> $GITHUB_OUTPUT
+
+    - name: Upload Safari Mobile Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ steps.safari_mobile_asset.outputs.asset }}
+        asset_name: ci-browser-extension-${{ github.ref_name }}-safari-mobile.zip
         asset_content_type: application/zip

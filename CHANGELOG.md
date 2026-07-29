@@ -6,7 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+- **Safari CI coverage** — `build-and-test.yml` now builds the Safari desktop
+  (MV2) and iOS/mobile (MV3) bundles on every push/PR, and `release.yml`
+  attaches both as release assets alongside Chrome and Firefox.
+- **Safari release documentation** — PUBLISHING.md now has a full Apple App
+  Store section covering the `safari-web-extension-converter` Xcode-wrapper
+  step, signing, and App Store Connect submission (previously undocumented —
+  the Xcode wrapper project itself is still generated manually per release,
+  not committed to this repo). DEVELOPMENT.md and README.md document local
+  Safari testing.
+
+### Fixed
+- **`release.yml` was broken** — it ran `npm ci`, which cannot install this
+  workspace (`workspace:*` protocol isn't supported by npm). Switched to the
+  same yarn 4 / corepack flow already used in `build-and-test.yml`.
+- **Firefox-only manifest keys leaking into other browsers** —
+  `browser_specific_settings.gecko` (AMO's `data_collection_permissions`
+  disclosure) was appearing in the Chrome and Safari manifests too. Scoped it
+  to the Firefox build only.
+- **Stale toolbar name** — the popup's `<title>` ("CI Browser Extension"),
+  which WXT uses as the manifest `action.default_title`, was overriding the
+  "Companion Intelligence" branding set in `wxt.config.ts` on every browser.
+- `package.json`'s `description` (baked into every manifest) still said
+  "Chrome and Firefox"; now mentions Safari too.
 
 ## [1.4.0] — 2026-06-10
 
