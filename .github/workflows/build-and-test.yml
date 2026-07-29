@@ -40,6 +40,12 @@ jobs:
     - name: Build Firefox extension
       run: yarn build:firefox
 
+    - name: Build Safari extension
+      run: yarn build:safari
+
+    - name: Build Safari Mobile extension
+      run: yarn build:safari-mobile
+
     - name: Upload Chrome build artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -52,4 +58,18 @@ jobs:
       with:
         name: firefox-extension
         path: .output/firefox-mv2
+        retention-days: 30
+
+    - name: Upload Safari build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: safari-extension
+        path: .output/safari-mv2
+        retention-days: 30
+
+    - name: Upload Safari Mobile build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: safari-mobile-extension
+        path: .output/safari-mv3
         retention-days: 30
