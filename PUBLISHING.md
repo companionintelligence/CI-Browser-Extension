@@ -10,6 +10,7 @@
 
 2. **Verify Packages**
    - Chrome: `.output/ci-browser-extension-*-chrome.zip`
+   - Edge: `.output/ci-browser-extension-*-edge.zip`
    - Firefox: `.output/ci-browser-extension-*-firefox.zip`
    - Firefox Sources: `.output/ci-browser-extension-*-sources.zip`
    - Safari (desktop): `.output/ci-browser-extension-*-safari.zip`
@@ -227,9 +228,11 @@ The repository includes GitHub Actions workflows:
 - **CI/CD** (`build-and-test.yml`): lint/type-check/test, then builds Chrome,
   Firefox, and Safari (both desktop and iOS/mobile) on every push/PR as a
   smoke test that all four targets still compile.
-- **Release** (`release.yml`): on a `v*` tag, runs `yarn prepare:store` and
-  attaches the Chrome, Firefox (+ sources), and Safari (desktop + mobile) zips
-  to the GitHub Release.
+- **Release** (`release.yml`): on a `v*` tag, runs `yarn prepare:store`,
+  attaches the Chrome, Edge, Firefox (+ sources), and Safari (desktop +
+  mobile) zips to the GitHub Release, then **auto-publishes to Chrome Web
+  Store, Firefox AMO, and Microsoft Edge Add-ons** if the store credentials
+  below are configured as repo secrets. See "CI/CD Auto-Publish Setup" below.
 - Tag releases like `v1.0.0` to trigger automated release builds.
 
 CI only produces the raw Safari web-extension bundle — it does **not** run
@@ -238,3 +241,54 @@ archiving, and App Store Connect submission stay a manual, macOS-only step
 (see [Apple App Store (Safari)](#apple-app-store-safari) above); there's no
 GitHub-hosted way to fully automate an Apple code-signing identity without
 committing signing secrets, so this is deliberately out of CI for now.
+
+## CI/CD Auto-Publish Setup
+
+`release.yml` has one publish step per auto-publishable store. Each step
+checks its own secrets first (`if: env.<SOMETHING> != ''`) and is skipped
+entirely if they're absent — so this is safe to merge before any secrets
+exist; releases just keep attaching zips for manual upload like before. **A
+store's first submission has to happen manually** (as described earlier in
+this doc) before its API credentials exist to automate updates.
+
+Add secrets with `gh secret set NAME --repo companionintelligence/CI-Browser-Extension`
+(it prompts for the value — nothing gets typed on the command line or pasted
+into chat/logs) or via the repo's Settings → Secrets and variables → Actions
+in the GitHub UI. Whoever holds each store's developer account should be the
+one generating and adding these, since they require access to the
+manually-submitted listing.
+
+### Firefox AMO
+| Secret | Where to get it |
+|---|---|
+| `AMO_JWT_ISSUER` | addons.mozilla.org/developers → Manage API Keys → generates an issuer (JWT `iss`) + secret pair |
+| `AMO_JWT_SECRET` | Same page, shown once at generation time |
+
+Publish step runs `web-ext sign --channel listed`, which both signs and
+submits the already-listed add-on as a new version.
+
+### Chrome Web Store
+| Secret | Where to get it |
+|---|---|
+| `CHROME_EXTENSION_ID` | The ID shown on the item's Chrome Web Store Developer Dashboard page (also in its URL) |
+| `CHROME_CLIENT_ID` / `CHROME_CLIENT_SECRET` | Google Cloud Console → OAuth client (Desktop app type), with the Chrome Web Store API enabled on the project |
+| `CHROME_REFRESH_TOKEN` | Generated once via the OAuth2 flow against that client (see [chrome-webstore-upload-cli's README](https://github.com/fregante/chrome-webstore-upload-cli) for the one-time `curl`/browser steps) |
+
+Publish step uploads the zip then calls `publish`, matching the two-call
+[`chrome-webstore-upload`](https://github.com/fregante/chrome-webstore-upload)
+API.
+
+### Microsoft Edge Add-ons
+| Secret | Where to get it |
+|---|---|
+| `EDGE_PRODUCT_ID`, `EDGE_CLIENT_ID`, `EDGE_CLIENT_SECRET`, `EDGE_ACCESS_TOKEN_URL` | Partner Center → the extension's listing → **API access** page, which displays all four values directly (Partner Center generates the client secret and access-token URL for you; no separate Azure AD app registration needed) |
+
+**This step is unverified** — no Edge submission has happened yet (unlike
+Chrome/Firefox/Safari), so the request shapes in `release.yml` are written
+from Microsoft's documented [Add-ons API](https://learn.microsoft.com/en-us/microsoft-edge/extensions-chromium/publish/api/using-addons-api)
+but haven't been exercised against a live Partner Center account. Before
+relying on it: do the first Edge submission manually, generate the API
+credentials from the listing's API access page, add the secrets above, then
+watch the first automated run closely (or dry-run the `curl` calls locally
+against the real API) and fix up the request shape if Microsoft's current API
+has drifted from the doc.
