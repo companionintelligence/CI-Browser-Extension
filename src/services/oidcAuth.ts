@@ -7,8 +7,8 @@
  * (CI-Portal #356); the redirect is `browser.identity.getRedirectURL()`
  * (`https://<extension-id>.chromiumapp.org/`, allowed by the portal redirect
  * allowlist). The **id_token** (getIdToken) — not the opaque OAuth access_token —
- * is the Bearer the extension sends to CI-Server's `/api/v1/events` (which validates
- * the JWKS-signed portal JWT after CI-Server #1473).
+ * is the Bearer the extension sends to CI-Server's `/api/v1/*` bulk routes (which
+ * validate the JWKS-signed portal JWT after CI-Server #1473).
  *
  * Every request here is sent with `credentials: "omit"` — see postToken; the
  * portal rejects cookie-bearing requests from the extension's origin.
@@ -318,7 +318,7 @@ function jwtExp(jwt: string): number | null {
 
 /**
  * Return the OIDC **id_token** — the JWKS-signed JWT (aud === client_id) to
- * forward to CI-Server as the Bearer for `/api/v1/events`. The OAuth access_token is
+ * forward to CI-Server as the Bearer for its `/api/v1/*` routes. The OAuth access_token is
  * an opaque random string and cannot pass CI-Server's `jwtVerify`, so this — not
  * getAccessToken — is the token to send to CI-Server.
  *
