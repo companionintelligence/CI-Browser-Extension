@@ -7,8 +7,11 @@
  * (CI-Portal #356); the redirect is `browser.identity.getRedirectURL()`
  * (`https://<extension-id>.chromiumapp.org/`, allowed by the portal redirect
  * allowlist). The **id_token** (getIdToken) — not the opaque OAuth access_token —
- * is the Bearer the extension sends to CI-Server's `/v1/events` (which validates
+ * is the Bearer the extension sends to CI-Server's `/api/v1/events` (which validates
  * the JWKS-signed portal JWT after CI-Server #1473).
+ *
+ * Every request here is sent with `credentials: "omit"` — see postToken; the
+ * portal rejects cookie-bearing requests from the extension's origin.
  *
  * Pure helpers (PKCE, authorize-URL, redirect parsing, token-request body) are
  * separated from the `browser`/network flow so they unit-test without a browser.
@@ -116,6 +119,7 @@ export function tokenRequestBody(params: Record<string, string>): string {
 export async function discover(issuer: string): Promise<DiscoveryDoc> {
   const res = await fetch(
     `${issuer.replace(/\/$/, "")}/.well-known/openid-configuration`,
+    { credentials: "omit" },
   );
   if (!res.ok) {
     throw new Error(`OIDC discovery failed: HTTP ${res.status}`);
@@ -140,9 +144,23 @@ async function postToken(
       Accept: "application/json",
     },
     body: tokenRequestBody(params),
+    // `credentials: "omit"` is load-bearing, not hygiene. The extension holds
+    // host permissions for the portal origins, so Chrome attaches the portal's
+    // session cookies (just set by launchWebAuthFlow) to this POST. CI-Portal's
+    // better-auth runs its origin check on any *cookie-bearing* request, and the
+    // extension's `Origin: chrome-extension://<id>` is not — and should not be —
+    // in the portal's trustedOrigins, so the exchange came back 403
+    // "Invalid origin". A public-client PKCE exchange is authenticated by
+    // code_verifier alone; no cookie belongs on it.
+    credentials: "omit",
   });
   if (!res.ok) {
-    throw new Error(`OIDC token request failed: HTTP ${res.status}`);
+    // Surface the body: better-auth reports the actual cause (invalid_grant,
+    // invalid origin, ...) there, and a bare status code hides it.
+    const detail = await res.text().catch(() => "");
+    throw new Error(
+      `OIDC token request failed: HTTP ${res.status}${detail ? ` — ${detail.slice(0, 300)}` : ""}`,
+    );
   }
 
   const json = (await res.json()) as {
@@ -300,7 +318,7 @@ function jwtExp(jwt: string): number | null {
 
 /**
  * Return the OIDC **id_token** — the JWKS-signed JWT (aud === client_id) to
- * forward to CI-Server as the Bearer for `/v1/events`. The OAuth access_token is
+ * forward to CI-Server as the Bearer for `/api/v1/events`. The OAuth access_token is
  * an opaque random string and cannot pass CI-Server's `jwtVerify`, so this — not
  * getAccessToken — is the token to send to CI-Server.
  *

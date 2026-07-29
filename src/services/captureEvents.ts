@@ -1,5 +1,5 @@
 /**
- * Unified capture ingest — CI-Server's G1 `POST /v1/events` CaptureEvent path.
+ * Unified capture ingest — CI-Server's G1 `POST /api/v1/events` CaptureEvent path.
  *
  * Phase 3 of the unified identity pipeline: browser activity is sent as
  * CaptureEvents on the same envelope every capture source writes through
@@ -40,7 +40,7 @@ export interface BrowserActivity {
   contains_sensitive?: boolean;
 }
 
-/** The CaptureEvent envelope CI-Server's `/v1/events` accepts. */
+/** The CaptureEvent envelope CI-Server's `/api/v1/events` accepts. */
 export interface CaptureEvent {
   source_system: string;
   source_id: string;
@@ -61,9 +61,18 @@ export interface IngestResult {
 /** Every browser activity shares one source so dedup is keyed per-activity below. */
 export const SOURCE_SYSTEM = "browser-extension";
 
-/** Derive the `/v1/events` URL from the stored server URL (always has a protocol). */
+/**
+ * Derive the `/api/v1/events` URL from the stored server URL (always has a
+ * protocol).
+ *
+ * The `/api` prefix is the gateway's, not the API's: CI-Server mounts the
+ * controller at `v1` (`@Controller('v1')`, no global prefix) and ci-memory's
+ * gateway routes `/api/*` through to it. Posting to a bare `/v1/events` never
+ * reaches the API — the gateway answers 405 itself. This matches the `/api/...`
+ * prefix the device calls in background.ts already use.
+ */
 export function eventsUrl(serverURL: string): string {
-  return `${serverURL.replace(/\/+$/, "")}/v1/events`;
+  return `${serverURL.replace(/\/+$/, "")}/api/v1/events`;
 }
 
 // occurred_at must satisfy the server's strict Zod `.datetime()` (Z form). A
@@ -143,7 +152,7 @@ export function toCaptureEvent(a: BrowserActivity): CaptureEvent {
 }
 
 /**
- * POST a batch of browser activities as CaptureEvents to `/v1/events`, returning
+ * POST a batch of browser activities as CaptureEvents to `/api/v1/events`, returning
  * the server's `{ ingested, duplicate, rejected }`. Throws on a non-2xx so the
  * caller can retry. An empty batch is a no-op.
  */
@@ -166,7 +175,7 @@ export async function sendCaptureEvents(
     body: JSON.stringify({ events }),
   });
   if (!res.ok) {
-    throw new Error(`CI-Server /v1/events failed: HTTP ${res.status}`);
+    throw new Error(`CI-Server /api/v1/events failed: HTTP ${res.status}`);
   }
 
   return (await res.json()) as IngestResult;

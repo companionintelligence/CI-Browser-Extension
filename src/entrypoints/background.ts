@@ -173,7 +173,7 @@ async function discoverMemoryServer(): Promise<void> {
 }
 
 // Resolve the Bearer for CI-Server: prefer the portal OIDC **id_token** — the
-// JWKS-signed JWT CI-Server's `/v1/events` validates. The opaque OAuth
+// JWKS-signed JWT CI-Server's `/api/v1/events` validates. The opaque OAuth
 // access_token is NOT usable here (CI-Server's jwtVerify rejects it; this was the
 // Phase 3 blocker fixed by getIdToken in #51). Falls back to a legacy CI-Server
 // token still mirrored in Redux during the migration. Returns null when there is
@@ -188,7 +188,7 @@ async function resolveServerToken(): Promise<string | null> {
 }
 
 // Central capture transport: every browser-activity write goes through here as
-// CaptureEvents on CI-Server's unified `/v1/events` path (replacing the legacy
+// CaptureEvents on CI-Server's unified `/api/v1/events` path (replacing the legacy
 // `POST /api/browser-activity`). No-ops without a server URL or batch;
 // throws on a missing token or non-2xx so callers keep their retry/logging.
 // Historical sync passes observedAt=now so the server records import time
