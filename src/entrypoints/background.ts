@@ -11,9 +11,9 @@ import { siteRegex, parseUrl, isUrlBlacklisted } from "@/utils.ts";
 import { addSyncedItem, addSyncedItems, isItemSynced } from "@/lib/syncedItems";
 import { buildHighlightActivity } from "@/lib/highlight";
 import {
-  sendCaptureEvents,
+  sendBrowserCaptures,
   type BrowserActivity,
-} from "@/services/captureEvents";
+} from "@/services/browserActivity";
 import {
   getAccessToken,
   getIdToken,
@@ -173,7 +173,7 @@ async function discoverMemoryServer(): Promise<void> {
 }
 
 // Resolve the Bearer for CI-Server: prefer the portal OIDC **id_token** — the
-// JWKS-signed JWT CI-Server's `/api/v1/events` validates. The opaque OAuth
+// JWKS-signed JWT CI-Server's `/api/v1/*` routes validate. The opaque OAuth
 // access_token is NOT usable here (CI-Server's jwtVerify rejects it; this was the
 // Phase 3 blocker fixed by getIdToken in #51). Falls back to a legacy CI-Server
 // token still mirrored in Redux during the migration. Returns null when there is
@@ -187,13 +187,17 @@ async function resolveServerToken(): Promise<string | null> {
   return store.getState().ciState.accessToken ?? null;
 }
 
-// Central capture transport: every browser-activity write goes through here as
-// CaptureEvents on CI-Server's unified `/api/v1/events` path (replacing the legacy
-// `POST /api/browser-activity`). No-ops without a server URL or batch;
-// throws on a missing token or non-2xx so callers keep their retry/logging.
-// Historical sync passes observedAt=now so the server records import time
-// separately from occurred_at (the Chrome visit / bookmark / download time).
-async function postCaptureEvents(
+// Central capture transport: every browser-activity write goes through here to
+// CI-Server's TYPED bulk routes — `/api/v1/browser-activity`, and
+// `/api/v1/contents` for saved bookmarks (see @/services/browserActivity for the
+// kind→destination table this follows and why the unified `/api/v1/events` path
+// could not produce browser_activity rows). No-ops without a server URL or
+// batch; throws on a missing token or non-2xx so callers keep their
+// retry/logging.
+// Historical sync passes observedAt=now so import time is recorded separately
+// from the Chrome visit / bookmark / download time. The browser-activity table
+// has no observed_at column, so it rides in `properties` rather than being lost.
+async function postBrowserCaptures(
   activities: BrowserActivity[],
   opts?: { observedAt?: string },
 ): Promise<void> {
@@ -218,7 +222,7 @@ async function postCaptureEvents(
       )
     : activities;
 
-  await sendCaptureEvents(serverURL, token, batch);
+  await sendBrowserCaptures(serverURL, token, batch);
 }
 
 /**
@@ -334,7 +338,7 @@ const recordHit = async function (e: any) {
     );
 
     try {
-      await postCaptureEvents([newActivity]);
+      await postBrowserCaptures([newActivity]);
 
       const historyId = `${active.url}_${date}`;
       await addSyncedItem(SYNCED_HISTORY_KEY, historyId);
@@ -1187,7 +1191,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
         }
 
         try {
-          await postCaptureEvents(browserActivities, {
+          await postBrowserCaptures(browserActivities, {
             observedAt: syncObservedAt,
           });
           uploaded = uploaded + browserActivities.length;
@@ -1452,7 +1456,7 @@ async function syncDownloadsToServer() {
       for (const download of slice) {
         try {
           const event = await createDownloadEvent(download, "sync");
-          await postCaptureEvents([event], { observedAt: syncObservedAt });
+          await postBrowserCaptures([event], { observedAt: syncObservedAt });
           syncedDownloadIds.push(download.id.toString());
         } catch (eventError: unknown) {
           console.error("Error syncing download:", eventError, download);
@@ -1481,7 +1485,7 @@ async function handleDownloadCreated(download: any) {
 
   try {
     const downloadEvent = await createDownloadEvent(download, "create");
-    await postCaptureEvents([downloadEvent]);
+    await postBrowserCaptures([downloadEvent]);
   } catch (error) {
     console.error("Error syncing created download:", error);
   }
@@ -1495,9 +1499,9 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
     return;
   }
 
-  // Map each scraped item to a CaptureEvent-ready activity (kind browser.scrape).
-  // A per-item source_id keeps distinct items on the same page/timestamp from
-  // deduping into a single event server-side.
+  // Map each scraped item to a browser activity. A per-item source_id keeps
+  // distinct items on the same page/timestamp from deduping into a single row
+  // server-side.
   const activities: BrowserActivity[] = [];
 
   for (const [dataType, items] of Object.entries(scrapeResult.data)) {
@@ -1529,7 +1533,7 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
   }
 
   try {
-    await postCaptureEvents(activities);
+    await postBrowserCaptures(activities);
   } catch (error) {
     console.error("Error uploading scraped data:", error);
   }
@@ -1561,7 +1565,7 @@ async function handleSaveHighlight(
   );
 
   try {
-    await postCaptureEvents([activity]);
+    await postBrowserCaptures([activity]);
     console.log("Saved highlight from", url);
   } catch (error) {
     console.error("Error uploading highlight:", error);
@@ -1793,7 +1797,7 @@ async function syncBookmarksToServer() {
               JSON.stringify(event, null, 2),
             );
 
-            await postCaptureEvents([event], { observedAt: syncObservedAt });
+            await postBrowserCaptures([event], { observedAt: syncObservedAt });
             console.log("Successfully sent bookmark event:", event.url);
 
             // Mark this specific bookmark as synced only after successful upload
@@ -1848,7 +1852,7 @@ async function handleBookmarkCreated(id: string, bookmark: any) {
 
   try {
     const bookmarkEvent = await createBookmarkEvent(bookmark, "create");
-    await postCaptureEvents([bookmarkEvent]);
+    await postBrowserCaptures([bookmarkEvent]);
   } catch (error) {
     console.error("Error syncing created bookmark:", error);
   }
@@ -1868,37 +1872,9 @@ async function handleBookmarkChanged(id: string) {
     }
 
     const bookmarkEvent = await createBookmarkEvent(bookmark, "update");
-    await postCaptureEvents([bookmarkEvent]);
+    await postBrowserCaptures([bookmarkEvent]);
   } catch (error) {
     console.error("Error syncing updated bookmark:", error);
-  }
-}
-
-async function handleBookmarkRemoved(id: string, removeInfo: any) {
-  const { deviceId } = store.getState().ciState;
-
-  if (!removeInfo.node?.url || !(await resolveServerToken())) {
-    return; // Skip folders or if not authenticated
-  }
-
-  try {
-    // A bookmark removal is a bookmark activity with event_type "remove",
-    // mirroring createBookmarkEvent so it rides the same browser.bookmark kind.
-    const removalActivity: BrowserActivity = {
-      time: new Date().toISOString(),
-      device_id: deviceId || "",
-      url: removeInfo.node.url,
-      title: removeInfo.node.title,
-      action_type: "bookmark",
-      properties: {
-        bookmark_id: id,
-        event_type: "remove",
-      },
-    };
-
-    await postCaptureEvents([removalActivity]);
-  } catch (error) {
-    console.error("Error syncing removed bookmark:", error);
   }
 }
 
@@ -2246,14 +2222,14 @@ export default defineBackground({
     // Set up bookmark listeners based on settings
     const setupBookmarkListeners = () => {
       const state = store.getState().ciState;
+      // No onRemoved listener: bookmark removals are not captured. A saved
+      // bookmark becomes a content row, and a deletion has nothing to say there.
       if (state.bookmarkSyncEnabled) {
         browser.bookmarks.onCreated.addListener(handleBookmarkCreated);
         browser.bookmarks.onChanged.addListener(handleBookmarkChanged);
-        browser.bookmarks.onRemoved.addListener(handleBookmarkRemoved);
       } else {
         browser.bookmarks.onCreated.removeListener(handleBookmarkCreated);
         browser.bookmarks.onChanged.removeListener(handleBookmarkChanged);
-        browser.bookmarks.onRemoved.removeListener(handleBookmarkRemoved);
       }
     };
 
