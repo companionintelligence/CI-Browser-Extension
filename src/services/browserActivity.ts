@@ -66,8 +66,23 @@ export interface IngestResult {
   rejected: { index: number; reason: string }[];
 }
 
-/** Every browser capture shares one source; dedup is keyed per-record below. */
-export const SOURCE_SYSTEM = "browser-extension";
+/**
+ * Every browser capture shares one source; dedup is keyed per-record below.
+ *
+ * This MUST match the platform's event-ingest spec, which names this source
+ * `ci-browser-extension` — the same string as the OIDC client id. CI-Server's
+ * content→event auto-linking joins on the exact provenance triple
+ * (`source_type`, `source_system`, `source_id`), so while the extension sent
+ * the shorter `browser-extension` its rows could never link to importer rows
+ * describing the same item.
+ *
+ * Changing this is a deliberate BREAKING change to the dedup key: it is part of
+ * the server-side unique index, so previously-uploaded captures do not dedup
+ * against the new value and the first sync after this change re-materializes
+ * them under the corrected source. Accepted pre-release; the duplicate rows are
+ * the one-time cost of getting provenance right before there is real data.
+ */
+export const SOURCE_SYSTEM = "ci-browser-extension";
 
 // `time` must satisfy the server's Zod `.datetime()` (Z form). A bare
 // "YYYY-MM-DD HH:MM:SS" (no zone) is treated as UTC rather than local time; an
@@ -188,13 +203,38 @@ export function contentsUrl(serverURL: string): string {
   return apiUrl(serverURL, "contents");
 }
 
+export function ingestFinishUrl(serverURL: string): string {
+  return apiUrl(serverURL, "ingest/finish");
+}
+
+/**
+ * Entity types `finishIngest` asks CI-Server to index — exactly the two this
+ * transport writes. Names come from the server's `BACKFILLABLE_ENTITIES`
+ * (hyphenated `browser-activity`, NOT the `browser_activity` table/destination
+ * spelling used elsewhere in the ingest API).
+ */
+const FINISH_ENTITY_TYPES = ["browser-activity", "content"];
+
 /**
  * Captures that belong in `ci.content` rather than `ci.browser_activity`:
- * bookmarks (the importer's `web.bookmark` → content) and highlights (a saved
- * text selection is a reading annotation — it has a body, not a duration).
+ * bookmarks (the importer's `web.bookmark` → content), highlights (a saved text
+ * selection is a reading annotation — it has a body, not a duration), and
+ * scrapes.
+ *
+ * Scrapes moved here because the browser-activity lane could not represent
+ * them. Its `action_type` enum has no `scrape`, so every scraped row arrived as
+ * `web.page_view` with its real identity buried in `properties` — which nothing
+ * server-side reads. A scraped item (a watched title, a repository, a trip) is
+ * a *thing the user has a relationship with*, not a page view; `ci.content`
+ * models exactly that, its `type` column is free text, and its rows are
+ * search-indexed on title/text/url. See toScrapeContentRecord.
  */
 export function isContentCapture(a: BrowserActivity): boolean {
-  return a.action_type === "bookmark" || a.action_type === "highlight";
+  return (
+    a.action_type === "bookmark" ||
+    a.action_type === "highlight" ||
+    a.action_type === "scrape"
+  );
 }
 
 /**
@@ -358,6 +398,97 @@ export function toHighlightContentRecord(
   };
 }
 
+/**
+ * Field names an item may carry that identify the *thing* rather than the page
+ * it was scraped from — a Netflix title's own link, a repo's URL. Preferred as
+ * the content row's `url` so a scraped item points at itself rather than at the
+ * settings page it happened to be listed on.
+ */
+const ITEM_URL_FIELDS = ["titleUrl", "url", "link", "href", "articleUrl"];
+
+function itemUrl(fields: Record<string, unknown>): string | undefined {
+  for (const key of ITEM_URL_FIELDS) {
+    const value = fields[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Map a scraped item to a `/v1/contents` record typed by what it *is*.
+ *
+ * `type` is the profile's `personalDataType` (`entertainment_preferences`,
+ * `professional_activity`, …). The server's content schema takes free text
+ * there, so this needs no CI-Server change — but unlike the browser-activity
+ * lane it preserves the classification instead of flattening it to a page view.
+ *
+ * `text` is the item's own field values joined, because the content
+ * search-index weights `text` (5) and `title` (10) and would otherwise have
+ * nothing to match on — the raw fields live only in `source_data`, which is not
+ * indexed.
+ */
+export function toScrapeContentRecord(
+  a: BrowserActivity,
+): ContentRecord | null {
+  const pageUrl = a.url?.trim();
+  const props = a.properties ?? {};
+  const type = props.personal_data_type;
+  const fields = (props.data ?? {}) as Record<string, unknown>;
+
+  // Without a classification there is no meaningful content type to file it
+  // under, and without a page there is nothing to attribute it to.
+  if (!pageUrl || typeof type !== "string" || !type) {
+    return null;
+  }
+
+  const sourceData = extraProperties(a);
+  sourceData[OBTAINED_AT_KEY] = toInstant(a.time);
+
+  const searchable = Object.entries(fields)
+    .filter(
+      ([key, value]) =>
+        typeof value === "string" &&
+        value.trim() &&
+        !ITEM_URL_FIELDS.includes(key),
+    )
+    .map(([, value]) => (value as string).trim());
+
+  const record: ContentRecord = {
+    type,
+    url: itemUrl(fields) ?? pageUrl,
+    source_url: pageUrl,
+    source_type: SOURCE_TYPE,
+    source_system: SOURCE_SYSTEM,
+    source_id: sourceIdFor(a),
+    source_data: sourceData,
+  };
+
+  if (a.title) {
+    record.title = a.title;
+  }
+
+  if (searchable.length > 0) {
+    record.text = searchable.join(" · ");
+  }
+
+  return record;
+}
+
+/** Pick the content mapper for a capture already known to belong on that lane. */
+function contentRecordFor(a: BrowserActivity): ContentRecord | null {
+  switch (a.action_type) {
+    case "highlight":
+      return toHighlightContentRecord(a);
+    case "scrape":
+      return toScrapeContentRecord(a);
+    default:
+      return toBookmarkContentRecord(a);
+  }
+}
+
 const EMPTY_RESULT: IngestResult = {
   ingested: 0,
   duplicate: 0,
@@ -415,10 +546,7 @@ export async function sendBrowserCaptures(
   const contentRecords: ContentRecord[] = [];
   for (const a of activities) {
     if (isContentCapture(a)) {
-      const content =
-        a.action_type === "highlight"
-          ? toHighlightContentRecord(a)
-          : toBookmarkContentRecord(a);
+      const content = contentRecordFor(a);
       if (content) {
         contentRecords.push(content);
       }
@@ -442,4 +570,52 @@ export async function sendBrowserCaptures(
     duplicate: activityResult.duplicate + contentResult.duplicate,
     rejected: [...activityResult.rejected, ...contentResult.rejected],
   };
+}
+
+/**
+ * Make what was just uploaded searchable.
+ *
+ * The typed `/v1/*` bulk lanes deliberately do NOT index as they write: their
+ * services run with `emitCreated: false`, so no `*CreatedEvent` fires and the
+ * search-ingress listeners never see the rows. That is a throughput choice for
+ * bulk importers — index once at the end, not once per record — but it means an
+ * ingest that never says "finished" is an ingest whose data is in Postgres and
+ * invisible to search, RAG, and the Memory UI. Nothing sweeps on a timer.
+ *
+ * `searchIndexOnly: true` takes the cheap path (`SearchIndexBackfillService`
+ * directly), scoped by `entityTypes` to the two types written above. The full
+ * path — omitting the flag — runs the whole maintenance orchestration chain and
+ * allows only one run per user at a time (a concurrent call is a 409), which is
+ * far too heavy to hang off a 10-minute sync alarm.
+ *
+ * Best-effort by design: returns false instead of throwing, because failing to
+ * index is not a reason to re-upload data the server already accepted.
+ */
+export async function finishIngest(
+  serverURL: string,
+  accessToken: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(ingestFinishUrl(serverURL), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        searchIndexOnly: true,
+        entityTypes: FINISH_ENTITY_TYPES,
+      }),
+    });
+
+    if (!res.ok) {
+      console.warn(`CI-Server ingest/finish returned HTTP ${res.status}`);
+    }
+
+    return res.ok;
+  } catch (error) {
+    console.warn("CI-Server ingest/finish failed:", error);
+
+    return false;
+  }
 }

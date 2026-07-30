@@ -2,12 +2,16 @@
   "domain": "github.com",
   "name": "GitHub Activity Scraper",
   "description": "Scrapes GitHub repositories, issues, pull requests, and activity",
+  "matchPatterns": [
+    "*://*.github.com/*"
+  ],
   "targetUrl": [
     "https://github.com/*",
     "https://*.github.com/*"
   ],
   "dataSelectors": {
     "repositories": {
+      "personalDataType": "professional_activity",
       "container": "[data-filterable-for='your-repos-filter'], .repo-list li, article.Box-row",
       "fields": {
         "name": {
@@ -39,6 +43,7 @@
       }
     },
     "issues": {
+      "personalDataType": "professional_activity",
       "container": ".js-navigation-container .js-issue-row, [data-hovercard-type='issue']",
       "fields": {
         "title": {
@@ -70,6 +75,7 @@
       }
     },
     "pullRequests": {
+      "personalDataType": "professional_activity",
       "container": ".js-navigation-container .js-issue-row[data-hovercard-type='pull_request']",
       "fields": {
         "title": {
@@ -96,6 +102,7 @@
       }
     },
     "commits": {
+      "personalDataType": "professional_activity",
       "container": ".commit, .TimelineItem--condensed",
       "fields": {
         "message": {
@@ -122,6 +129,7 @@
       }
     },
     "activity": {
+      "personalDataType": "professional_activity",
       "container": ".news .alert, .contribution-activity-listing",
       "fields": {
         "activityType": {
@@ -148,34 +156,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "repositories",
-      "description": "GitHub repositories viewed or starred",
-      "personalDataType": "professional_activity"
-    },
-    {
-      "name": "issues",
-      "description": "GitHub issues viewed or created",
-      "personalDataType": "professional_activity"
-    },
-    {
-      "name": "pull_requests",
-      "description": "GitHub pull requests viewed or created",
-      "personalDataType": "professional_activity"
-    },
-    {
-      "name": "commits",
-      "description": "GitHub commits viewed",
-      "personalDataType": "professional_activity"
-    },
-    {
-      "name": "activity",
-      "description": "GitHub activity feed events",
-      "personalDataType": "professional_activity"
-    }
-  ]
+  }
 }
-
-

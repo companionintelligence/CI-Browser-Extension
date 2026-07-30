@@ -11,13 +11,14 @@ Issues: <https://github.com/companionintelligence/CI-Browser-Extension/issues> (
 
 ## What this repo does
 
-WXT-based browser extension that captures browsing activity and sends it to CI-Server. Uses IndexedDB for local queue and domain-specific scrapers.
+WXT-based browser extension that captures browsing activity and sends it to CI-Server. Captures history, live navigation, bookmarks, downloads, saved highlights, and domain-specific scrapes.
 
 ## Stack
 
 - WXT (browser extension framework)
 - TypeScript
-- IndexedDB (local queue)
+- Redux Toolkit + webext-redux (state, bridged to the popup)
+- `browser.storage.local` (settings, synced-ID bookkeeping, capture retry queue)
 - Jest (unit tests)
 
 ## Key commands
@@ -49,9 +50,25 @@ install. Do not mix with npm/pnpm/bun.
 
 ## Cross-repo connections
 
-- Sends browser-activity events to CI-Server (/browser-activity endpoint)
-- Auth: API key from CI-Server
-- Supports Chrome, Firefox, and Chromium-based browsers
+- **Auth:** OIDC Authorization-Code + PKCE against **CI-Portal** as the public
+  client `ci-browser-extension`. The Bearer sent to CI-Server is the portal
+  **`id_token`** (a JWKS-signed JWT) — *not* the opaque OAuth `access_token`,
+  which CI-Server's `jwtVerify` rejects. No API keys, session cookies, or CSRF
+  tokens are involved. See `src/services/oidcAuth.ts`.
+- **Memory discovery:** after sign-in the extension asks CI-Portal
+  `/api/users/me/apps?slug=ci-memory` where the user's Memory server runs and
+  sets `serverURL` from it; a manually-set URL is never overwritten.
+- **Ingest:** captures POST to CI-Server's typed bulk lanes —
+  `POST <serverURL>/api/v1/browser-activity` (visits, downloads, scrapes) and
+  `POST <serverURL>/api/v1/contents` (bookmarks, highlights). The `/api` prefix
+  is stripped by the gateway; a bare `/v1/...` does not route.
+- **Indexing:** those bulk lanes do **not** index as they write, so the
+  extension calls `POST /api/v1/ingest/finish` (`searchIndexOnly`) after a sync
+  and debounced after live captures. Without it, uploaded data is in Postgres
+  but invisible to search.
+- **Server requirement:** CI-Server must run with `PORTAL_OIDC_ENABLED=true`, or
+  it rejects every portal token with an undiagnosable 401.
+- Supports Chrome, Firefox, Edge, and Safari (see `yarn build:all`).
 
 ## Build targets
 

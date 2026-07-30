@@ -26,16 +26,24 @@ const ICONS = {
 export default defineConfig({
   manifest: (env) => ({
     name: "Companion Intelligence",
+    // Origins the BACKGROUND needs to reach directly: the Portal (OIDC) and
+    // whichever host runs the user's Memory server.
+    //
+    // Scraped sites are deliberately NOT listed. A content script's `matches`
+    // already grants it access to its own page, so naming Netflix/Hulu/Disney+
+    // here granted the background extra fetch/tabs reach it never used and
+    // inflated the install-time permission warning — while being stale anyway
+    // (the scraper injects on 12 patterns, this list named 3).
+    //
+    // Local dev origins are Firefox/dev-only: a production Chrome or Safari
+    // listing should not ask for localhost access, and store reviewers flag it.
     host_permissions: [
       "*://*.companionintelligence.com/*",
       "*://*.companionintel.com/*",
       "*://*.ci.computer/*",
-      "*://*.netflix.com/*",
-      "*://*.hulu.com/*",
-      "*://secure.hulu.com/*",
-      "*://*.disneyplus.com/*",
-      "*://*.ci.localhost/*",
-      "*://ci-server.localhost/*",
+      ...(env.mode === "development"
+        ? ["*://*.ci.localhost/*", "*://ci-server.localhost/*"]
+        : []),
     ],
     permissions: [
       "alarms",

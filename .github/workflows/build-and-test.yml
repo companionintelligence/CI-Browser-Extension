@@ -31,8 +31,10 @@ jobs:
     - name: Run type checking
       run: yarn compile
 
+    # --coverage so jest.config's coverageThreshold is actually enforced;
+    # a bare `jest` run collects no coverage and the ratchet never applies.
     - name: Run tests
-      run: yarn test
+      run: yarn test:coverage
 
     - name: Build Chrome extension
       run: yarn build

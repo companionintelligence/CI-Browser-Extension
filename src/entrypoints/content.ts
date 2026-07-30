@@ -36,36 +36,15 @@ export default defineContentScript({
       scrollDepthPercent = 0;
     }
 
-    // Stop tracking when user leaves page
+    // Stop tracking when user leaves page.
+    //
+    // Deliberately does NOT persist anything. This used to append every page's
+    // final scroll depth to a `scrollDepthData` array in storage.local, which
+    // nothing ever read — pure storage growth on every page the user closed.
+    // Scroll depth reaches the server through the getScrollDepth message below,
+    // which the background pulls while the page is still open.
     function stopScrollTracking() {
       isTracking = false;
-
-      // Store scroll depth data when user leaves page
-      if (scrollDepthPercent > 0) {
-        const scrollData = {
-          url: window.location.href,
-          scrollDepth: scrollDepthPercent,
-          timestamp: Date.now(),
-        };
-
-        // Store in browser storage for later retrieval
-        browser.storage.local
-          .get("scrollDepthData")
-          .then((result) => {
-            const scrollDepthData =
-              (result.scrollDepthData as (typeof scrollData)[] | undefined) ??
-              [];
-            scrollDepthData.push(scrollData);
-
-            // Keep only last 1000 entries to prevent storage bloat
-            if (scrollDepthData.length > 1000) {
-              scrollDepthData.splice(0, scrollDepthData.length - 1000);
-            }
-
-            browser.storage.local.set({ scrollDepthData });
-          })
-          .catch(console.error);
-      }
     }
 
     // Listen for scroll events

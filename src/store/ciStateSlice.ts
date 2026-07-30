@@ -19,6 +19,7 @@ export const loadUserSettings = createAsyncThunk(
       "bookmarkSyncEnabled",
       "downloadSyncEnabled",
       "historySyncEnabled",
+      "sensitiveScrapingEnabled",
       "serverURL",
       "serverURLSource",
       "serverDomain",
@@ -128,6 +129,11 @@ interface CiState {
   bookmarkSyncEnabled: boolean;
   downloadSyncEnabled: boolean;
   historySyncEnabled: boolean;
+  /**
+   * Opt-in for scrape profiles marked `sensitive` (brokerage holdings and
+   * order history). Off unless the user turns it on — see @/lib/scrapeSettings.
+   */
+  sensitiveScrapingEnabled: boolean;
 }
 
 export const ciStateSlice = createSlice({
@@ -159,6 +165,7 @@ export const ciStateSlice = createSlice({
     bookmarkSyncEnabled: false,
     downloadSyncEnabled: false,
     historySyncEnabled: true, // Default to enabled since history is the main feature
+    sensitiveScrapingEnabled: false, // Financial data is never captured by default
   } as CiState,
   reducers: {
     setState: (state, action) => {
@@ -208,6 +215,12 @@ export const ciStateSlice = createSlice({
       return {
         ...state,
         downloadSyncEnabled: !state.downloadSyncEnabled,
+      };
+    },
+    toggleSensitiveScraping(state) {
+      return {
+        ...state,
+        sensitiveScrapingEnabled: !state.sensitiveScrapingEnabled,
       };
     },
     toggleHistorySync(state) {
@@ -300,6 +313,7 @@ export const ciStateSlice = createSlice({
           bookmarkSyncEnabled: state.bookmarkSyncEnabled,
           downloadSyncEnabled: state.downloadSyncEnabled,
           historySyncEnabled: state.historySyncEnabled,
+          sensitiveScrapingEnabled: state.sensitiveScrapingEnabled,
           serverURL: state.serverURL,
           serverURLSource: state.serverURLSource,
           portalUrl: state.portalUrl,
@@ -332,6 +346,7 @@ export const {
   toggleBookmarkSync,
   toggleDownloadSync,
   toggleHistorySync,
+  toggleSensitiveScraping,
   addSiteBlacklist,
   removeSiteBlacklist,
   addPageBlacklist,

@@ -12,6 +12,25 @@ export default {
     "!src/**/*.d.ts",
     "!src/setupTests.ts",
   ],
+  // A ratchet, not a target. Set below the numbers CI measures so coverage
+  // cannot silently erode; raise it as suites land. The headline figure stays
+  // low mainly because background.ts (the largest file by far) is not directly
+  // testable — `defineBackground` can't be imported under jest — so the real
+  // lever is continuing to move logic out of it into src/lib and src/services,
+  // which are at 93% and 92%.
+  //
+  // Calibrate these against a CI run, not a local one: CI's istanbul counts
+  // module-level import lines as uncovered statements (an untested file reports
+  // `1-2300` there but `37-2300` locally), so the same tree measures ~1 point
+  // lower on CI than it does here.
+  coverageThreshold: {
+    global: {
+      statements: 28,
+      branches: 25,
+      functions: 28,
+      lines: 28,
+    },
+  },
   testMatch: [
     "<rootDir>/src/**/__tests__/**/*.{ts,tsx}",
     "<rootDir>/src/**/*.{test,spec}.{ts,tsx}",

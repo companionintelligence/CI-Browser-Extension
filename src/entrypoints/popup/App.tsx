@@ -4,6 +4,7 @@ import {
   toggleAutoSync,
   toggleBookmarkSync,
   toggleDownloadSync,
+  toggleSensitiveScraping,
   toggleHistorySync,
   clearSyncHistoryLogs,
   setState,
@@ -42,6 +43,7 @@ export default function App() {
     deviceName: string | null;
     bookmarkSyncEnabled: boolean;
     downloadSyncEnabled: boolean;
+    sensitiveScrapingEnabled: boolean;
     historySyncEnabled: boolean;
     syncHistoryLogs: {
       id: string;
@@ -72,6 +74,7 @@ export default function App() {
     deviceName,
     bookmarkSyncEnabled,
     downloadSyncEnabled,
+    sensitiveScrapingEnabled,
     historySyncEnabled,
     syncHistoryLogs,
   } = ciState;
@@ -145,6 +148,13 @@ export default function App() {
 
   const handleHistorySyncToggle = () => {
     dispatch(toggleHistorySync());
+  };
+
+  const handleSensitiveScrapingToggle = () => {
+    dispatch(toggleSensitiveScraping());
+    // Persist immediately: the content script reads this key straight from
+    // storage.local before it scrapes, so it must not wait for another save.
+    dispatch(saveUserSettings());
   };
 
   // Kick off the OIDC Auth-Code + PKCE sign-in. The flow runs in the background
@@ -461,6 +471,24 @@ export default function App() {
                   <Label htmlFor="download-sync-enabled">Downloads</Label>
                 </Field>
               </Field.Group>
+
+              {/* Sensitive scrape profiles are opt-in: financial holdings are
+                  not something an extension should capture by default. */}
+              <Field orientation="horizontal" className="mt-3">
+                <Checkbox
+                  id="sensitive-scraping-enabled"
+                  name="sensitive-scraping-enabled"
+                  checked={sensitiveScrapingEnabled}
+                  onCheckedChange={handleSensitiveScrapingToggle}
+                />
+                <Label htmlFor="sensitive-scraping-enabled">
+                  Include financial accounts
+                  <span className="block text-[0.75em] text-muted-foreground font-normal">
+                    Capture portfolio holdings and trade history from brokerage
+                    sites. Off by default.
+                  </span>
+                </Label>
+              </Field>
             </div>
 
             {/* Sync History & Logs Section */}

@@ -2,6 +2,9 @@
   "domain": "wsj.com",
   "name": "Wall Street Journal Data Scraper",
   "description": "Scrapes WSJ articles, headlines, and subscription content",
+  "matchPatterns": [
+    "*://*.wsj.com/*"
+  ],
   "targetUrl": [
     "https://www.wsj.com/*",
     "https://www.wsj.com/news/*",
@@ -9,6 +12,7 @@
   ],
   "dataSelectors": {
     "articles": {
+      "personalDataType": "news_consumption",
       "container": "[data-testid='article'], .article, .WSJTheme--story, .story-item",
       "fields": {
         "headline": {
@@ -50,6 +54,7 @@
       }
     },
     "markets": {
+      "personalDataType": "financial_interests",
       "container": ".market-data, .quote, .WSJTheme--market-data",
       "fields": {
         "symbol": {
@@ -69,17 +74,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "news_articles",
-      "description": "Wall Street Journal articles and financial news",
-      "personalDataType": "news_consumption"
-    },
-    {
-      "name": "market_data",
-      "description": "Financial market data and stock information viewed",
-      "personalDataType": "financial_interests"
-    }
-  ]
+  }
 }

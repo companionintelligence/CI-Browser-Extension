@@ -2,13 +2,18 @@
   "domain": "robinhood.com",
   "name": "Robinhood Data Scraper",
   "description": "Scrapes Robinhood trading activity, portfolio, and investment data",
+  "matchPatterns": [
+    "*://*.robinhood.com/*"
+  ],
   "targetUrl": [
     "https://www.robinhood.com/account/*",
     "https://www.robinhood.com/portfolio/*",
     "https://www.robinhood.com/orders/*"
   ],
+  "sensitive": true,
   "dataSelectors": {
     "portfolio": {
+      "personalDataType": "financial_data",
       "container": "[data-testid='portfolio-item'], .portfolio-item, .holding",
       "fields": {
         "symbol": {
@@ -44,6 +49,7 @@
       }
     },
     "orders": {
+      "personalDataType": "financial_data",
       "container": "[data-testid='order'], .order, .transaction",
       "fields": {
         "symbol": {
@@ -79,6 +85,7 @@
       }
     },
     "watchlist": {
+      "personalDataType": "financial_interests",
       "container": "[data-testid='watchlist-item'], .watchlist-item, .watched-stock",
       "fields": {
         "symbol": {
@@ -103,22 +110,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "investment_portfolio",
-      "description": "Stock holdings and investment positions",
-      "personalDataType": "financial_data"
-    },
-    {
-      "name": "trading_activity",
-      "description": "Buy/sell orders and trading history",
-      "personalDataType": "financial_data"
-    },
-    {
-      "name": "investment_interests",
-      "description": "Watchlist and stocks of interest",
-      "personalDataType": "financial_interests"
-    }
-  ]
+  }
 }

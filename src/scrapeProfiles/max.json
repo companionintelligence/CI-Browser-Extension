@@ -2,6 +2,9 @@
   "domain": "max.com",
   "name": "Max (HBO) Data Scraper",
   "description": "Scrapes Max (HBO) watchlist, viewing history, and profile data",
+  "matchPatterns": [
+    "*://*.max.com/*"
+  ],
   "targetUrl": [
     "https://www.max.com/watchlist*",
     "https://www.max.com/profile*",
@@ -10,6 +13,7 @@
   ],
   "dataSelectors": {
     "watchlist": {
+      "personalDataType": "entertainment_preferences",
       "container": "[data-testid='watchlist-item'], .watchlist-item, .content-tile, .title-card",
       "fields": {
         "title": {
@@ -42,6 +46,7 @@
       }
     },
     "viewingHistory": {
+      "personalDataType": "entertainment_preferences",
       "container": "[data-testid='continue-watching'], .continue-watching-item, .history-item",
       "fields": {
         "title": {
@@ -68,6 +73,7 @@
       }
     },
     "recommendations": {
+      "personalDataType": "entertainment_preferences",
       "container": "[data-testid='recommendation'], .recommendation-item, .content-row .content-tile",
       "fields": {
         "title": {
@@ -88,22 +94,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "watchlist",
-      "description": "Max watchlist items saved by user",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "viewing_history",
-      "description": "Max viewing history with watch progress",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "recommendations",
-      "description": "Max personalized recommendations",
-      "personalDataType": "entertainment_preferences"
-    }
-  ]
+  }
 }
