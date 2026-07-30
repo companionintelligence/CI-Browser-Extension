@@ -10,7 +10,9 @@ the formal policy.
 Two rules govern everything below:
 
 1. **Your ignore list always wins.** Any site or page you add under *Ignored
-   Pages and Sites* is never captured, by any mechanism.
+   Pages and Sites* is never captured, by any mechanism. The rules are applied
+   at the upload transport, so every capture path — visits, highlights, scrapes,
+   bookmarks, downloads — is covered by construction.
 2. **Nothing is captured before you sign in.** Capture requires a valid
    Companion session and a configured Memory server.
 
@@ -24,7 +26,7 @@ popup.
 | Source | Default | What is captured | Lands in |
 |---|---|---|---|
 | **History** | On | URL, page title, visit time, time spent, scroll depth, meta description | `browser_activity` |
-| **Bookmarks** | Off | URL, title, folder, date added | `content` (`bookmark`) |
+| **Bookmarks** | Off | URL, title, date added | `content` (`bookmark`) |
 | **Downloads** | Off | URL, filename, size, state, start time | `browser_activity` |
 | **Highlights** | On | The text you select, plus the page it came from | `content` (`highlight`) |
 
@@ -72,7 +74,7 @@ what makes it searchable and useful to your assistant later.
 |---|---|---|
 | **Streaming** | Netflix, Hulu, Disney+, Max, Paramount+, Prime Video | `entertainment_preferences` — viewing history, watchlist, recommendations |
 | **Accounts** | Disney+, Hulu | `account_data` — profile names, account info |
-| **News & reading** | CNN, WSJ, Slashdot | `news_consumption`, `browsing_history` — articles read |
+| **News & reading** | CNN, WSJ, Slashdot | `news_consumption`, `browsing_history` — articles read. WSJ's markets section also files as `financial_interests` |
 | **Work** | GitHub | `professional_activity` — repos, issues, pull requests, commits |
 | **Social** | Quora | `social_activity`, `social_connections` — questions, answers, follows |
 | **Travel** | Airbnb | `travel_history`, `travel_preferences`, `business_activity` — trips, wishlist, hosting |
@@ -86,7 +88,14 @@ accounts** in the popup. The check happens *before* reading the page — the
 extension does not read your brokerage data and then discard it, it does not read
 it at all.
 
-Today that is Robinhood only. Any future profile touching balances, holdings,
+**The gate is about *account* data, not the word "financial".** Robinhood is the
+only gated profile: it reads your holdings and order history. WSJ's markets
+section also produces `financial_interests`, but that is the publicly-listed
+market data on a news page — the same class of thing as any other article you
+read — so it is not gated. Nothing reads a financial *account* of yours without
+the opt-in.
+
+Any future profile touching balances, holdings,
 health records, or private messages will be gated the same way.
 
 ### What we plan to add, and why

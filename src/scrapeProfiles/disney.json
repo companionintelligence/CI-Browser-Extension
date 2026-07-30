@@ -124,32 +124,6 @@
           "type": "attribute",
           "attribute": "src",
           "transform": "absoluteUrl"
-        },
-        "isKidsProfile": {
-          "selector": ".kids-profile, [data-testid='kids-profile']",
-          "type": "text",
-          "transform": "trim"
-        }
-      }
-    },
-    "accountInfo": {
-      "personalDataType": "account_data",
-      "container": ".account-details, .subscription-info, [data-testid='account-info']",
-      "fields": {
-        "email": {
-          "selector": ".email, .account-email, [data-testid='email']",
-          "type": "text",
-          "transform": "trim"
-        },
-        "subscriptionType": {
-          "selector": ".subscription-type, .plan-type, [data-testid='subscription']",
-          "type": "text",
-          "transform": "trim"
-        },
-        "billingDate": {
-          "selector": ".billing-date, .next-payment, [data-testid='billing-date']",
-          "type": "text",
-          "transform": "trim"
         }
       }
     }

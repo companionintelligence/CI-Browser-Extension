@@ -56,3 +56,15 @@ magick -loop 0 -dispose previous \
 echo "== sizes =="
 ls -la out/*.gif out/*.png | awk '{print $5, $9}'
 echo "done"
+
+echo "== publish to the committed asset dirs =="
+# out/ is a gitignored intermediate; these are the paths STORE-LISTING.md and
+# the README reference, so copying was previously a manual step people forgot.
+mkdir -p shared chrome safari
+cp out/hero.png            shared/hero.png
+cp out/demo.gif            shared/demo.gif
+for f in out/screenshot-*.png; do cp "$f" "shared/$(basename "$f")"; done
+cp out/promo-small.png     chrome/promo-tile-440x280.png
+cp out/promo-marquee.png   chrome/promo-marquee-1400x560.png
+cp out/app-icon-1024.png   safari/app-icon-1024.png
+echo "published $(ls shared/screenshot-*.png | wc -l | tr -d ' ') screenshots + hero, gif, 2 promos, app icon"

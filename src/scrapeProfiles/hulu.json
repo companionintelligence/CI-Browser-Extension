@@ -12,32 +12,6 @@
     "https://www.hulu.com/profiles*"
   ],
   "dataSelectors": {
-    "accountInfo": {
-      "personalDataType": "account_data",
-      "container": ".account-info, .profile-info, .user-details, .account-section",
-      "fields": {
-        "email": {
-          "selector": ".email, .account-email, input[type='email']",
-          "type": "text",
-          "transform": "trim"
-        },
-        "planType": {
-          "selector": ".plan-type, .subscription-plan, .current-plan",
-          "type": "text",
-          "transform": "trim"
-        },
-        "billingDate": {
-          "selector": ".billing-date, .next-billing, .renewal-date",
-          "type": "text",
-          "transform": "trim"
-        },
-        "accountSince": {
-          "selector": ".account-since, .member-since, .created-date",
-          "type": "text",
-          "transform": "trim"
-        }
-      }
-    },
     "watchHistory": {
       "personalDataType": "entertainment_preferences",
       "container": ".watch-history-item, .history-item, .viewing-activity-row",
@@ -117,11 +91,6 @@
           "type": "attribute",
           "attribute": "src",
           "transform": "absoluteUrl"
-        },
-        "isKidsProfile": {
-          "selector": ".kids-profile, .children-profile, .parental-controls",
-          "type": "text",
-          "transform": "trim"
         }
       }
     }
