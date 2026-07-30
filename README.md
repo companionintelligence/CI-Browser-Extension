@@ -43,8 +43,9 @@ third-party trackers.
   standard CI-Portal OIDC (Authorization-Code + PKCE) login that yields a
   short-lived portal `id_token`.
 
-See [`PRIVACY.md`](PRIVACY.md) for the full data-handling disclosure and
-[`CHANGELOG.md`](CHANGELOG.md) for release notes.
+See [`CAPTURE.md`](CAPTURE.md) for exactly what is captured (and what never is),
+the site-profile list and roadmap, [`PRIVACY.md`](PRIVACY.md) for the full
+data-handling disclosure, and [`CHANGELOG.md`](CHANGELOG.md) for release notes.
 
 ## 📸 Screenshots
 
