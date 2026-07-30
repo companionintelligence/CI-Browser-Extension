@@ -76,13 +76,13 @@ function header() {
     txt(54, 45, "Intelligence", { size: 13, fill: T.teal, weight: 700 });
 }
 
-function serverSection(y) {
-  let s = txt(16, y + 14, "CI Server URL", { size: 16, fill: T.teal, weight: 600 });
-  s += txt(16, y + 34, "Enter the domain of your Companion Memory App (found in your hub)", { size: 12, fill: T.muted });
-  s += rrect(16, y + 46, 230, 40, 8, "#0b1220", { stroke: T.border, sw: 1 });
-  s += txt(28, y + 71, "my-ci.companionintelligence.com", { size: 12.5, fill: T.text, family: T.mono });
-  s += button(254, y + 46, W - 16 - 254, 40, "Save", { size: 14 });
-  return { svg: s, y: y + 104 };
+// Signed-out headline. The popup leads with the product name and promise —
+// there is no server field here any more: sign-in comes first and the Memory
+// server is discovered from the Portal afterwards.
+function signedOutIntro(y) {
+  let s = txt(W / 2, y + 14, "Companion Intelligence", { size: 17, fill: T.teal, weight: 600, anchor: "middle" });
+  s += txt(W / 2, y + 36, "Sync your browsing to your Companion memory.", { size: 12.5, fill: T.muted, anchor: "middle" });
+  return { svg: s, y: y + 52 };
 }
 
 function loginBar(y, loggedIn) {
@@ -93,9 +93,15 @@ function loginBar(y, loggedIn) {
     s += txt(48, y + 25, "Authorized with Companion Intelligence", { size: 13, fill: T.teal, weight: 500 });
     return { svg: s, y: y + 52 };
   }
-  // Primary CTA — the OIDC "Authorize with Companion" button (--gradient-brand).
-  const s = button(16, y, W - 32, 40, "Authorize with Companion", { gradient: true, size: 14 });
+  // Primary CTA — the OIDC sign-in button (--gradient-brand).
+  const s = button(16, y, W - 32, 40, "Sign in with Companion account", { gradient: true, size: 13.5 });
   return { svg: s, y: y + 52 };
+}
+
+// The unobtrusive Advanced disclosure at the foot of the popup — where the
+// Portal and Memory server URLs live now that neither is part of the main flow.
+function advancedRow(y) {
+  return { svg: txt(W / 2, y + 14, "Advanced", { size: 12.5, fill: T.muted, anchor: "middle" }), y: y + 26 };
 }
 
 function autoSyncCard(y, checked) {
@@ -136,6 +142,16 @@ function togglesRow(y) {
     cx += 110;
   }
   return { svg: s, y: y + 60 };
+}
+
+// The opt-in gate on sensitive scrape profiles (brokerage holdings and order
+// history). Drawn UNCHECKED on purpose: off by default is the product promise,
+// and a store screenshot showing it enabled would misrepresent the default.
+function sensitiveRow(y) {
+  let s = checkbox(28, y, false);
+  s += txt(54, y + 13, "Include financial accounts", { size: 12.5, fill: T.text, weight: 500 });
+  s += txt(54, y + 31, "Off by default", { size: 11, fill: T.muted });
+  return { svg: s, y: y + 46 };
 }
 
 function ignoredButton(y, sites, pages) {
@@ -201,12 +217,12 @@ export function renderPopup(state) {
   let y = 60;
   let s = header();
   if (state === "loggedOut") {
-    const a = serverSection(y); s += a.svg; y = a.y;
-    const b = loginBar(y, false); s += b.svg; y = b.y + 8;
+    const i = signedOutIntro(y); s += i.svg; y = i.y;
+    const b = loginBar(y, false); s += b.svg; y = b.y;
+    const ad = advancedRow(y); s += ad.svg; y = ad.y + 8;
     return wrap(y, s);
   }
   // logged-in family
-  const a = serverSection(y); s += a.svg; y = a.y;
   const b = loginBar(y, true); s += b.svg; y = b.y + 6;
   const h = sectionHeader(y, "Browser History Sync"); s += h.svg; y = h.y;
   const ac = autoSyncCard(y, true); s += ac.svg; y = ac.y;
@@ -224,7 +240,9 @@ export function renderPopup(state) {
     s += button(16, y, W - 32, 44, "Start History Sync", { size: 14 }); y += 52;
   }
   const tg = togglesRow(y); s += tg.svg; y = tg.y;
-  const ib = ignoredButton(y, 3, 5); s += ib.svg; y = ib.y + 8;
+  const sr = sensitiveRow(y); s += sr.svg; y = sr.y;
+  const ib = ignoredButton(y, 3, 5); s += ib.svg; y = ib.y + 4;
+  const ad = advancedRow(y); s += ad.svg; y = ad.y + 8;
   return wrap(y, s);
 }
 

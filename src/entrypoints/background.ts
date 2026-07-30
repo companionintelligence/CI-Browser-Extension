@@ -14,6 +14,7 @@ import {
   getSyncedItems,
 } from "@/lib/syncedItems";
 import { drainCaptureQueue, enqueueCaptures } from "@/lib/captureQueue";
+import { dropIgnoredCaptures } from "@/lib/captureFilter";
 import { isValidBookmarkEvent } from "@/lib/captureValidation";
 import { buildHighlightActivity } from "@/lib/highlight";
 import {
@@ -62,9 +63,7 @@ async function runAutoSync() {
       const token = await resolveServerToken();
 
       if (token) {
-        // Retry anything a live capture couldn't deliver before syncing, so a
-        // reconnect flushes the backlog first and both land in one finishIngest.
-        await retryQueuedCaptures();
+        // triggerManualSync drains the retry queue itself before syncing.
         await triggerManualSync({
           timeRange: AUTO_SYNC_ALARM_TIME_RANGE,
         });
@@ -236,6 +235,11 @@ async function postBrowserCaptures(
     return;
   }
 
+  const allowed = applyIgnoreList(activities);
+  if (allowed.length === 0) {
+    return;
+  }
+
   const token = await resolveServerToken();
   if (!token) {
     throw new Error("No access token available for capture upload");
@@ -243,12 +247,27 @@ async function postBrowserCaptures(
 
   const observedAt = opts?.observedAt;
   const batch = observedAt
-    ? activities.map((a) =>
+    ? allowed.map((a) =>
         a.observed_at ? a : { ...a, observed_at: observedAt },
       )
-    : activities;
+    : allowed;
 
   await sendBrowserCaptures(serverURL, token, batch);
+}
+
+// Apply the ignore list to an outgoing batch. See @/lib/captureFilter for why
+// this is enforced at the transport rather than in each capture path.
+function applyIgnoreList(activities: BrowserActivity[]): BrowserActivity[] {
+  const { siteBlacklist = [], pageBlacklist = [] } = store.getState().ciState;
+  const allowed = dropIgnoredCaptures(activities, siteBlacklist, pageBlacklist);
+
+  if (allowed.length !== activities.length) {
+    console.log(
+      `[CI] Skipped ${activities.length - allowed.length} capture(s) on ignored sites/pages`,
+    );
+  }
+
+  return allowed;
 }
 
 /**
@@ -379,6 +398,14 @@ const recordHit = async function (e: any) {
   // Snapshot state before the dispatch below so state.lastUrl still holds the
   // previously recorded page
   const state = store.getState().ciState;
+
+  // The History switch governs live capture too, not just the backfill. It
+  // previously gated only syncHistory, so turning History off left this
+  // listener recording every page the user visited — the opposite of what the
+  // popup and the docs say the switch does.
+  if (!state.historySyncEnabled) {
+    return;
+  }
 
   // Read the tab the navigation actually happened in. Querying for the *active*
   // tab instead attributed a background-tab navigation to whatever the user
@@ -846,6 +873,14 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
 
     return;
   }
+
+  // Flush anything a live capture failed to deliver, BEFORE the sync-type
+  // checks below. Highlights and scrapes queue independently of the History /
+  // Bookmarks / Downloads switches, so a user with all three off can still have
+  // a backlog — draining only after that early return would strand it forever.
+  // (This also has to run outside the auto-sync path: auto-sync is off by
+  // default, so draining only there meant most users never retried anything.)
+  await retryQueuedCaptures();
 
   // Check if any sync is enabled
   if (!historySyncEnabled && !bookmarkSyncEnabled && !downloadSyncEnabled) {
