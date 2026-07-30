@@ -27,3 +27,6 @@ web-ext.config.ts
 *.njsproj
 *.sln
 *.sw?
+
+# Jest coverage output (now produced on every CI test run)
+coverage/

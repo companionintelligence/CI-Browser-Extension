@@ -8,9 +8,16 @@ import {
   addSyncHistoryLog,
 } from "@/store/ciStateSlice";
 import { siteRegex, parseUrl, isUrlBlacklisted } from "@/utils.ts";
-import { addSyncedItem, addSyncedItems, isItemSynced } from "@/lib/syncedItems";
+import {
+  addSyncedItem,
+  addSyncedItems,
+  getSyncedItems,
+} from "@/lib/syncedItems";
+import { drainCaptureQueue, enqueueCaptures } from "@/lib/captureQueue";
+import { isValidBookmarkEvent } from "@/lib/captureValidation";
 import { buildHighlightActivity } from "@/lib/highlight";
 import {
+  finishIngest,
   sendBrowserCaptures,
   type BrowserActivity,
 } from "@/services/browserActivity";
@@ -19,13 +26,13 @@ import {
   getIdToken,
   loadTokens,
   signIn,
+  signInSilently,
   signOut,
 } from "@/services/oidcAuth";
 import { portalOidcConfig } from "@/services/portalConfig";
 import { fetchPortalApps, memoryAppsFrom } from "@/services/portalApps";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
-import { database } from "@/indexeddb";
 
 const SLICE_SIZE = 100;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
@@ -55,6 +62,9 @@ async function runAutoSync() {
       const token = await resolveServerToken();
 
       if (token) {
+        // Retry anything a live capture couldn't deliver before syncing, so a
+        // reconnect flushes the backlog first and both land in one finishIngest.
+        await retryQueuedCaptures();
         await triggerManualSync({
           timeRange: AUTO_SYNC_ALARM_TIME_RANGE,
         });
@@ -62,6 +72,22 @@ async function runAutoSync() {
     }
   } catch (error) {
     console.error("Auto-sync error:", error);
+  }
+}
+
+// Re-send live captures whose upload failed. Bounded and self-trimming; see
+// @/lib/captureQueue for the retention policy.
+async function retryQueuedCaptures(): Promise<void> {
+  try {
+    const result = await drainCaptureQueue((activities) =>
+      postBrowserCaptures(activities),
+    );
+
+    if (result.sent > 0) {
+      console.log(`Re-sent ${result.sent} queued capture(s)`);
+    }
+  } catch (error) {
+    console.error("Capture retry failed:", error);
   }
 }
 
@@ -226,6 +252,62 @@ async function postBrowserCaptures(
 }
 
 /**
+ * Upload a live capture, queueing it for retry if the upload fails.
+ *
+ * Live captures — a recorded visit, a saved highlight, a scrape, a bookmark or
+ * download as it happens — are one-shot: unlike the sync engines, nothing
+ * re-derives them later, so a dropped POST is lost data. Every live capture
+ * path goes through here rather than calling postBrowserCaptures directly.
+ */
+async function postLiveCapture(activities: BrowserActivity[]): Promise<void> {
+  try {
+    await postBrowserCaptures(activities);
+    requestIngestFinish();
+  } catch (error) {
+    await enqueueCaptures(activities);
+    throw error;
+  }
+}
+
+/**
+ * Ask CI-Server to index what was just uploaded (see finishIngest for why this
+ * is required at all), debounced so a burst of live captures triggers one sweep
+ * rather than one per record.
+ *
+ * A pending debounce is lost if MV3 suspends the worker first; that only delays
+ * indexing to the next auto-sync tick, which finishes unconditionally.
+ */
+let ingestFinishTimer: ReturnType<typeof setTimeout> | null = null;
+const INGEST_FINISH_DEBOUNCE_MS = 30_000;
+
+function requestIngestFinish(): void {
+  if (ingestFinishTimer) {
+    return;
+  }
+
+  ingestFinishTimer = setTimeout(() => {
+    ingestFinishTimer = null;
+    flushIngestFinish();
+  }, INGEST_FINISH_DEBOUNCE_MS);
+}
+
+// Index immediately — used at the end of a sync run, where the batch is already
+// complete and there is nothing to debounce against.
+async function flushIngestFinish(): Promise<void> {
+  const { serverURL } = store.getState().ciState;
+  if (!serverURL) {
+    return;
+  }
+
+  const token = await resolveServerToken();
+  if (!token) {
+    return;
+  }
+
+  await finishIngest(serverURL, token);
+}
+
+/**
  * Chrome/Firefox history, bookmark, and download times → ISO instant.
  * Returns null when the browser did not provide a usable timestamp so callers
  * can skip the item instead of inventing "now" (which made historical sync
@@ -298,55 +380,83 @@ const recordHit = async function (e: any) {
   // previously recorded page
   const state = store.getState().ciState;
 
-  const tabInfo = await browser.tabs.query({
-    active: true,
-    currentWindow: true,
-  });
-  const active = tabInfo[0];
+  // Read the tab the navigation actually happened in. Querying for the *active*
+  // tab instead attributed a background-tab navigation to whatever the user
+  // happened to be looking at, recording the wrong URL under the wrong page.
+  const navigatedUrl = await resolveNavigatedUrl(e);
 
-  if (!active?.url) {
+  if (!navigatedUrl) {
     return;
   }
 
-  const parsed = parseUrl(active.url);
+  const parsed = parseUrl(navigatedUrl);
   if (!parsed) {
     return;
   }
 
-  store.dispatch(setState({ domain: parsed.hostname, url: active.url }));
+  store.dispatch(setState({ domain: parsed.hostname, url: navigatedUrl }));
 
-  // Check the URL being recorded (active.url) against the blacklist —
-  // `state` was snapshotted before the dispatch above, so state.url still
-  // holds the previous page and must not be used here
+  // Check the URL being recorded against the blacklist — `state` was
+  // snapshotted before the dispatch above, so state.url still holds the
+  // previous page and must not be used here
   const isBlacklisted = isUrlBlacklisted(
-    active.url,
+    navigatedUrl,
     state.siteBlacklist,
     state.pageBlacklist,
   );
 
-  if (!isBlacklisted && state.lastUrl !== active.url) {
-    store.dispatch(setState({ lastUrl: active.url }));
+  if (!isBlacklisted && state.lastUrl !== navigatedUrl) {
+    store.dispatch(setState({ lastUrl: navigatedUrl }));
 
     store.dispatch(saveUserSettings());
 
     const deviceId = await getDeviceId();
     const date = new Date().getTime();
     const newActivity = await convertToBrowserActivity(
-      active.url,
+      navigatedUrl,
       date,
       deviceId,
     );
 
     try {
-      await postBrowserCaptures([newActivity]);
+      await postLiveCapture([newActivity]);
 
-      const historyId = `${active.url}_${date}`;
+      const historyId = `${navigatedUrl}_${date}`;
       await addSyncedItem(SYNCED_HISTORY_KEY, historyId);
     } catch (err) {
       console.error("Error posting event:", err);
     }
   }
 };
+
+/**
+ * The URL of the tab a webNavigation event fired in. Prefers the event's own
+ * url/tabId; falls back to the active tab only when the event carries neither,
+ * which is the pre-existing behaviour for synthetic callers.
+ */
+async function resolveNavigatedUrl(e: any): Promise<string | null> {
+  if (typeof e?.url === "string" && e.url) {
+    return e.url;
+  }
+
+  try {
+    if (typeof e?.tabId === "number" && e.tabId >= 0) {
+      const tab = await browser.tabs.get(e.tabId);
+
+      return tab?.url ?? null;
+    }
+  } catch {
+    // Tab closed between the navigation and this read — nothing to record.
+    return null;
+  }
+
+  const tabInfo = await browser.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+
+  return tabInfo[0]?.url ?? null;
+}
 
 async function getDeviceId(): Promise<string> {
   const storage = await browser.storage.local.get("deviceId");
@@ -518,8 +628,6 @@ async function createDeviceOnServer(): Promise<string> {
       }),
     );
 
-    deviceSetupInProgress = false;
-
     return deviceId;
   } catch (error: any) {
     const errorMessage =
@@ -539,6 +647,10 @@ async function setupDevice(): Promise<string> {
 
   deviceSetupInProgress = true;
 
+  // The latch MUST clear on every exit. When it only cleared on the create and
+  // error paths, finding an existing device left it stuck true for the life of
+  // the service worker, and every later setupDevice() — the SETUP_DEVICE
+  // message, the auth-check provisioning — threw "already in progress".
   try {
     const token = await resolveServerToken();
 
@@ -556,8 +668,9 @@ async function setupDevice(): Promise<string> {
   } catch (error: any) {
     const errorMessage =
       error?.message || error?.toString() || "Unknown error occurred";
-    deviceSetupInProgress = false;
     throw new Error(errorMessage);
+  } finally {
+    deviceSetupInProgress = false;
   }
 }
 
@@ -604,24 +717,7 @@ async function convertToBrowserActivity(
   url: string,
   visitTime: number,
   deviceId: string,
-): Promise<{
-  time: string;
-  device_id: string;
-  url: string;
-  title?: string;
-  action_type:
-    | "visit"
-    | "reload"
-    | "bookmark"
-    | "search"
-    | "download"
-    | "form_submit";
-  properties?: Record<string, any>;
-  duration_seconds?: number;
-  scroll_depth_percent?: number;
-  is_incognito?: boolean;
-  contains_sensitive?: boolean;
-}> {
+): Promise<BrowserActivity> {
   // Skip invalid URLs
   if (!isValidUrl(url)) {
     throw new Error(`Invalid URL: ${url}`);
@@ -773,7 +869,6 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
   );
 
   const successMessage = "Sync completed successfully";
-  const hasErrors = false;
 
   try {
     // Sync history if enabled
@@ -797,13 +892,16 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
       await syncDownloads();
     }
 
+    // Everything written above went to the bulk lanes, which do not index as
+    // they write — without this the sync is invisible to search. See
+    // finishIngest.
+    await flushIngestFinish();
+
     // Final success message
     store.dispatch(
       setState({
         historySyncInProgress: false,
-        historySyncStatus: hasErrors
-          ? `${successMessage} (with some errors)`
-          : successMessage,
+        historySyncStatus: successMessage,
         lastHistorySync: new Date().toISOString(),
       }),
     );
@@ -1077,7 +1175,11 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     );
     const historySyncReEnabledAt = syncReEnabledData.historySyncReEnabledAt;
 
-    // Filter out already synced history entries and invalid URLs
+    // Filter out already synced history entries and invalid URLs.
+    // The synced-ID set is read ONCE here: it holds up to 20k ids, and the
+    // previous per-item isItemSynced re-read and re-Set-ified the whole array
+    // for every visit — thousands of full storage reads on a large sync.
+    const syncedHistoryIds = await getSyncedItems(SYNCED_HISTORY_KEY);
     const unsyncedResults = [];
     for (const result of hydratedResults) {
       // Skip invalid URLs
@@ -1091,11 +1193,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
       } else {
         // Normal sync - check cache
         const historyId = `${result.url}_${result.visitTime}`;
-        const isAlreadySynced = await isItemSynced(
-          SYNCED_HISTORY_KEY,
-          historyId,
-        );
-        if (!isAlreadySynced) {
+        if (!syncedHistoryIds.has(historyId)) {
           unsyncedResults.push(result);
         }
       }
@@ -1359,24 +1457,7 @@ async function triggerBackgroundSync() {
 async function createDownloadEvent(
   download: any,
   eventType: "create" | "update" | "sync" = "sync",
-): Promise<{
-  time: string;
-  device_id: string;
-  url: string;
-  title?: string;
-  action_type:
-    | "visit"
-    | "reload"
-    | "bookmark"
-    | "search"
-    | "download"
-    | "form_submit";
-  properties?: Record<string, any>;
-  duration_seconds?: number;
-  scroll_depth_percent?: number;
-  is_incognito?: boolean;
-  contains_sensitive?: boolean;
-}> {
+): Promise<BrowserActivity> {
   const state = store.getState().ciState;
   const { deviceId } = state;
 
@@ -1422,7 +1503,9 @@ async function syncDownloadsToServer() {
   try {
     const downloads = await browser.downloads.search({});
 
-    // Filter out already synced downloads and invalid URLs
+    // Filter out already synced downloads and invalid URLs (one storage read
+    // for the whole run — see the note in syncHistory)
+    const syncedDownloadKeys = await getSyncedItems(SYNCED_DOWNLOADS_KEY);
     const unsyncedDownloads = [];
     for (const download of downloads) {
       // Skip downloads with invalid URLs
@@ -1430,11 +1513,7 @@ async function syncDownloadsToServer() {
         continue;
       }
 
-      const isAlreadySynced = await isItemSynced(
-        SYNCED_DOWNLOADS_KEY,
-        download.id.toString(),
-      );
-      if (!isAlreadySynced) {
+      if (!syncedDownloadKeys.has(download.id.toString())) {
         unsyncedDownloads.push(download);
       }
     }
@@ -1448,23 +1527,35 @@ async function syncDownloadsToServer() {
     console.log(`Syncing ${unsyncedDownloads.length} new downloads`);
     const syncObservedAt = new Date().toISOString();
 
-    // Process unsynced downloads in batches
+    // Process unsynced downloads in batches. The whole slice goes up in ONE
+    // request — the bulk lane takes up to 10k records, and posting one at a
+    // time made a 300-download backfill 300 round trips.
     for (let i = 0; i < unsyncedDownloads.length; i += SLICE_SIZE) {
       const slice = unsyncedDownloads.slice(i, i + SLICE_SIZE);
+      const events: BrowserActivity[] = [];
       const syncedDownloadIds: string[] = [];
 
       for (const download of slice) {
         try {
-          const event = await createDownloadEvent(download, "sync");
-          await postBrowserCaptures([event], { observedAt: syncObservedAt });
+          events.push(await createDownloadEvent(download, "sync"));
           syncedDownloadIds.push(download.id.toString());
         } catch (eventError: unknown) {
-          console.error("Error syncing download:", eventError, download);
-          // Skip missing timestamps / upload failures; do not invent sync-time.
+          console.error("Error building download event:", eventError, download);
+          // Skip missing timestamps; do not invent sync-time.
         }
       }
 
-      await addSyncedItems(SYNCED_DOWNLOADS_KEY, syncedDownloadIds);
+      if (events.length === 0) {
+        continue;
+      }
+
+      try {
+        await postBrowserCaptures(events, { observedAt: syncObservedAt });
+        // Mark synced only after the batch lands, so a failure retries next run
+        await addSyncedItems(SYNCED_DOWNLOADS_KEY, syncedDownloadIds);
+      } catch (uploadError: unknown) {
+        console.error("Error uploading download batch:", uploadError);
+      }
     }
 
     // Update last sync time
@@ -1485,7 +1576,7 @@ async function handleDownloadCreated(download: any) {
 
   try {
     const downloadEvent = await createDownloadEvent(download, "create");
-    await postBrowserCaptures([downloadEvent]);
+    await postLiveCapture([downloadEvent]);
   } catch (error) {
     console.error("Error syncing created download:", error);
   }
@@ -1533,7 +1624,7 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
   }
 
   try {
-    await postBrowserCaptures(activities);
+    await postLiveCapture(activities);
   } catch (error) {
     console.error("Error uploading scraped data:", error);
   }
@@ -1565,10 +1656,12 @@ async function handleSaveHighlight(
   );
 
   try {
-    await postBrowserCaptures([activity]);
+    await postLiveCapture([activity]);
     console.log("Saved highlight from", url);
   } catch (error) {
-    console.error("Error uploading highlight:", error);
+    // Already queued for retry by postLiveCapture — a highlight the user
+    // deliberately saved is the last thing that should be dropped on a blip.
+    console.error("Error uploading highlight (queued for retry):", error);
   }
 }
 
@@ -1602,24 +1695,7 @@ async function getAllBookmarks(): Promise<any[]> {
 async function createBookmarkEvent(
   bookmark: any,
   eventType: "create" | "update" | "sync" = "sync",
-): Promise<{
-  time: string;
-  device_id: string;
-  url: string;
-  title?: string;
-  action_type:
-    | "visit"
-    | "reload"
-    | "bookmark"
-    | "search"
-    | "download"
-    | "form_submit";
-  properties?: Record<string, any>;
-  duration_seconds?: number;
-  scroll_depth_percent?: number;
-  is_incognito?: boolean;
-  contains_sensitive?: boolean;
-}> {
+): Promise<BrowserActivity> {
   const state = store.getState().ciState;
   const { deviceId } = state;
 
@@ -1680,7 +1756,9 @@ async function syncBookmarksToServer() {
   try {
     const allBookmarks = await getAllBookmarks();
 
-    // Filter out already synced bookmarks and invalid URLs
+    // Filter out already synced bookmarks and invalid URLs (one storage read
+    // for the whole run — see the note in syncHistory)
+    const syncedBookmarkKeys = await getSyncedItems(SYNCED_BOOKMARKS_KEY);
     const unsyncedBookmarks = [];
     for (const bookmark of allBookmarks) {
       // Skip bookmarks with invalid URLs
@@ -1688,11 +1766,7 @@ async function syncBookmarksToServer() {
         continue;
       }
 
-      const isAlreadySynced = await isItemSynced(
-        SYNCED_BOOKMARKS_KEY,
-        bookmark.id,
-      );
-      if (!isAlreadySynced) {
+      if (!syncedBookmarkKeys.has(bookmark.id)) {
         unsyncedBookmarks.push(bookmark);
       }
     }
@@ -1710,12 +1784,28 @@ async function syncBookmarksToServer() {
     for (let i = 0; i < unsyncedBookmarks.length; i += SLICE_SIZE) {
       const slice = unsyncedBookmarks.slice(i, i + SLICE_SIZE);
 
-      // Create bookmark events with error handling
-      const bookmarkEvents = [];
+      // Build the batch, keeping each event paired with the id to mark synced.
+      // Pairing here is what fixes the old index bug: the previous code walked
+      // the filtered event list with `slice[j]`, but `slice` still contained
+      // the bookmarks that had been skipped, so the two lists drifted apart and
+      // a failed upload could mark an unrelated bookmark as synced.
+      const batch: Array<{ event: BrowserActivity; bookmarkId: string }> = [];
       for (const bookmark of slice) {
         try {
           const event = await createBookmarkEvent(bookmark, "sync");
-          bookmarkEvents.push(event);
+
+          if (!isValidBookmarkEvent(event)) {
+            continue;
+          }
+
+          const bookmarkId =
+            typeof event.properties?.bookmark_id === "string"
+              ? event.properties.bookmark_id
+              : bookmark?.id;
+
+          if (bookmarkId) {
+            batch.push({ event, bookmarkId });
+          }
         } catch (error) {
           console.error("Error creating bookmark event:", error);
           console.error("Problematic bookmark:", bookmark);
@@ -1724,114 +1814,34 @@ async function syncBookmarksToServer() {
         }
       }
 
-      if (bookmarkEvents.length === 0) {
+      if (batch.length === 0) {
         console.log("No valid bookmark events to send for this batch");
         continue;
       }
 
-      // Additional validation: ensure all events have required fields
-      const validEvents = bookmarkEvents.filter((event) => {
-        const isValid =
-          event.time && event.device_id && event.url && event.action_type;
-        if (!isValid) {
-          console.warn("Filtering out invalid bookmark event:", event);
-        }
-
-        return isValid;
-      });
-
-      if (validEvents.length === 0) {
-        console.log("No valid bookmark events after filtering");
-        continue;
-      }
-
       try {
-        console.log(
-          "Sending bookmark events:",
-          JSON.stringify(validEvents, null, 2),
+        await postBrowserCaptures(
+          batch.map((entry) => entry.event),
+          { observedAt: syncObservedAt },
         );
 
-        // Additional validation: ensure all required fields are present
-        for (const event of validEvents) {
-          if (
-            !event.time ||
-            !event.device_id ||
-            !event.url ||
-            !event.action_type
-          ) {
-            console.error("Invalid event missing required fields:", event);
-            throw new Error("Invalid event data");
-          }
+        // Mark synced only after the batch lands, so a failure retries next run
+        await addSyncedItems(
+          SYNCED_BOOKMARKS_KEY,
+          batch.map((entry) => entry.bookmarkId),
+        );
+      } catch (batchError: any) {
+        console.error("Error uploading bookmark batch:", batchError);
+        console.error("Server response:", batchError?.response?.data);
 
-          // Ensure time is in ISO format
-          if (!event.time.includes("T") || !event.time.includes("Z")) {
-            console.error("Invalid time format:", event.time);
-            throw new Error("Invalid time format");
-          }
-
-          // Ensure device_id is a valid UUID format
-          const uuidRegex =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-          if (!uuidRegex.test(event.device_id)) {
-            console.error("Invalid device_id format:", event.device_id);
-            throw new Error("Invalid device_id format");
-          }
+        // Log detailed validation errors if available
+        if (batchError?.response?.data?.errors) {
+          console.error(
+            "Server validation errors:",
+            JSON.stringify(batchError.response.data.errors, null, 2),
+          );
         }
 
-        // Validate that we have valid bookmark events
-        if (validEvents.length === 0) {
-          console.log("No bookmark events to send");
-          continue;
-        }
-
-        // Send each event individually (server expects single object, not array)
-        const syncedBookmarkIds: string[] = [];
-        for (let j = 0; j < validEvents.length; j++) {
-          const event = validEvents[j];
-          const bookmark = slice[j];
-
-          try {
-            // Log the data being sent for debugging
-            console.log(
-              "Sending bookmark event:",
-              JSON.stringify(event, null, 2),
-            );
-
-            await postBrowserCaptures([event], { observedAt: syncObservedAt });
-            console.log("Successfully sent bookmark event:", event.url);
-
-            // Mark this specific bookmark as synced only after successful upload
-            const bookmarkId =
-              typeof event.properties?.bookmark_id === "string"
-                ? event.properties.bookmark_id
-                : bookmark?.id;
-            if (bookmarkId) {
-              syncedBookmarkIds.push(bookmarkId);
-            }
-          } catch (eventError: any) {
-            console.error(
-              "Error sending individual bookmark event:",
-              eventError,
-            );
-            console.error("Failed event:", event);
-            console.error("Server response:", eventError.response?.data);
-
-            // Log detailed validation errors if available
-            if (eventError.response?.data?.errors) {
-              console.error(
-                "Server validation errors:",
-                JSON.stringify(eventError.response.data.errors, null, 2),
-              );
-            }
-
-            // Continue with other events even if one fails
-            // Don't mark as synced if upload failed
-          }
-        }
-
-        await addSyncedItems(SYNCED_BOOKMARKS_KEY, syncedBookmarkIds);
-      } catch (batchError) {
-        console.error("Error processing bookmark batch:", batchError);
         // Continue with next batch even if this one fails
       }
     }
@@ -1852,7 +1862,7 @@ async function handleBookmarkCreated(id: string, bookmark: any) {
 
   try {
     const bookmarkEvent = await createBookmarkEvent(bookmark, "create");
-    await postBrowserCaptures([bookmarkEvent]);
+    await postLiveCapture([bookmarkEvent]);
   } catch (error) {
     console.error("Error syncing created bookmark:", error);
   }
@@ -1872,7 +1882,7 @@ async function handleBookmarkChanged(id: string) {
     }
 
     const bookmarkEvent = await createBookmarkEvent(bookmark, "update");
-    await postBrowserCaptures([bookmarkEvent]);
+    await postLiveCapture([bookmarkEvent]);
   } catch (error) {
     console.error("Error syncing updated bookmark:", error);
   }
@@ -1880,17 +1890,6 @@ async function handleBookmarkChanged(id: string) {
 
 export default defineBackground({
   main() {
-    const initServices = async () => {
-      try {
-        await database.init();
-        // Location tracking is now handled by content script
-      } catch (error) {
-        console.error("Failed to initialize services:", error);
-      }
-    };
-
-    initServices();
-
     const wrapStore = createWrapStore();
     wrapStore(store);
     const storageDefaults = {
@@ -1918,7 +1917,21 @@ export default defineBackground({
         // OAuth access_token is rejected by CI-Server's JWKS verify). getIdToken
         // returns null when there is no usable session or once the id_token has
         // expired (the refresh grant does not reissue one — the user re-signs in).
-        const idToken = await getIdToken(oidcConfig());
+        let idToken = await getIdToken(oidcConfig());
+
+        // An expired id_token does not necessarily mean the user must sign in
+        // again: the refresh grant just doesn't reissue one. If the portal
+        // session is still good, a non-interactive auth-code round trip mints a
+        // fresh id_token silently. Only when that fails is re-auth genuinely
+        // required, and the popup drops to the sign-in view.
+        if (!idToken && (await loadTokens())) {
+          const renewed = await signInSilently(oidcConfig());
+
+          if (renewed?.id_token) {
+            console.log("[CI] Renewed the portal session silently");
+            idToken = renewed.id_token;
+          }
+        }
 
         // Mirror a portal id_token into Redux so the capture guards + popup
         // reflect the session. For a portal-era user (stored oidcTokens exist)
@@ -2049,9 +2062,21 @@ export default defineBackground({
       }
     });
 
-    // Check auth once settings (incl. serverURL) have been loaded
+    // Check auth once settings (incl. serverURL) have been loaded, and only
+    // then wire the live bookmark/download listeners.
+    //
+    // Registration MUST wait for the settings load. Both setup functions read
+    // the sync toggles out of Redux, and until loadUserSettings resolves those
+    // are still their initial `false` — so running them eagerly took the
+    // removeListener branch, and the only thing that re-registered was
+    // storage.onChanged, which fires on a *change* and not on a rewrite of the
+    // same value. The result was that after every MV3 service-worker
+    // suspension, live bookmark and download capture stayed off until the user
+    // manually toggled the setting off and on again.
     store.dispatch(loadUserSettings()).then(() => {
       checkAuthenticationState();
+      setupBookmarkListeners();
+      setupDownloadListeners();
     });
 
     const existingKeys = Object.keys(store.getState().ciState);
@@ -2090,27 +2115,37 @@ export default defineBackground({
       }
     });
 
-    browser.webNavigation.onCompleted.addListener((e) => {
+    // Both navigation events get the same http(s)-only gate. onHistoryStateUpdated
+    // was previously unfiltered, so SPA route changes on non-web schemes reached
+    // recordHit while ordinary loads on those schemes did not.
+    const onNavigation = (e: { url: string }) => {
       if (siteRegex.test(e.url)) {
         recordHit(e);
       }
-    });
-    browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
+    };
+
+    browser.webNavigation.onCompleted.addListener(onNavigation);
+    browser.webNavigation.onHistoryStateUpdated.addListener(onNavigation);
 
     browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log("Background received message:", message);
 
       try {
         if (message && message.action === "SETUP_DEVICE") {
-          try {
-            setupDevice().then(() => {
+          // .catch, not try/catch: setupDevice is async, so a rejection never
+          // reaches the surrounding synchronous handler — the popup was left
+          // waiting on a sendResponse that never came, plus an unhandled
+          // rejection.
+          setupDevice()
+            .then(() => {
               sendResponse({ success: true });
+            })
+            .catch((error: any) => {
+              const errorMessage =
+                error?.message || error?.toString() || "Unknown error occurred";
+              console.error("Device setup failed:", error);
+              sendResponse({ success: false, error: errorMessage });
             });
-          } catch (error: any) {
-            const errorMessage =
-              error?.message || error?.toString() || "Unknown error occurred";
-            sendResponse({ success: false, error: errorMessage });
-          }
 
           return true;
         }
@@ -2233,9 +2268,6 @@ export default defineBackground({
       }
     };
 
-    // Initial setup
-    setupBookmarkListeners();
-
     // Set up download listeners based on settings
     const setupDownloadListeners = () => {
       const state = store.getState().ciState;
@@ -2246,8 +2278,8 @@ export default defineBackground({
       }
     };
 
-    // Initial setup
-    setupDownloadListeners();
+    // Initial registration happens in the loadUserSettings().then() above, once
+    // the toggles hold their persisted values rather than their defaults.
 
     // Listen for setting changes
     browser.storage.onChanged.addListener((changes) => {

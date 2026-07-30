@@ -188,6 +188,18 @@ export function contentsUrl(serverURL: string): string {
   return apiUrl(serverURL, "contents");
 }
 
+export function ingestFinishUrl(serverURL: string): string {
+  return apiUrl(serverURL, "ingest/finish");
+}
+
+/**
+ * Entity types `finishIngest` asks CI-Server to index — exactly the two this
+ * transport writes. Names come from the server's `BACKFILLABLE_ENTITIES`
+ * (hyphenated `browser-activity`, NOT the `browser_activity` table/destination
+ * spelling used elsewhere in the ingest API).
+ */
+const FINISH_ENTITY_TYPES = ["browser-activity", "content"];
+
 /**
  * Captures that belong in `ci.content` rather than `ci.browser_activity`:
  * bookmarks (the importer's `web.bookmark` → content) and highlights (a saved
@@ -442,4 +454,52 @@ export async function sendBrowserCaptures(
     duplicate: activityResult.duplicate + contentResult.duplicate,
     rejected: [...activityResult.rejected, ...contentResult.rejected],
   };
+}
+
+/**
+ * Make what was just uploaded searchable.
+ *
+ * The typed `/v1/*` bulk lanes deliberately do NOT index as they write: their
+ * services run with `emitCreated: false`, so no `*CreatedEvent` fires and the
+ * search-ingress listeners never see the rows. That is a throughput choice for
+ * bulk importers — index once at the end, not once per record — but it means an
+ * ingest that never says "finished" is an ingest whose data is in Postgres and
+ * invisible to search, RAG, and the Memory UI. Nothing sweeps on a timer.
+ *
+ * `searchIndexOnly: true` takes the cheap path (`SearchIndexBackfillService`
+ * directly), scoped by `entityTypes` to the two types written above. The full
+ * path — omitting the flag — runs the whole maintenance orchestration chain and
+ * allows only one run per user at a time (a concurrent call is a 409), which is
+ * far too heavy to hang off a 10-minute sync alarm.
+ *
+ * Best-effort by design: returns false instead of throwing, because failing to
+ * index is not a reason to re-upload data the server already accepted.
+ */
+export async function finishIngest(
+  serverURL: string,
+  accessToken: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(ingestFinishUrl(serverURL), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        searchIndexOnly: true,
+        entityTypes: FINISH_ENTITY_TYPES,
+      }),
+    });
+
+    if (!res.ok) {
+      console.warn(`CI-Server ingest/finish returned HTTP ${res.status}`);
+    }
+
+    return res.ok;
+  } catch (error) {
+    console.warn("CI-Server ingest/finish failed:", error);
+
+    return false;
+  }
 }

@@ -130,10 +130,13 @@ store-assets/                   # store + README art (regenerate via render.sh)
 - **Framework:** [WXT](https://wxt.dev) (cross-browser, type-safe)
 - **UI:** React 19 + TypeScript + Tailwind/shadcn
 - **State:** Redux Toolkit + `webext-redux` (shared across popup/background)
-- **Storage:** IndexedDB queue + `browser.storage.local`
-- **HTTP:** posts captured activity as CaptureEvents to your CI Server's unified
-  `POST /api/v1/events` ingest path (the same envelope every capture source writes
-  through); device registration via `/api/devices`
+- **Storage:** `browser.storage.local` — settings, synced-ID bookkeeping, and a
+  bounded retry queue for live captures that fail to upload
+- **HTTP:** posts captures to your CI Server's typed bulk lanes —
+  `POST /api/v1/browser-activity` (visits, downloads, scrapes) and
+  `POST /api/v1/contents` (bookmarks, highlights) — then
+  `POST /api/v1/ingest/finish` so what was written becomes searchable; device
+  registration via `/api/devices`
 
 **Browser builds:** Chrome MV3 (primary), Firefox MV2, Safari MV2 (desktop) /
 MV3 (iOS via `build:safari-mobile`), plus Edge/Opera/Brave/DuckDuckGo
@@ -142,27 +145,35 @@ MV3 (iOS via `build:safari-mobile`), plus Edge/Opera/Brave/DuckDuckGo
 ### Data flow
 1. Navigation events and manual/auto sync collect activity (minus your ignore lists).
 2. Items are de-duplicated against local sync bookkeeping.
-3. Batches POST to your CI Server's `/api/v1/events` with the portal `id_token` as
-   the Bearer; the server dedups on `(source_system, source_id)`.
-4. Page title/description come from the page itself (a content-script read) — no
+3. Batches POST to your CI Server's `/api/v1/browser-activity` and
+   `/api/v1/contents` with the portal `id_token` as the Bearer; the server dedups
+   on `(source_type, source_system, source_id)`.
+4. A `POST /api/v1/ingest/finish` sweep indexes the batch — the bulk lanes write
+   without indexing, so this is what makes captures searchable.
+5. A live capture whose upload fails (offline, server down) is queued locally and
+   retried on the next auto-sync tick rather than being dropped.
+6. Page title/description come from the page itself (a content-script read) — no
    third-party metadata service.
+
+**Requires** CI-Server to run with `PORTAL_OIDC_ENABLED=true`; otherwise it
+rejects portal tokens with a bare 401.
 
 ### Security & privacy
 - Data is sent only to **your** configured CI Server; no third-party analytics.
 - Auth: a CI-Portal OIDC Authorization-Code + PKCE login (public client
   `ci-browser-extension`). The extension sends the portal-issued, JWKS-signed
-  `id_token` as the Bearer to CI-Server's `/api/v1/events`; no passwords, session
-  cookies, or CSRF tokens are read or stored. (Replaces the retired
+  `id_token` as the Bearer to CI-Server's `/api/v1/*` bulk routes; no passwords,
+  session cookies, or CSRF tokens are read or stored. (Replaces the retired
   cookie/CSRF/`/api/authenticate/refresh` flow.)
 - No passwords or form contents are collected. See [`PRIVACY.md`](PRIVACY.md).
 
 ## 🗺️ Roadmap
 
-Tracked in `CI-Engineering/projects/ci-browser-extension`. Highlights: local-first
-outbox/queue, diagnostics panel and setup wizard, broader scrape-profile coverage,
-richer CaptureEvent envelope coverage as CI-Server's `/api/v1/events` contract grows,
-and Browser-Use bidirectional control. The extension already authenticates through
-the platform's **CI-Portal OIDC** identity provider (Authorization-Code + PKCE).
+Tracked in `CI-Engineering/projects/ci-browser-extension`. Highlights: a
+diagnostics panel, broader scrape-profile coverage, a server-side fan-out
+contract so scrapes stop riding the page-view lane, and Browser-Use
+bidirectional control. The extension already authenticates through the
+platform's **CI-Portal OIDC** identity provider (Authorization-Code + PKCE).
 
 ## 🤝 Contributing
 

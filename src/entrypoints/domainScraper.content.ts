@@ -23,6 +23,11 @@ export default defineContentScript({
         const result = domainScraper.scrape(document, currentUrl);
 
         if (result && result.data) {
+          // The background is the only consumer. A second copy used to be
+          // written to storage.local under a unique `scrapeData_<domain>_<ts>`
+          // key on every scrape — a new key each time, never read and never
+          // pruned, so browsing a scraped site steadily filled the quota.
+          // Delivery failures are handled by the background's retry queue.
           browser.runtime
             .sendMessage({
               action: "DOMAIN_SCRAPE_DATA",
@@ -30,14 +35,6 @@ export default defineContentScript({
             })
             .catch((error) => {
               console.error("Failed to send scraped data:", error);
-            });
-
-          browser.storage.local
-            .set({
-              [`scrapeData_${result.domain}_${Date.now()}`]: result,
-            })
-            .catch((error) => {
-              console.error("Failed to store scraped data:", error);
             });
         }
       }

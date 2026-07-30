@@ -198,8 +198,18 @@ export async function clearTokens(): Promise<void> {
 
 // ---- public flow ----
 
-/** Interactive sign-in: PKCE + launchWebAuthFlow + code exchange; stores tokens. */
-export async function signIn(config: OidcConfig): Promise<OidcTokens> {
+/**
+ * One Authorization-Code + PKCE round trip; stores the resulting tokens.
+ *
+ * `interactive: false` reuses the portal's existing browser session without
+ * showing UI — the portal either redirects straight back with a code or errors
+ * immediately. That is what makes a silent id_token renewal possible; see
+ * signInSilently.
+ */
+async function runAuthCodeFlow(
+  config: OidcConfig,
+  interactive: boolean,
+): Promise<OidcTokens> {
   const { authorization_endpoint, token_endpoint } = await discover(
     config.issuer,
   );
@@ -218,7 +228,7 @@ export async function signIn(config: OidcConfig): Promise<OidcTokens> {
 
   const redirectUrl = await browser.identity.launchWebAuthFlow({
     url: authorizeUrl,
-    interactive: true,
+    interactive,
   });
   if (!redirectUrl) {
     throw new Error("OIDC sign-in cancelled");
@@ -247,6 +257,40 @@ export async function signIn(config: OidcConfig): Promise<OidcTokens> {
   await saveTokens(tokens);
 
   return tokens;
+}
+
+/** Interactive sign-in: PKCE + launchWebAuthFlow + code exchange; stores tokens. */
+export async function signIn(config: OidcConfig): Promise<OidcTokens> {
+  return runAuthCodeFlow(config, true);
+}
+
+/**
+ * Try to renew the session without user interaction, returning null if that
+ * needs a human.
+ *
+ * This exists because the refresh grant does not reissue an `id_token`, and the
+ * id_token — not the opaque access_token — is the Bearer CI-Server accepts. So
+ * a long-lived refresh token cannot by itself keep capture working: once the
+ * id_token expires, every capture guard silently no-ops until someone opens the
+ * popup and clicks sign in. A non-interactive auth-code round trip against the
+ * portal's still-valid browser session mints a fresh id_token with no UI.
+ *
+ * Fails (returns null) when the portal session has also expired or the portal
+ * wants consent — exactly the cases that genuinely require the user.
+ */
+export async function signInSilently(
+  config: OidcConfig,
+): Promise<OidcTokens | null> {
+  try {
+    return await runAuthCodeFlow(config, false);
+  } catch (error) {
+    console.debug(
+      "Silent OIDC renewal failed; interactive sign-in needed:",
+      error,
+    );
+
+    return null;
+  }
 }
 
 /** Refresh with the stored refresh_token; stores + returns the new tokens. */

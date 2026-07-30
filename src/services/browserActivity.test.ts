@@ -1,6 +1,8 @@
 import {
   browserActivityUrl,
   contentsUrl,
+  finishIngest,
+  ingestFinishUrl,
   isContentCapture,
   toBrowserActivityRecord,
   toBookmarkContentRecord,
@@ -365,5 +367,62 @@ describe("sendBrowserCaptures", () => {
     await expect(
       sendBrowserCaptures("https://hub.ci.computer", "t", [activity()]),
     ).rejects.toThrow(/HTTP 401/);
+  });
+});
+
+describe("finishIngest", () => {
+  beforeEach(() => {
+    jest.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("derives the finish URL behind the same /api gateway prefix", () => {
+    expect(ingestFinishUrl("https://hub.ci.computer")).toBe(
+      "https://hub.ci.computer/api/v1/ingest/finish",
+    );
+    expect(ingestFinishUrl("https://hub.ci.computer/")).toBe(
+      "https://hub.ci.computer/api/v1/ingest/finish",
+    );
+  });
+
+  it("takes the cheap search-index path scoped to the two types written", async () => {
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    (global as { fetch?: unknown }).fetch = fetchMock;
+
+    expect(await finishIngest("https://hub.ci.computer", "portal-jwt")).toBe(
+      true,
+    );
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://hub.ci.computer/api/v1/ingest/finish");
+    expect(
+      (init as { headers: Record<string, string> }).headers.Authorization,
+    ).toBe("Bearer portal-jwt");
+
+    const body = JSON.parse((init as { body: string }).body);
+    // searchIndexOnly avoids the full orchestration chain, which is one-per-user
+    // and 409s on concurrent runs — far too heavy for a 10-minute sync alarm.
+    expect(body.searchIndexOnly).toBe(true);
+    // Server spelling is hyphenated here, unlike the browser_activity destination
+    expect(body.entityTypes).toEqual(["browser-activity", "content"]);
+  });
+
+  it("reports failure without throwing — indexing is best-effort", async () => {
+    (global as { fetch?: unknown }).fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: false, status: 409 });
+
+    expect(await finishIngest("https://hub.ci.computer", "t")).toBe(false);
+  });
+
+  it("swallows a network error rather than failing the sync", async () => {
+    (global as { fetch?: unknown }).fetch = jest
+      .fn()
+      .mockRejectedValue(new Error("offline"));
+
+    expect(await finishIngest("https://hub.ci.computer", "t")).toBe(false);
   });
 });
