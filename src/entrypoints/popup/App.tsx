@@ -378,16 +378,21 @@ export default function App() {
                 </p>
               </div>
             ) : (
+              // This branch is reached while SIGNED IN — it means device
+              // registration against the Memory server has not completed. The
+              // old copy here ("Not Authenticated · Please log in through the
+              // main application first") was left over from the retired
+              // cookie flow and sent the user to sign in again, which cannot
+              // help: they are already signed in. The usual real cause is a
+              // server that rejects the portal token.
               <div className="mb-4 p-3 rounded text-left">
                 <p className="m-0 text-[0.9em] text-muted-foreground mb-2">
-                  Not Authenticated
+                  Setting up this device…
                 </p>
-                <p className="text-[0.9em] text-muted-foreground my-2">
-                  Please log in through the main application first.
-                </p>
-                <p className="text-[0.8em] text-muted-foreground my-1 italic">
-                  This extension requires authentication to sync browser
-                  history.
+                <p className="text-[0.8em] text-muted-foreground my-1">
+                  If this persists, your Memory server may be unreachable or may
+                  not have Companion sign-in enabled (
+                  <code>PORTAL_OIDC_ENABLED</code>).
                 </p>
               </div>
             )}
