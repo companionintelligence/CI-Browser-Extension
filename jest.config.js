@@ -25,10 +25,10 @@ export default {
   // lower on CI than it does here.
   coverageThreshold: {
     global: {
-      statements: 28,
-      branches: 25,
-      functions: 28,
-      lines: 28,
+      statements: 31,
+      branches: 28,
+      functions: 31,
+      lines: 31,
     },
   },
   testMatch: [

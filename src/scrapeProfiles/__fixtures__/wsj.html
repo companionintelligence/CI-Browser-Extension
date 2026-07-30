@@ -1,0 +1,244 @@
+<!doctype html>
+<!--
+  Wall Street Journal front page (www.wsj.com).
+  SYNTHETIC — models the structure of the real page; see README.md.
+  Every headline, dek, byline, ticker and price is fabricated.
+
+  Structural details modelled from the live site, because they decide what the
+  profile's selectors can hit:
+    - WSJ's class names are CSS-module compiled: `WSJTheme--story--XB4V2mLz`,
+      `WSJTheme--headline--7VCzo7Ez`, i.e. the readable part always carries a
+      build hash suffix. The profile's bare `.WSJTheme--story` / `.WSJTheme--headline`
+      / `.WSJTheme--market-data` selectors therefore cannot match a class token
+      on the real page — that is modelled faithfully here.
+    - stories are <article> elements carrying data-testid / data-id hooks
+    - the lead story headline is an <h2>; the river below it uses <h3>
+    - the dek is a <p>, the byline and timestamp are hashed <div>s
+    - the paywall marker is an aria-labelled icon span, not a `.premium-flag`
+    - the markets summary strip is present, and is a decoy: nothing in it
+      matches the profile's `markets` container selector
+-->
+<html lang="en-US">
+  <head>
+    <title>The Wall Street Journal - Breaking News, Business, Financial &amp; Economic News</title>
+    <meta name="description" content="WSJ online coverage of breaking news and current headlines" />
+  </head>
+  <body class="WSJTheme--body--2gJ3Fm4H">
+    <div id="root">
+      <header class="WSJTheme--header--1DBpB5vf" role="banner">
+        <div class="WSJTheme--header-inner--3XwbnGqA">
+          <a class="WSJTheme--logo--1kLcxMDf" href="/" aria-label="Wall Street Journal">
+            <img src="https://example.test/img.jpg" alt="WSJ" width="240" height="24" />
+          </a>
+          <div class="WSJTheme--header-actions--2hFmMtQd">
+            <a class="WSJTheme--sign-in--1t7bQxYb" href="https://accounts.wsj.com/login">Sign In</a>
+            <a class="WSJTheme--subscribe--3sQmKcVv" href="https://subscribe.wsj.com/">Subscribe</a>
+          </div>
+        </div>
+        <nav class="WSJTheme--nav--1hHmnFmy" aria-label="Primary">
+          <ul class="WSJTheme--nav-list--3rDgFRCr">
+            <li class="WSJTheme--nav-item--2mFbLpQ1"><a class="WSJTheme--nav-link--1Xt3lPk8" href="/news/world">World</a></li>
+            <li class="WSJTheme--nav-item--2mFbLpQ1"><a class="WSJTheme--nav-link--1Xt3lPk8" href="/news/business">Business</a></li>
+            <li class="WSJTheme--nav-item--2mFbLpQ1"><a class="WSJTheme--nav-link--1Xt3lPk8" href="/news/markets">Markets</a></li>
+            <li class="WSJTheme--nav-item--2mFbLpQ1"><a class="WSJTheme--nav-link--1Xt3lPk8" href="/news/technology">Tech</a></li>
+            <li class="WSJTheme--nav-item--2mFbLpQ1"><a class="WSJTheme--nav-link--1Xt3lPk8" href="/news/opinion">Opinion</a></li>
+          </ul>
+        </nav>
+      </header>
+
+      <div class="WSJTheme--markets-summary--1SXjD4qm" data-testid="markets-summary">
+        <ul class="WSJTheme--markets-list--2Jw6r7ug">
+          <li class="WSJTheme--markets-item--1oB2Qpxt">
+            <a class="WSJTheme--markets-link--2wQnPzFe" href="/market-data/quotes/index/FICX">
+              <span class="WSJTheme--markets-name--2pF9dxx7">FICX</span>
+              <span class="WSJTheme--markets-value--2y3W4RRs">4,102.88</span>
+              <span class="WSJTheme--markets-change--2ZKZbFq8 WSJTheme--is-up--3vLGxD4l">+0.41%</span>
+            </a>
+          </li>
+          <li class="WSJTheme--markets-item--1oB2Qpxt">
+            <a class="WSJTheme--markets-link--2wQnPzFe" href="/market-data/quotes/index/MADEUP">
+              <span class="WSJTheme--markets-name--2pF9dxx7">MADEUP</span>
+              <span class="WSJTheme--markets-value--2y3W4RRs">17,930.12</span>
+              <span class="WSJTheme--markets-change--2ZKZbFq8 WSJTheme--is-down--2kQnBbRc">-0.19%</span>
+            </a>
+          </li>
+          <li class="WSJTheme--markets-item--1oB2Qpxt">
+            <a class="WSJTheme--markets-link--2wQnPzFe" href="/market-data/quotes/bond/BX/TMUBMUSD10Y">
+              <span class="WSJTheme--markets-name--2pF9dxx7">10-Yr (fictional)</span>
+              <span class="WSJTheme--markets-value--2y3W4RRs">3.912%</span>
+              <span class="WSJTheme--markets-change--2ZKZbFq8 WSJTheme--is-up--3vLGxD4l">+0.021</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <main class="WSJTheme--main--1BEHrgeF" role="main">
+        <div class="WSJTheme--page-grid--3aTnQpLm">
+          <section class="WSJTheme--lead-module--2QpXhLmT" aria-label="Lead story">
+            <article
+              class="WSJTheme--story--XB4V2mLz WSJTheme--top-story-article--3nDwEE4V"
+              data-testid="article"
+              data-id="SB-FICTIONAL-0001"
+              data-block-id="lead"
+            >
+              <div class="WSJTheme--overflow-hidden--qJmDzHRu">
+                <div class="WSJTheme--flashline--2p_UTn3d">
+                  <span class="WSJTheme--flashline-text--3lm3nMHS">Exclusive</span>
+                </div>
+                <h2 class="WSJTheme--headline--7VCzo7Ez">
+                  <a
+                    class="WSJTheme--headlineLink--2W5f3vQp"
+                    href="/articles/fictional-conglomerate-splits-itself-in-three-11753900000"
+                    >Fictional Conglomerate Says It Will Split Itself Into Three Companies</a
+                  >
+                  <span
+                    class="WSJTheme--paywall-icon--2ppKUpv3"
+                    aria-label="Subscriber content"
+                    role="img"
+                  ></span>
+                </h2>
+                <p class="WSJTheme--summary--lmOCEFp8">
+                  The invented company said the breakup would let each unit "pursue its own
+                  imaginary strategy," a plan analysts at a firm that does not exist called
+                  overdue.
+                </p>
+                <div class="WSJTheme--byline--3JGjdM5S">
+                  By <span class="WSJTheme--author--2FrfsQY0">Ada Lovelace</span> and
+                  <span class="WSJTheme--author--2FrfsQY0">Grace Placeholder</span>
+                </div>
+                <div class="WSJTheme--timestamp--22sfkNDv">2 hours ago</div>
+              </div>
+              <div class="WSJTheme--media--1Vk8mQpZ">
+                <figure class="WSJTheme--figure--2sQnRtLp">
+                  <img src="https://example.test/img.jpg" alt="" width="1280" height="853" />
+                  <figcaption class="WSJTheme--caption--3xLmQpVv">Fabricated photo caption.</figcaption>
+                </figure>
+              </div>
+            </article>
+          </section>
+
+          <section class="WSJTheme--river--1kQmXpTn" aria-label="Latest headlines">
+            <div class="WSJTheme--river-header--2VpQmLxK">
+              <h3 class="WSJTheme--river-title--3TmQpXvL">Latest Headlines</h3>
+            </div>
+
+            <article
+              class="WSJTheme--story--XB4V2mLz"
+              data-testid="article"
+              data-id="SB-FICTIONAL-0002"
+            >
+              <div class="WSJTheme--overflow-hidden--qJmDzHRu">
+                <div class="WSJTheme--flashline--2p_UTn3d">
+                  <span class="WSJTheme--flashline-text--3lm3nMHS">Markets</span>
+                </div>
+                <h3 class="WSJTheme--headline--7VCzo7Ez">
+                  <a
+                    class="WSJTheme--headlineLink--2W5f3vQp"
+                    href="/articles/invented-index-ends-flat-for-eleventh-session-11753900111"
+                    >Invented Index Ends Flat for an Eleventh Straight Session</a
+                  >
+                </h3>
+                <p class="WSJTheme--summary--lmOCEFp8">
+                  Traders described the made-up session as "uneventful in both directions."
+                </p>
+                <div class="WSJTheme--byline--3JGjdM5S">
+                  By <span class="WSJTheme--author--2FrfsQY0">Alan Example</span>
+                </div>
+                <div class="WSJTheme--timestamp--22sfkNDv">3 hours ago</div>
+              </div>
+            </article>
+
+            <article
+              class="WSJTheme--story--XB4V2mLz"
+              data-testid="article"
+              data-id="SB-FICTIONAL-0003"
+            >
+              <div class="WSJTheme--overflow-hidden--qJmDzHRu">
+                <div class="WSJTheme--flashline--2p_UTn3d">
+                  <span class="WSJTheme--flashline-text--3lm3nMHS">Tech</span>
+                </div>
+                <h3 class="WSJTheme--headline--7VCzo7Ez">
+                  <a
+                    class="WSJTheme--headlineLink--2W5f3vQp"
+                    href="/articles/nonexistent-chip-maker-delays-nonexistent-chip-11753900222"
+                    >Nonexistent Chip Maker Delays Its Nonexistent Chip Again</a
+                  >
+                  <span
+                    class="WSJTheme--paywall-icon--2ppKUpv3"
+                    aria-label="Subscriber content"
+                    role="img"
+                  ></span>
+                </h3>
+                <p class="WSJTheme--summary--lmOCEFp8">
+                  The fabricated part, first announced in an imaginary keynote, slips to a
+                  quarter that has not been specified.
+                </p>
+                <div class="WSJTheme--byline--3JGjdM5S">
+                  By <span class="WSJTheme--author--2FrfsQY0">Ada Lovelace</span>
+                </div>
+                <div class="WSJTheme--timestamp--22sfkNDv">5 hours ago</div>
+              </div>
+            </article>
+
+            <article
+              class="WSJTheme--story--XB4V2mLz"
+              data-testid="article"
+              data-id="SB-FICTIONAL-0004"
+            >
+              <div class="WSJTheme--overflow-hidden--qJmDzHRu">
+                <div class="WSJTheme--flashline--2p_UTn3d">
+                  <span class="WSJTheme--flashline-text--3lm3nMHS">Economy</span>
+                </div>
+                <h3 class="WSJTheme--headline--7VCzo7Ez">
+                  <a
+                    class="WSJTheme--headlineLink--2W5f3vQp"
+                    href="/articles/made-up-survey-finds-respondents-uncertain-11753900333"
+                    >Made-Up Survey Finds Respondents Uncertain About Everything</a
+                  >
+                </h3>
+                <p class="WSJTheme--summary--lmOCEFp8">
+                  Fifty-one percent of imaginary households said conditions were "about the
+                  same," a fictional record.
+                </p>
+                <div class="WSJTheme--byline--3JGjdM5S">
+                  By <span class="WSJTheme--author--2FrfsQY0">Grace Placeholder</span>
+                </div>
+                <div class="WSJTheme--timestamp--22sfkNDv">7 hours ago</div>
+              </div>
+            </article>
+          </section>
+
+          <aside class="WSJTheme--rail--2LpQmXvT" aria-label="Opinion">
+            <div class="WSJTheme--rail-module--1QmXpTvL">
+              <h3 class="WSJTheme--rail-title--2VpQmLxK">Opinion</h3>
+              <ul class="WSJTheme--rail-list--3XpQmVtL">
+                <li class="WSJTheme--rail-item--1TmQpXvL">
+                  <a class="WSJTheme--rail-link--2QmXpTvL" href="/articles/fictional-op-ed-11753900444"
+                    >A Fictional Op-Ed About an Imaginary Policy</a
+                  >
+                </li>
+                <li class="WSJTheme--rail-item--1TmQpXvL">
+                  <a class="WSJTheme--rail-link--2QmXpTvL" href="/articles/another-fictional-op-ed-11753900555"
+                    >Another Column, Also Invented</a
+                  >
+                </li>
+              </ul>
+            </div>
+            <div class="WSJTheme--ad--3QmXpTvL" data-ad-slot="rail">
+              <span class="WSJTheme--ad-label--1XpQmVtL">Advertisement</span>
+            </div>
+          </aside>
+        </div>
+      </main>
+
+      <footer class="WSJTheme--footer--2XpQmVtL" role="contentinfo">
+        <ul class="WSJTheme--footer-list--1QmXpTvL">
+          <li><a href="/policy/privacy-policy">Privacy Notice</a></li>
+          <li><a href="/policy/subscriber-agreement">Subscriber Agreement</a></li>
+          <li><a href="/policy/cookie-policy">Cookie Notice</a></li>
+        </ul>
+        <p class="WSJTheme--footer-copy--3TmQpXvL">Fictional copy for a fixture. Not a real page.</p>
+      </footer>
+    </div>
+  </body>
+</html>

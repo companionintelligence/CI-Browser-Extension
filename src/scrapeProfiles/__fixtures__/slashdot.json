@@ -1,0 +1,8 @@
+{
+  "url": "https://slashdot.org/",
+  "provenance": "synthetic",
+  "note": "Front page with four fabricated stories, modelled on the real firehose index. Two findings the fixture is deliberately built to expose, both of which reproduce on the live markup: (1) the container list `article, .article, .story` matches BOTH `article.article` and the `h2.story` inside it, so the four stories yield eight rows — every story is captured twice; (2) inside the h2 the topic-icon anchor precedes the title anchor, so `h2 a` resolves to the icon: `title` extracts as \"\" and `url` extracts as the topic-filter link, not the story. `expect` is set to 4 (the number of stories on the page) rather than the 8 rows produced today, so it stays correct if the duplicate container match is fixed. `department` is not covered: Slashdot renders \"from the ... dept.\" as plain text inside .story-byline with no class, so `.dept, .department` matches nothing. Replace with a captured page — see README.md.",
+  "expect": {
+    "articles": 4
+  }
+}

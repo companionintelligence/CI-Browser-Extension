@@ -1,0 +1,201 @@
+<!doctype html>
+<!--
+  Max "My List" (www.max.com/watchlist), signed in.
+  SYNTHETIC — models the structure of the real page; see README.md.
+
+  All titles, synopses and artwork URLs are fabricated.
+
+  Structure notes that matter to the selectors:
+    * The grid renders a lazy-load placeholder card that carries the same
+      .title-card class but no link, image or text. It is a deliberate decoy:
+      the engine must count it as a matched container that yields no row.
+    * `viewingHistory` and `recommendations` are not exercised here — My List is
+      a flat grid with no Continue Watching strip and no content rows.
+-->
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My List | Max</title>
+  </head>
+  <body class="max-body theme-dark">
+    <div id="root" class="app-shell">
+      <header class="global-header" data-testid="global-header">
+        <nav class="global-nav" aria-label="Primary">
+          <a class="global-nav__logo" href="/" aria-label="Max">
+            <svg class="logo" aria-hidden="true" viewBox="0 0 64 20"></svg>
+          </a>
+          <ul class="global-nav__list">
+            <li class="global-nav__item"><a class="global-nav__link" href="/">Home</a></li>
+            <li class="global-nav__item"><a class="global-nav__link" href="/series">Series</a></li>
+            <li class="global-nav__item"><a class="global-nav__link" href="/movies">Movies</a></li>
+            <li class="global-nav__item"><a class="global-nav__link" href="/sports">Sports</a></li>
+            <li class="global-nav__item global-nav__item--current">
+              <a class="global-nav__link" href="/watchlist" aria-current="page">My List</a>
+            </li>
+          </ul>
+          <div class="global-header__actions">
+            <button class="icon-button" type="button" data-testid="search-button" aria-label="Search"></button>
+            <a class="avatar-button" href="/profile" data-testid="profile-button">
+              <img class="avatar-button__image" src="https://example.test/avatar-teal.png" alt="Ada Lovelace" width="32" height="32" />
+            </a>
+          </div>
+        </nav>
+      </header>
+
+      <main class="page page--watchlist" role="main">
+        <div class="page__header">
+          <h1 class="page__heading">My List</h1>
+          <div class="filter-bar" role="tablist" aria-label="Filter My List">
+            <button class="filter-chip filter-chip--selected" role="tab" aria-selected="true" type="button">All</button>
+            <button class="filter-chip" role="tab" aria-selected="false" type="button">Series</button>
+            <button class="filter-chip" role="tab" aria-selected="false" type="button">Movies</button>
+            <button class="filter-chip" role="tab" aria-selected="false" type="button">Downloads</button>
+          </div>
+        </div>
+
+        <div class="content-grid" data-testid="watchlist-grid">
+          <article
+            class="title-card watchlist-item"
+            data-testid="watchlist-item"
+            data-item-id="urn:hbo:series:00000000-0000-4000-8000-000000000001"
+          >
+            <a class="title-card__link" href="/series/quantum-bakers/00000000-0000-4000-8000-000000000001">
+              <div class="title-card__art">
+                <img
+                  class="title-card__image"
+                  src="https://example.test/img.jpg"
+                  alt=""
+                  width="480"
+                  height="270"
+                  loading="lazy"
+                />
+                <span class="type-badge" data-testid="content-type">Series</span>
+              </div>
+              <h3 class="title-card__title" data-testid="title">Quantum Bakers</h3>
+            </a>
+            <div class="title-card__hover" aria-hidden="true">
+              <p class="description" data-testid="description">
+                Rival pastry chefs are handed a kitchen that runs on impossible physics.
+              </p>
+              <span class="title-card__meta">3 Seasons</span>
+            </div>
+            <button class="title-card__remove" type="button" aria-label="Remove Quantum Bakers from My List">
+              <svg class="icon icon--check" aria-hidden="true" viewBox="0 0 24 24"></svg>
+            </button>
+          </article>
+
+          <article
+            class="title-card watchlist-item"
+            data-testid="watchlist-item"
+            data-item-id="urn:hbo:series:00000000-0000-4000-8000-000000000002"
+          >
+            <a class="title-card__link" href="/series/lighthouse-nine/00000000-0000-4000-8000-000000000002">
+              <div class="title-card__art">
+                <img
+                  class="title-card__image"
+                  src="https://example.test/img.jpg"
+                  alt=""
+                  width="480"
+                  height="270"
+                  loading="lazy"
+                />
+                <span class="type-badge" data-testid="content-type">Series</span>
+              </div>
+              <h3 class="title-card__title" data-testid="title">Lighthouse Nine</h3>
+            </a>
+            <div class="title-card__hover" aria-hidden="true">
+              <p class="description" data-testid="description">
+                A keeper on a shuttered island station receives weather reports from a year
+                that has not happened yet.
+              </p>
+              <span class="title-card__meta">1 Season</span>
+            </div>
+            <button class="title-card__remove" type="button" aria-label="Remove Lighthouse Nine from My List">
+              <svg class="icon icon--check" aria-hidden="true" viewBox="0 0 24 24"></svg>
+            </button>
+          </article>
+
+          <article
+            class="title-card watchlist-item"
+            data-testid="watchlist-item"
+            data-item-id="urn:hbo:feature:00000000-0000-4000-8000-000000000003"
+          >
+            <a class="title-card__link" href="/movies/salt-flats-marathon/00000000-0000-4000-8000-000000000003">
+              <div class="title-card__art">
+                <img
+                  class="title-card__image"
+                  src="https://example.test/img.jpg"
+                  alt=""
+                  width="480"
+                  height="270"
+                  loading="lazy"
+                />
+                <span class="type-badge" data-testid="content-type">Movie</span>
+              </div>
+              <h3 class="title-card__title" data-testid="title">Salt Flats Marathon</h3>
+            </a>
+            <div class="title-card__hover" aria-hidden="true">
+              <p class="description" data-testid="description">
+                A retired courier runs one last delivery across a dry lake bed on foot.
+              </p>
+              <span class="title-card__meta">2026 &middot; 1 hr 48 min</span>
+            </div>
+            <button class="title-card__remove" type="button" aria-label="Remove Salt Flats Marathon from My List">
+              <svg class="icon icon--check" aria-hidden="true" viewBox="0 0 24 24"></svg>
+            </button>
+          </article>
+
+          <article
+            class="title-card watchlist-item"
+            data-testid="watchlist-item"
+            data-item-id="urn:hbo:series:00000000-0000-4000-8000-000000000004"
+          >
+            <a class="title-card__link" href="/series/the-paper-orchard/00000000-0000-4000-8000-000000000004">
+              <div class="title-card__art">
+                <img
+                  class="title-card__image"
+                  src="https://example.test/img.jpg"
+                  alt=""
+                  width="480"
+                  height="270"
+                  loading="lazy"
+                />
+                <span class="type-badge" data-testid="content-type">Series</span>
+                <span class="title-card__flag">New Episodes</span>
+              </div>
+              <h3 class="title-card__title" data-testid="title">The Paper Orchard</h3>
+            </a>
+            <div class="title-card__hover" aria-hidden="true">
+              <p class="description" data-testid="description">
+                Three siblings inherit a print shop and, with it, every letter their town
+                never mailed.
+              </p>
+              <span class="title-card__meta">2 Seasons</span>
+            </div>
+            <button class="title-card__remove" type="button" aria-label="Remove The Paper Orchard from My List">
+              <svg class="icon icon--check" aria-hidden="true" viewBox="0 0 24 24"></svg>
+            </button>
+          </article>
+
+          <!-- Lazy-load placeholder: matches .title-card, carries no data. -->
+          <div class="title-card title-card--placeholder" aria-hidden="true">
+            <div class="title-card__art skeleton skeleton--pulse"></div>
+            <div class="skeleton skeleton--line"></div>
+          </div>
+        </div>
+
+        <button class="load-more" type="button" data-testid="load-more">Load more</button>
+      </main>
+
+      <footer class="site-footer" role="contentinfo">
+        <ul class="site-footer__links">
+          <li><a class="site-footer__link" href="/terms">Terms of Use</a></li>
+          <li><a class="site-footer__link" href="/privacy">Privacy Policy</a></li>
+          <li><a class="site-footer__link" href="/help">Help</a></li>
+        </ul>
+        <p class="site-footer__legal">&copy; 2026 Fictional Streaming Co.</p>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,287 @@
+<!doctype html>
+<!--
+  Airbnb trips page — airbnb.com/trips/v1.
+
+  Models the reservation list: an "Upcoming" section and a "Where you've been"
+  section, both built from the same card component. The `wishlist` and `hosting`
+  selectors belong to /wishlists/* and /hosting/* and are deliberately absent —
+  note that both of those containers share the `._8ssblpx` class alternative, so
+  a page carrying it would be claimed by whichever selector ran first.
+
+  Airbnb ships hashed atom classes (`_1tanv1h`, `dir dir-ltr`) rather than
+  semantic ones, so the profile's readable `data-testid` values are the load
+  bearing hooks here; see the note in airbnb.json.
+
+  SYNTHETIC — models the structure of the real page; see README.md.
+  Guests, hosts, places, dates and prices are all fabricated.
+-->
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trips - Airbnb</title>
+  </head>
+  <body>
+    <div id="site-content">
+      <div class="_1h6ihyq">
+        <div id="site-header" class="_15j78hm">
+          <header class="_1qewqec">
+            <div class="_1ejmwj1 dir dir-ltr">
+              <a class="_1gm2dl1" href="/" aria-label="Airbnb homepage">
+                <svg viewBox="0 0 1000 1000" height="32" width="32" aria-hidden="true" role="presentation"></svg>
+              </a>
+              <nav class="_1lfuv0y" aria-label="Primary">
+                <ul class="_1tmt9lf dir dir-ltr">
+                  <li class="_1v4yn5x"><a class="_5kaapu" href="/s/homes">Homes</a></li>
+                  <li class="_1v4yn5x"><a class="_5kaapu" href="/s/experiences">Experiences</a></li>
+                </ul>
+              </nav>
+              <div class="_fs9dms">
+                <button type="button" class="_2m0uy1l" aria-label="Main navigation menu" aria-expanded="false">
+                  <span class="_1p0spma" aria-hidden="true"></span>
+                  <img
+                    src="https://example.test/img.jpg"
+                    alt=""
+                    class="_1ncm3we"
+                    aria-hidden="true"
+                    width="30"
+                    height="30"
+                  />
+                </button>
+              </div>
+            </div>
+          </header>
+        </div>
+
+        <main id="main" role="main" class="_1p8no1v">
+          <div class="_1kb3wsn dir dir-ltr">
+            <h1 tabindex="-1" class="_14i3z6h dir dir-ltr">Trips</h1>
+
+            <div class="_1kx5bnv" role="tablist" aria-label="Trip status">
+              <!-- Decoy: tab labels repeat the words the field selectors look for,
+                   but sit outside any trip card. -->
+              <button role="tab" aria-selected="true" class="_1qxrwsn" id="tab-upcoming">Upcoming</button>
+              <button role="tab" aria-selected="false" class="_1qxrwsn" id="tab-past">Where you've been</button>
+              <button role="tab" aria-selected="false" class="_1qxrwsn" id="tab-canceled">Canceled</button>
+            </div>
+
+            <section aria-labelledby="upcoming-heading" class="_1s21a6e2">
+              <h2 id="upcoming-heading" class="_1xu9tpch dir dir-ltr">Upcoming reservations</h2>
+
+              <div class="_1rjs05z5" role="list">
+                <div class="c1eq6cnb dir dir-ltr" role="listitem">
+                  <div data-testid="trip-card" class="_1h30gqq dir dir-ltr">
+                    <a
+                      class="_1qbxjk7"
+                      href="/trips/v1/a1b2c3/details"
+                      aria-label="Reservation at Fogbank Cabin, hosted by Grace"
+                    >
+                      <div class="_bfq7lo">
+                        <div class="_bkw3ib">
+                          <img
+                            src="https://example.test/img.jpg"
+                            alt=""
+                            class="_6tbg2q"
+                            loading="lazy"
+                            decoding="async"
+                            width="320"
+                            height="213"
+                          />
+                        </div>
+                      </div>
+                      <div class="_1r7ymvg">
+                        <div class="_1a7ijmw">
+                          <span data-testid="status" class="_1mhorg9 dir dir-ltr">Confirmed</span>
+                          <span class="a8jt5op" aria-hidden="false">·</span>
+                          <span class="_14tuc2z dir dir-ltr">Entire cabin</span>
+                        </div>
+                        <div data-testid="property-name" class="_1tanv1h dir dir-ltr">Fogbank Cabin with a wood stove</div>
+                        <div data-testid="location" class="_1p3joamp dir dir-ltr">Cape Marrow, Pacifica</div>
+                        <div class="_1yq3xhr dir dir-ltr">
+                          <span data-testid="check-in" class="check-in">Aug 14, 2026</span>
+                          <span class="_1jkqvhw" aria-hidden="true">–</span>
+                          <span data-testid="check-out" class="check-out">Aug 18, 2026</span>
+                        </div>
+                        <div data-testid="guests" class="_tqmy57 dir dir-ltr">2 guests</div>
+                        <div data-testid="total-price" class="_1p7iugi dir dir-ltr">$1,284.00 total</div>
+                      </div>
+                    </a>
+                    <div class="_1p2u9j0 dir dir-ltr">
+                      <span class="_1ffjcbi">Hosted by Grace</span>
+                      <button type="button" class="l1ovpqvx" aria-label="Show reservation details for Fogbank Cabin">
+                        Show details
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="c1eq6cnb dir dir-ltr" role="listitem">
+                  <div data-testid="trip-card" class="_1h30gqq dir dir-ltr">
+                    <a
+                      class="_1qbxjk7"
+                      href="/trips/v1/d4e5f6/details"
+                      aria-label="Reservation at Saltpan Loft, hosted by Hedy"
+                    >
+                      <div class="_bfq7lo">
+                        <div class="_bkw3ib">
+                          <img
+                            src="https://example.test/img.jpg"
+                            alt=""
+                            class="_6tbg2q"
+                            loading="lazy"
+                            decoding="async"
+                            width="320"
+                            height="213"
+                          />
+                        </div>
+                      </div>
+                      <div class="_1r7ymvg">
+                        <div class="_1a7ijmw">
+                          <span data-testid="status" class="_1mhorg9 dir dir-ltr">Pending host approval</span>
+                          <span class="a8jt5op" aria-hidden="false">·</span>
+                          <span class="_14tuc2z dir dir-ltr">Entire loft</span>
+                        </div>
+                        <div data-testid="property-name" class="_1tanv1h dir dir-ltr">Saltpan Loft above the ferry dock</div>
+                        <div data-testid="location" class="_1p3joamp dir dir-ltr">Thornbury, Westmoor</div>
+                        <div class="_1yq3xhr dir dir-ltr">
+                          <span data-testid="check-in" class="check-in">Sep 2, 2026</span>
+                          <span class="_1jkqvhw" aria-hidden="true">–</span>
+                          <span data-testid="check-out" class="check-out">Sep 5, 2026</span>
+                        </div>
+                        <div data-testid="guests" class="_tqmy57 dir dir-ltr">4 guests</div>
+                        <div data-testid="total-price" class="_1p7iugi dir dir-ltr">$742.50 total</div>
+                      </div>
+                    </a>
+                    <div class="_1p2u9j0 dir dir-ltr">
+                      <span class="_1ffjcbi">Hosted by Hedy</span>
+                      <button type="button" class="l1ovpqvx" aria-label="Show reservation details for Saltpan Loft">
+                        Show details
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Decoy: an upsell card built from the same atoms as a trip card
+                 (title, location, price) but without the trip-card container. -->
+            <section aria-labelledby="promo-heading" class="_1s21a6e2">
+              <div data-testid="promo-card" class="c1l1h97y dir dir-ltr">
+                <h2 id="promo-heading" class="_1tanv1h dir dir-ltr">Ideas for your next trip</h2>
+                <p class="_1p3joamp dir dir-ltr">Coastal stays near Cape Marrow</p>
+                <span class="_1p7iugi dir dir-ltr">From $96 night</span>
+                <a class="_1qbxjk7" href="/s/Cape-Marrow/homes">Browse homes</a>
+              </div>
+            </section>
+
+            <section aria-labelledby="past-heading" class="_1s21a6e2">
+              <h2 id="past-heading" class="_1xu9tpch dir dir-ltr">Where you've been</h2>
+
+              <div class="_1rjs05z5" role="list">
+                <div class="c1eq6cnb dir dir-ltr" role="listitem">
+                  <div data-testid="trip-card" class="_1h30gqq dir dir-ltr">
+                    <a
+                      class="_1qbxjk7"
+                      href="/trips/v1/g7h8i9/details"
+                      aria-label="Reservation at Kestrel Barn, hosted by Marie"
+                    >
+                      <div class="_bfq7lo">
+                        <div class="_bkw3ib">
+                          <img
+                            src="https://example.test/img.jpg"
+                            alt=""
+                            class="_6tbg2q"
+                            loading="lazy"
+                            decoding="async"
+                            width="320"
+                            height="213"
+                          />
+                        </div>
+                      </div>
+                      <div class="_1r7ymvg">
+                        <div class="_1a7ijmw">
+                          <span data-testid="status" class="_1mhorg9 dir dir-ltr">Completed</span>
+                          <span class="a8jt5op" aria-hidden="false">·</span>
+                          <span class="_14tuc2z dir dir-ltr">Private room</span>
+                        </div>
+                        <div data-testid="property-name" class="_1tanv1h dir dir-ltr">Kestrel Barn at the orchard edge</div>
+                        <div data-testid="location" class="_1p3joamp dir dir-ltr">Alder Hollow, Northrend County</div>
+                        <div class="_1yq3xhr dir dir-ltr">
+                          <span data-testid="check-in" class="check-in">Mar 6, 2026</span>
+                          <span class="_1jkqvhw" aria-hidden="true">–</span>
+                          <span data-testid="check-out" class="check-out">Mar 9, 2026</span>
+                        </div>
+                        <div data-testid="guests" class="_tqmy57 dir dir-ltr">2 guests</div>
+                        <div data-testid="total-price" class="_1p7iugi dir dir-ltr">$498.00 total</div>
+                      </div>
+                    </a>
+                    <div class="_1p2u9j0 dir dir-ltr">
+                      <span class="_1ffjcbi">Hosted by Marie</span>
+                      <button type="button" class="l1ovpqvx" aria-label="Write a review for Kestrel Barn">
+                        Write a review
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="c1eq6cnb dir dir-ltr" role="listitem">
+                  <div data-testid="trip-card" class="_1h30gqq dir dir-ltr">
+                    <a
+                      class="_1qbxjk7"
+                      href="/trips/v1/j1k2l3/details"
+                      aria-label="Reservation at Tidewell Cottage, hosted by Ada"
+                    >
+                      <div class="_bfq7lo">
+                        <div class="_bkw3ib">
+                          <img
+                            src="https://example.test/img.jpg"
+                            alt=""
+                            class="_6tbg2q"
+                            loading="lazy"
+                            decoding="async"
+                            width="320"
+                            height="213"
+                          />
+                        </div>
+                      </div>
+                      <div class="_1r7ymvg">
+                        <div class="_1a7ijmw">
+                          <span data-testid="status" class="_1mhorg9 dir dir-ltr">Completed</span>
+                          <span class="a8jt5op" aria-hidden="false">·</span>
+                          <span class="_14tuc2z dir dir-ltr">Entire cottage</span>
+                        </div>
+                        <div data-testid="property-name" class="_1tanv1h dir dir-ltr">Tidewell Cottage by the sea wall</div>
+                        <div data-testid="location" class="_1p3joamp dir dir-ltr">Port Sabine, Grand Isle</div>
+                        <div class="_1yq3xhr dir dir-ltr">
+                          <span data-testid="check-in" class="check-in">Nov 21, 2025</span>
+                          <span class="_1jkqvhw" aria-hidden="true">–</span>
+                          <span data-testid="check-out" class="check-out">Nov 24, 2025</span>
+                        </div>
+                        <div data-testid="guests" class="_tqmy57 dir dir-ltr">3 guests</div>
+                        <div data-testid="total-price" class="_1p7iugi dir dir-ltr">$611.75 total</div>
+                      </div>
+                    </a>
+                    <div class="_1p2u9j0 dir dir-ltr">
+                      <span class="_1ffjcbi">Hosted by Ada</span>
+                      <button type="button" class="l1ovpqvx" aria-label="Rebook Tidewell Cottage">Book again</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </main>
+
+        <footer class="_15j78hm" role="contentinfo">
+          <div class="_1lf2s7u dir dir-ltr">
+            <ul class="_1jvm2ml">
+              <li><a class="_5kaapu" href="/help">Help Center</a></li>
+              <li><a class="_5kaapu" href="/terms/privacy_policy">Privacy</a></li>
+              <li><a class="_5kaapu" href="/terms">Terms</a></li>
+            </ul>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>

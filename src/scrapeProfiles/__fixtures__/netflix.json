@@ -1,0 +1,8 @@
+{
+  "url": "https://www.netflix.com/settings/viewed/",
+  "provenance": "synthetic",
+  "note": "Models the viewing-activity table. Replace with a captured, scrubbed page next time someone is signed in — see README.md.",
+  "expect": {
+    "viewingHistory": 3
+  }
+}

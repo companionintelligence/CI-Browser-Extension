@@ -1,0 +1,9 @@
+{
+  "url": "https://www.hulu.com/my-stuff",
+  "provenance": "synthetic",
+  "note": "Models the My Stuff grid plus the masthead profile switcher, which is where Hulu lists the account's profiles. `watchHistory` is deliberately uncovered: none of the profile's targetUrl pages render a viewing-history list. `watchlist.addedDate` finds nothing because Hulu's saved-item tiles carry no added-on date. Replace with a captured, scrubbed page next time someone is signed in — see README.md.",
+  "expect": {
+    "watchlist": 4,
+    "profiles": 3
+  }
+}

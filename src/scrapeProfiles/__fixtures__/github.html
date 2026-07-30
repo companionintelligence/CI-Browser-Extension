@@ -1,0 +1,477 @@
+<!doctype html>
+<!--
+  GitHub milestone page — github.com/<owner>/<repo>/milestone/<n>.
+
+  Chosen because it is the one list view that renders issue rows and
+  pull-request rows side by side in a single `js-navigation-container`, so one
+  page legitimately exercises both the `issues` and `pullRequests` selectors.
+  The repositories / commits / activity selectors belong to other pages and are
+  deliberately absent.
+
+  SYNTHETIC — models the structure of the real page; see README.md.
+  Owner, repo, titles, numbers, ids and dates are all fabricated.
+-->
+<html lang="en" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <title>Bernoulli engine v2 Milestone · ada-lovelace/analytical-engine</title>
+  </head>
+  <body class="logged-in env-production page-responsive">
+    <div class="position-relative js-header-wrapper">
+      <a class="px-2 py-4 color-bg-accent-emphasis show-on-focus js-skip-to-content" href="#start-of-content">Skip to content</a>
+
+      <header class="AppHeader">
+        <div class="AppHeader-globalBar pb-2 js-global-bar">
+          <div class="AppHeader-globalBar-start">
+            <a class="AppHeader-logo ml-1" href="/" aria-label="Homepage">
+              <svg class="octicon octicon-mark-github v-align-middle" height="32" viewBox="0 0 16 16" width="32" aria-hidden="true"></svg>
+            </a>
+            <nav class="AppHeader-context" aria-label="Context navigation">
+              <ul class="AppHeader-context-full">
+                <li class="AppHeader-context-item-label">
+                  <a class="AppHeader-context-item" href="/ada-lovelace">ada-lovelace</a>
+                </li>
+                <li class="AppHeader-context-item-label">
+                  <a class="AppHeader-context-item" href="/ada-lovelace/analytical-engine">analytical-engine</a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+
+          <div class="AppHeader-globalBar-end">
+            <div class="AppHeader-search" role="search">
+              <qbsearch-input class="search-input">
+                <button type="button" class="AppHeader-button AppHeader-search-whenRegular" aria-label="Search or jump to…">
+                  <span class="AppHeader-search-control">Type <kbd class="AppHeader-search-kbd">/</kbd> to search</span>
+                </button>
+              </qbsearch-input>
+            </div>
+            <a class="AppHeader-button" href="/notifications" aria-label="Notifications">
+              <svg class="octicon octicon-inbox" height="16" width="16" aria-hidden="true"></svg>
+            </a>
+            <!-- Decoy: a user hovercard. The `issues` container also lists a bare
+                 [data-hovercard-type='issue'], so the type value is load-bearing. -->
+            <a
+              class="AppHeader-logo"
+              href="/ada-lovelace"
+              data-hovercard-type="user"
+              data-hovercard-url="/users/ada-lovelace/hovercard"
+            >
+              <img class="avatar circle" src="https://example.test/img.jpg" alt="" width="20" height="20" />
+            </a>
+          </div>
+        </div>
+      </header>
+    </div>
+
+    <div id="start-of-content" class="show-on-focus"></div>
+
+    <div id="repository-container-header" class="pt-3 hide-full-screen mb-5" data-turbo-replace>
+      <div class="d-flex flex-wrap flex-justify-between mb-3">
+        <div class="flex-auto min-width-0 width-fit mr-3">
+          <h1 class="d-flex flex-wrap flex-items-center wb-break-word f3 text-normal">
+            <svg class="octicon octicon-repo color-fg-muted mr-2" height="16" width="16" aria-hidden="true"></svg>
+            <span class="author flex-self-stretch">
+              <a class="url fn" rel="author" data-hovercard-type="organization" data-hovercard-url="/orgs/ada-lovelace/hovercard" href="/ada-lovelace">ada-lovelace</a>
+            </span>
+            <span class="mx-1 flex-self-stretch color-fg-muted">/</span>
+            <strong class="mr-2 flex-self-stretch">
+              <a data-pjax="#repo-content-pjax-container" href="/ada-lovelace/analytical-engine">analytical-engine</a>
+            </strong>
+            <span class="Label Label--secondary v-align-middle mr-1">Public</span>
+          </h1>
+        </div>
+        <ul class="pagehead-actions flex-shrink-0 d-none d-md-inline">
+          <li>
+            <a class="btn-sm btn" href="/ada-lovelace/analytical-engine/watchers">
+              <svg class="octicon octicon-eye" height="16" width="16" aria-hidden="true"></svg>
+              Watch <span class="Counter js-social-count">18</span>
+            </a>
+          </li>
+          <li>
+            <a class="btn-sm btn" href="/ada-lovelace/analytical-engine/forks">
+              <svg class="octicon octicon-repo-forked" height="16" width="16" aria-hidden="true"></svg>
+              Fork <span class="Counter">3</span>
+            </a>
+          </li>
+          <li>
+            <a class="btn-sm btn" href="/ada-lovelace/analytical-engine/stargazers">
+              <svg class="octicon octicon-star" height="16" width="16" aria-hidden="true"></svg>
+              Star <span class="Counter js-social-count">241</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <nav class="UnderlineNav" aria-label="Repository">
+        <ul class="UnderlineNav-body list-style-none">
+          <li class="d-inline-flex">
+            <a id="code-tab" class="UnderlineNav-item no-wrap js-responsive-underlinenav-item" href="/ada-lovelace/analytical-engine">
+              <svg class="octicon octicon-code UnderlineNav-octicon" height="16" width="16" aria-hidden="true"></svg>
+              <span data-content="Code">Code</span>
+            </a>
+          </li>
+          <li class="d-inline-flex">
+            <a id="issues-tab" class="UnderlineNav-item no-wrap js-responsive-underlinenav-item selected" aria-current="page" href="/ada-lovelace/analytical-engine/issues">
+              <svg class="octicon octicon-issue-opened UnderlineNav-octicon" height="16" width="16" aria-hidden="true"></svg>
+              <span data-content="Issues">Issues</span>
+              <span class="Counter" title="12">12</span>
+            </a>
+          </li>
+          <li class="d-inline-flex">
+            <a id="pull-requests-tab" class="UnderlineNav-item no-wrap js-responsive-underlinenav-item" href="/ada-lovelace/analytical-engine/pulls">
+              <svg class="octicon octicon-git-pull-request UnderlineNav-octicon" height="16" width="16" aria-hidden="true"></svg>
+              <span data-content="Pull requests">Pull requests</span>
+              <span class="Counter" title="4">4</span>
+            </a>
+          </li>
+          <li class="d-inline-flex">
+            <a id="actions-tab" class="UnderlineNav-item no-wrap js-responsive-underlinenav-item" href="/ada-lovelace/analytical-engine/actions">
+              <span data-content="Actions">Actions</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+
+    <div id="repo-content-pjax-container" class="repository-content">
+      <div class="clearfix mb-4">
+        <div class="float-left col-9">
+          <h2 class="f2 lh-condensed mb-1">Bernoulli engine v2</h2>
+          <div class="mb-2 f5 color-fg-muted">
+            Due by <relative-time datetime="2026-09-01T00:00:00Z">September 1, 2026</relative-time>
+            · Last updated <relative-time datetime="2026-07-24T16:02:11Z">6 days ago</relative-time>
+          </div>
+          <p class="mb-2 color-fg-muted">Second pass on the card feeder and the mill scheduler.</p>
+          <span class="Progress mb-2 d-block" role="progressbar" aria-valuenow="40">
+            <span class="Progress-item bg-success-emphasis" style="width: 40%;"></span>
+          </span>
+          <p class="text-small color-fg-muted mb-0">40% complete · 5 open · 3 closed</p>
+        </div>
+        <div class="float-right col-3 text-right">
+          <a class="btn btn-sm" href="/ada-lovelace/analytical-engine/milestones/3/edit">Edit milestone</a>
+        </div>
+      </div>
+
+      <div class="Box">
+        <div class="Box-header d-flex flex-items-center flex-justify-between">
+          <div class="table-list-header-toggle states flex-auto pl-0">
+            <a href="/ada-lovelace/analytical-engine/milestone/3?closed=0" class="btn-link selected" aria-current="page">
+              <svg class="octicon octicon-issue-opened" height="16" width="16" aria-hidden="true"></svg>
+              5 Open
+            </a>
+            <a href="/ada-lovelace/analytical-engine/milestone/3?closed=1" class="btn-link">
+              <svg class="octicon octicon-check" height="16" width="16" aria-hidden="true"></svg>
+              3 Closed
+            </a>
+          </div>
+          <div class="table-list-header-toggle states flex-auto flex-order-1 pr-3 text-right">
+            <details class="details-reset details-overlay select-menu float-right">
+              <summary class="btn-link" role="button">Sort</summary>
+              <details-menu class="SelectMenu right-0">
+                <div class="SelectMenu-modal">
+                  <!-- Decoy: menu links are anchors in the same Box, but outside the
+                       navigation container, so they must not be picked up as rows. -->
+                  <a class="SelectMenu-item js-navigation-item" href="?sort=created-desc" role="menuitem">Newest</a>
+                  <a class="SelectMenu-item js-navigation-item" href="?sort=comments-desc" role="menuitem">Most commented</a>
+                </div>
+              </details-menu>
+            </details>
+          </div>
+        </div>
+
+        <div class="js-navigation-container js-active-navigation-container" data-issue-and-pr-hovercards-enabled>
+          <div
+            id="issue_142"
+            class="Box-row Box-row--focus-gray p-0 mt-0 js-navigation-item js-issue-row"
+            data-id="I_kwDOAbCdEf0000142"
+            data-hovercard-type="issue"
+            data-hovercard-url="/ada-lovelace/analytical-engine/issues/142/hovercard"
+          >
+            <div class="d-flex hide-sm hide-md">
+              <div class="flex-shrink-0 pt-2 pl-3">
+                <input type="checkbox" class="js-issues-list-check" data-check-all-item name="issues[]" value="142" aria-label="Select issue" />
+              </div>
+              <span class="flex-shrink-0 pt-2 pl-3">
+                <svg class="octicon octicon-issue-opened color-fg-open" title="Open issue" height="16" width="16" aria-hidden="true"></svg>
+              </span>
+            </div>
+            <div class="flex-auto min-width-0 p-2 pr-3 pr-md-2">
+              <a
+                id="issue_142_link"
+                class="Link--primary v-align-middle no-underline h4 js-navigation-open markdown-title"
+                data-hovercard-type="issue"
+                data-hovercard-url="/ada-lovelace/analytical-engine/issues/142/hovercard"
+                href="/ada-lovelace/analytical-engine/issues/142"
+                >Card feeder jams on repeated Bernoulli loops</a
+              >
+              <span class="labels lh-default d-block d-md-inline">
+                <a
+                  id="label-6f1e2a"
+                  href="/ada-lovelace/analytical-engine/issues?q=is%3Aissue+is%3Aopen+label%3Abug"
+                  data-name="bug"
+                  class="IssueLabel hx_IssueLabel width-fit mb-1 mr-1"
+                  style="--label-r: 215; --label-g: 58; --label-b: 74;"
+                  >bug</a
+                >
+                <a
+                  id="label-9c4d10"
+                  href="/ada-lovelace/analytical-engine/issues?q=is%3Aissue+is%3Aopen+label%3Amill"
+                  data-name="mill"
+                  class="IssueLabel hx_IssueLabel width-fit mb-1 mr-1"
+                  style="--label-r: 12; --label-g: 132; --label-b: 199;"
+                  >mill</a
+                >
+              </span>
+              <div class="d-flex mt-1 text-small color-fg-muted">
+                <span class="opened-by flex-shrink-0">
+                  #142 opened <relative-time datetime="2026-06-18T14:22:09Z">last month</relative-time> by
+                  <a class="Link--muted" data-hovercard-type="user" data-hovercard-url="/users/ada-lovelace/hovercard" href="/ada-lovelace">ada-lovelace</a>
+                </span>
+                <span class="d-none d-md-flex mr-1 flex-shrink-0">
+                  <a class="Link--muted" href="/ada-lovelace/analytical-engine/milestone/3">Bernoulli engine v2</a>
+                </span>
+              </div>
+            </div>
+            <div class="flex-shrink-0 col-3 pt-2 text-right no-wrap d-flex hide-sm hide-md">
+              <span class="ml-2 flex-1 flex-shrink-0">
+                <a class="Link--muted" href="/ada-lovelace/analytical-engine/issues/142">
+                  <svg class="octicon octicon-comment" height="16" width="16" aria-hidden="true"></svg>
+                  4
+                </a>
+              </span>
+            </div>
+          </div>
+
+          <div
+            id="issue_147"
+            class="Box-row Box-row--focus-gray p-0 mt-0 js-navigation-item js-issue-row"
+            data-id="I_kwDOAbCdEf0000147"
+            data-hovercard-type="issue"
+            data-hovercard-url="/ada-lovelace/analytical-engine/issues/147/hovercard"
+          >
+            <div class="d-flex hide-sm hide-md">
+              <div class="flex-shrink-0 pt-2 pl-3">
+                <input type="checkbox" class="js-issues-list-check" data-check-all-item name="issues[]" value="147" aria-label="Select issue" />
+              </div>
+              <span class="flex-shrink-0 pt-2 pl-3">
+                <svg class="octicon octicon-issue-opened color-fg-open" title="Open issue" height="16" width="16" aria-hidden="true"></svg>
+              </span>
+            </div>
+            <div class="flex-auto min-width-0 p-2 pr-3 pr-md-2">
+              <a
+                id="issue_147_link"
+                class="Link--primary v-align-middle no-underline h4 js-navigation-open markdown-title"
+                data-hovercard-type="issue"
+                data-hovercard-url="/ada-lovelace/analytical-engine/issues/147/hovercard"
+                href="/ada-lovelace/analytical-engine/issues/147"
+                >Store column overflows past 40 digits without warning</a
+              >
+              <span class="labels lh-default d-block d-md-inline">
+                <a
+                  id="label-3ab991"
+                  href="/ada-lovelace/analytical-engine/issues?q=is%3Aissue+is%3Aopen+label%3Astore"
+                  data-name="store"
+                  class="IssueLabel hx_IssueLabel width-fit mb-1 mr-1"
+                  style="--label-r: 91; --label-g: 60; --label-b: 168;"
+                  >store</a
+                >
+              </span>
+              <div class="d-flex mt-1 text-small color-fg-muted">
+                <span class="opened-by flex-shrink-0">
+                  #147 opened <relative-time datetime="2026-07-02T08:41:55Z">4 weeks ago</relative-time> by
+                  <a class="Link--muted" data-hovercard-type="user" data-hovercard-url="/users/charles-babbage/hovercard" href="/charles-babbage">charles-babbage</a>
+                </span>
+              </div>
+            </div>
+            <div class="flex-shrink-0 col-3 pt-2 text-right no-wrap d-flex hide-sm hide-md">
+              <span class="ml-2 flex-1 flex-shrink-0">
+                <img class="avatar avatar-user" src="https://example.test/img.jpg" alt="" width="20" height="20" />
+              </span>
+              <span class="ml-2 flex-1 flex-shrink-0">
+                <a class="Link--muted" href="/ada-lovelace/analytical-engine/issues/147">
+                  <svg class="octicon octicon-comment" height="16" width="16" aria-hidden="true"></svg>
+                  1
+                </a>
+              </span>
+            </div>
+          </div>
+
+          <div
+            id="issue_151"
+            class="Box-row Box-row--focus-gray p-0 mt-0 js-navigation-item js-issue-row"
+            data-id="I_kwDOAbCdEf0000151"
+            data-hovercard-type="issue"
+            data-hovercard-url="/ada-lovelace/analytical-engine/issues/151/hovercard"
+          >
+            <div class="d-flex hide-sm hide-md">
+              <div class="flex-shrink-0 pt-2 pl-3">
+                <input type="checkbox" class="js-issues-list-check" data-check-all-item name="issues[]" value="151" aria-label="Select issue" />
+              </div>
+              <span class="flex-shrink-0 pt-2 pl-3">
+                <svg class="octicon octicon-issue-opened color-fg-open" title="Open issue" height="16" width="16" aria-hidden="true"></svg>
+              </span>
+            </div>
+            <div class="flex-auto min-width-0 p-2 pr-3 pr-md-2">
+              <a
+                id="issue_151_link"
+                class="Link--primary v-align-middle no-underline h4 js-navigation-open markdown-title"
+                data-hovercard-type="issue"
+                data-hovercard-url="/ada-lovelace/analytical-engine/issues/151/hovercard"
+                href="/ada-lovelace/analytical-engine/issues/151"
+                >Docs: describe the operation-card ordering rules</a
+              >
+              <span class="labels lh-default d-block d-md-inline">
+                <a
+                  id="label-77c0e4"
+                  href="/ada-lovelace/analytical-engine/issues?q=is%3Aissue+is%3Aopen+label%3Adocumentation"
+                  data-name="documentation"
+                  class="IssueLabel hx_IssueLabel width-fit mb-1 mr-1"
+                  style="--label-r: 0; --label-g: 117; --label-b: 202;"
+                  >documentation</a
+                >
+                <a
+                  id="label-11de03"
+                  href="/ada-lovelace/analytical-engine/issues?q=is%3Aissue+is%3Aopen+label%3Agood+first+issue"
+                  data-name="good first issue"
+                  class="IssueLabel hx_IssueLabel width-fit mb-1 mr-1"
+                  style="--label-r: 112; --label-g: 87; --label-b: 255;"
+                  >good first issue</a
+                >
+              </span>
+              <div class="d-flex mt-1 text-small color-fg-muted">
+                <span class="opened-by flex-shrink-0">
+                  #151 opened <relative-time datetime="2026-07-19T11:03:40Z">last week</relative-time> by
+                  <a class="Link--muted" data-hovercard-type="user" data-hovercard-url="/users/ada-lovelace/hovercard" href="/ada-lovelace">ada-lovelace</a>
+                </span>
+              </div>
+            </div>
+            <div class="flex-shrink-0 col-3 pt-2 text-right no-wrap d-flex hide-sm hide-md"></div>
+          </div>
+
+          <div
+            id="issue_149"
+            class="Box-row Box-row--focus-gray p-0 mt-0 js-navigation-item js-issue-row"
+            data-id="PR_kwDOAbCdEf0000149"
+            data-hovercard-type="pull_request"
+            data-hovercard-url="/ada-lovelace/analytical-engine/pull/149/hovercard"
+          >
+            <div class="d-flex hide-sm hide-md">
+              <div class="flex-shrink-0 pt-2 pl-3">
+                <input type="checkbox" class="js-issues-list-check" data-check-all-item name="issues[]" value="149" aria-label="Select pull request" />
+              </div>
+              <span class="flex-shrink-0 pt-2 pl-3">
+                <svg class="octicon octicon-git-pull-request color-fg-open" title="Open pull request" height="16" width="16" aria-hidden="true"></svg>
+              </span>
+            </div>
+            <div class="flex-auto min-width-0 p-2 pr-3 pr-md-2">
+              <a
+                id="issue_149_link"
+                class="Link--primary v-align-middle no-underline h4 js-navigation-open markdown-title"
+                data-hovercard-type="pull_request"
+                data-hovercard-url="/ada-lovelace/analytical-engine/pull/149/hovercard"
+                href="/ada-lovelace/analytical-engine/pull/149"
+                >Retime the card feeder against the mill clock</a
+              >
+              <span class="labels lh-default d-block d-md-inline">
+                <a
+                  id="label-6f1e2b"
+                  href="/ada-lovelace/analytical-engine/issues?q=is%3Apr+is%3Aopen+label%3Abug"
+                  data-name="bug"
+                  class="IssueLabel hx_IssueLabel width-fit mb-1 mr-1"
+                  style="--label-r: 215; --label-g: 58; --label-b: 74;"
+                  >bug</a
+                >
+              </span>
+              <div class="d-flex mt-1 text-small color-fg-muted">
+                <span class="opened-by flex-shrink-0">
+                  #149 opened <relative-time datetime="2026-07-08T19:15:02Z">3 weeks ago</relative-time> by
+                  <a class="Link--muted" data-hovercard-type="user" data-hovercard-url="/users/ada-lovelace/hovercard" href="/ada-lovelace">ada-lovelace</a>
+                </span>
+                <span class="d-none d-md-flex mr-1 flex-shrink-0">
+                  <a class="Link--muted" href="/ada-lovelace/analytical-engine/pull/149/checks">
+                    <svg class="octicon octicon-check color-fg-success" height="16" width="16" aria-hidden="true"></svg>
+                  </a>
+                </span>
+              </div>
+            </div>
+            <div class="flex-shrink-0 col-3 pt-2 text-right no-wrap d-flex hide-sm hide-md">
+              <span class="ml-2 flex-1 flex-shrink-0">
+                <a class="Link--muted" href="/ada-lovelace/analytical-engine/pull/149">
+                  <svg class="octicon octicon-comment" height="16" width="16" aria-hidden="true"></svg>
+                  7
+                </a>
+              </span>
+            </div>
+          </div>
+
+          <div
+            id="issue_153"
+            class="Box-row Box-row--focus-gray p-0 mt-0 js-navigation-item js-issue-row"
+            data-id="PR_kwDOAbCdEf0000153"
+            data-hovercard-type="pull_request"
+            data-hovercard-url="/ada-lovelace/analytical-engine/pull/153/hovercard"
+          >
+            <div class="d-flex hide-sm hide-md">
+              <div class="flex-shrink-0 pt-2 pl-3">
+                <input type="checkbox" class="js-issues-list-check" data-check-all-item name="issues[]" value="153" aria-label="Select pull request" />
+              </div>
+              <span class="flex-shrink-0 pt-2 pl-3">
+                <svg class="octicon octicon-git-pull-request-draft color-fg-muted" title="Draft pull request" height="16" width="16" aria-hidden="true"></svg>
+              </span>
+            </div>
+            <div class="flex-auto min-width-0 p-2 pr-3 pr-md-2">
+              <a
+                id="issue_153_link"
+                class="Link--primary v-align-middle no-underline h4 js-navigation-open markdown-title"
+                data-hovercard-type="pull_request"
+                data-hovercard-url="/ada-lovelace/analytical-engine/pull/153/hovercard"
+                href="/ada-lovelace/analytical-engine/pull/153"
+                >WIP: widen the store to 50 digits</a
+              >
+              <span class="labels lh-default d-block d-md-inline">
+                <a
+                  id="label-3ab992"
+                  href="/ada-lovelace/analytical-engine/issues?q=is%3Apr+is%3Aopen+label%3Astore"
+                  data-name="store"
+                  class="IssueLabel hx_IssueLabel width-fit mb-1 mr-1"
+                  style="--label-r: 91; --label-g: 60; --label-b: 168;"
+                  >store</a
+                >
+              </span>
+              <div class="d-flex mt-1 text-small color-fg-muted">
+                <span class="opened-by flex-shrink-0">
+                  #153 opened <relative-time datetime="2026-07-27T07:56:31Z">3 days ago</relative-time> by
+                  <a class="Link--muted" data-hovercard-type="user" data-hovercard-url="/users/charles-babbage/hovercard" href="/charles-babbage">charles-babbage</a>
+                </span>
+              </div>
+            </div>
+            <div class="flex-shrink-0 col-3 pt-2 text-right no-wrap d-flex hide-sm hide-md">
+              <span class="ml-2 flex-1 flex-shrink-0">
+                <a class="Link--muted" href="/ada-lovelace/analytical-engine/pull/153">
+                  <svg class="octicon octicon-comment" height="16" width="16" aria-hidden="true"></svg>
+                  2
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="paginate-container">
+        <div class="pagination">
+          <span class="previous_page disabled" aria-disabled="true">Previous</span>
+          <span class="next_page disabled" aria-disabled="true">Next</span>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer width-full container-xl p-responsive" role="contentinfo">
+      <ul class="list-style-none d-flex flex-wrap col-12 flex-justify-center">
+        <li class="mr-3 mr-lg-0"><a href="/site/terms">Terms</a></li>
+        <li class="mr-3 mr-lg-0"><a href="/site/privacy">Privacy</a></li>
+        <li class="mr-3 mr-lg-0"><a href="https://docs.github.com">Docs</a></li>
+      </ul>
+    </footer>
+  </body>
+</html>

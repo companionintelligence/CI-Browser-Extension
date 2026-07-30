@@ -1,0 +1,208 @@
+<!doctype html>
+<!--
+  Paramount+ "My List" (www.paramountplus.com/watchlist/), signed in.
+  SYNTHETIC — models the structure of the real page; see README.md.
+
+  All titles, synopses and artwork URLs are fabricated.
+
+  Structure notes that matter to the selectors:
+    * The list mixes shows and movies, so the type chip is ragged: three of the
+      four tiles carry one and the fourth does not. That is what the real list
+      looks like and it exercises the per-field hit rate rather than pretending
+      every field is always present.
+    * The "Trending Now" carousel at the bottom is a decoy — same carousel
+      scaffolding and same .aa-poster markup, but those are not saved items and
+      the watchlist container must not reach them.
+    * `continueWatching` is uncovered: the Keep Watching carousel lives on the
+      home hub, which is not one of this profile's targetUrl pages.
+-->
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My List - Paramount Plus</title>
+  </head>
+  <body class="pplus theme-dark" data-page="watchlist">
+    <div id="app" class="app-container">
+      <header class="site-masthead" role="banner">
+        <nav class="site-nav" aria-label="Primary">
+          <a class="site-nav__logo" href="/" aria-label="Paramount Plus">
+            <svg class="logo" aria-hidden="true" viewBox="0 0 120 24"></svg>
+          </a>
+          <ul class="site-nav__list">
+            <li class="site-nav__item"><a class="site-nav__link" href="/shows/">Shows</a></li>
+            <li class="site-nav__item"><a class="site-nav__link" href="/movies/">Movies</a></li>
+            <li class="site-nav__item"><a class="site-nav__link" href="/sports/">Sports</a></li>
+            <li class="site-nav__item"><a class="site-nav__link" href="/live-tv/">Live TV</a></li>
+            <li class="site-nav__item site-nav__item--active">
+              <a class="site-nav__link" href="/watchlist/" aria-current="page">My List</a>
+            </li>
+          </ul>
+          <div class="site-nav__utility">
+            <button class="utility-button utility-button--search" type="button" aria-label="Search"></button>
+            <a class="utility-button utility-button--account" href="/account/">
+              <img class="account-avatar" src="https://example.test/avatar-teal.png" alt="Ada Lovelace" width="30" height="30" />
+            </a>
+          </div>
+        </nav>
+      </header>
+
+      <main class="page-content watchlist-page" role="main">
+        <div class="watchlist-page__header">
+          <h1 class="watchlist-page__title">My List</h1>
+          <p class="watchlist-page__count">4 titles</p>
+          <div class="segmented-control" role="tablist" aria-label="Filter My List">
+            <button class="segmented-control__option segmented-control__option--selected" role="tab" aria-selected="true" type="button">
+              All
+            </button>
+            <button class="segmented-control__option" role="tab" aria-selected="false" type="button">Shows</button>
+            <button class="segmented-control__option" role="tab" aria-selected="false" type="button">Movies</button>
+          </div>
+        </div>
+
+        <div class="watchlist-grid" data-testid="watchlist-grid">
+          <div
+            class="grid-cell watchlist-tile"
+            data-testid="watchlist-tile"
+            data-content-id="00000000-1111-4000-8000-000000000001"
+          >
+            <a class="aa-poster" href="/shows/quantum-bakers/" aria-label="Quantum Bakers">
+              <picture class="aa-poster__picture">
+                <source srcset="https://example.test/img.jpg" media="(min-width: 768px)" />
+                <img class="thumbnail aa-poster__image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+              </picture>
+              <span class="show-type" data-testid="show-type">Series</span>
+            </a>
+            <div class="grid-cell__meta">
+              <h3 class="show-title" data-testid="title">Quantum Bakers</h3>
+              <span class="grid-cell__subtitle">3 Seasons</span>
+            </div>
+            <div class="hover-card" aria-hidden="true">
+              <p class="synopsis" data-testid="description">
+                Rival pastry chefs are handed a kitchen that runs on impossible physics.
+              </p>
+              <button class="hover-card__action" type="button" aria-label="Remove Quantum Bakers from My List">
+                In My List
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="grid-cell watchlist-tile"
+            data-testid="watchlist-tile"
+            data-content-id="00000000-1111-4000-8000-000000000002"
+          >
+            <a class="aa-poster" href="/shows/lighthouse-nine/" aria-label="Lighthouse Nine">
+              <picture class="aa-poster__picture">
+                <source srcset="https://example.test/img.jpg" media="(min-width: 768px)" />
+                <img class="thumbnail aa-poster__image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+              </picture>
+              <span class="show-type" data-testid="show-type">Series</span>
+              <span class="aa-poster__flag">New Episode</span>
+            </a>
+            <div class="grid-cell__meta">
+              <h3 class="show-title" data-testid="title">Lighthouse Nine</h3>
+              <span class="grid-cell__subtitle">1 Season</span>
+            </div>
+            <div class="hover-card" aria-hidden="true">
+              <p class="synopsis" data-testid="description">
+                A keeper on a shuttered island station receives weather reports from a year
+                that has not happened yet.
+              </p>
+              <button class="hover-card__action" type="button" aria-label="Remove Lighthouse Nine from My List">
+                In My List
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="grid-cell watchlist-tile"
+            data-testid="watchlist-tile"
+            data-content-id="00000000-1111-4000-8000-000000000003"
+          >
+            <a class="aa-poster" href="/movies/salt-flats-marathon/" aria-label="Salt Flats Marathon">
+              <picture class="aa-poster__picture">
+                <source srcset="https://example.test/img.jpg" media="(min-width: 768px)" />
+                <img class="thumbnail aa-poster__image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+              </picture>
+              <span class="show-type" data-testid="show-type">Movie</span>
+            </a>
+            <div class="grid-cell__meta">
+              <h3 class="show-title" data-testid="title">Salt Flats Marathon</h3>
+              <span class="grid-cell__subtitle">2026 &middot; 1 hr 48 min</span>
+            </div>
+            <div class="hover-card" aria-hidden="true">
+              <p class="synopsis" data-testid="description">
+                A retired courier runs one last delivery across a dry lake bed on foot.
+              </p>
+              <button class="hover-card__action" type="button" aria-label="Remove Salt Flats Marathon from My List">
+                In My List
+              </button>
+            </div>
+          </div>
+
+          <!-- No type chip on this one: the tile was added before the chip shipped. -->
+          <div
+            class="grid-cell watchlist-tile"
+            data-testid="watchlist-tile"
+            data-content-id="00000000-1111-4000-8000-000000000004"
+          >
+            <a class="aa-poster" href="/shows/the-paper-orchard/" aria-label="The Paper Orchard">
+              <picture class="aa-poster__picture">
+                <source srcset="https://example.test/img.jpg" media="(min-width: 768px)" />
+                <img class="thumbnail aa-poster__image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+              </picture>
+            </a>
+            <div class="grid-cell__meta">
+              <h3 class="show-title" data-testid="title">The Paper Orchard</h3>
+              <span class="grid-cell__subtitle">2 Seasons</span>
+            </div>
+            <div class="hover-card" aria-hidden="true">
+              <p class="synopsis" data-testid="description">
+                Three siblings inherit a print shop and, with it, every letter their town
+                never mailed.
+              </p>
+              <button class="hover-card__action" type="button" aria-label="Remove The Paper Orchard from My List">
+                In My List
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Decoy carousel: same poster markup, not saved items. -->
+        <section class="carousel" data-testid="trending-carousel" aria-labelledby="trending-heading">
+          <h2 class="carousel__heading" id="trending-heading">Trending Now</h2>
+          <ul class="carousel__track" role="list">
+            <li class="carousel__cell">
+              <a class="aa-poster" href="/shows/the-second-proof/">
+                <img class="thumbnail aa-poster__image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+              </a>
+              <h3 class="show-title">The Second Proof</h3>
+            </li>
+            <li class="carousel__cell">
+              <a class="aa-poster" href="/shows/kiln-street/">
+                <img class="thumbnail aa-poster__image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+              </a>
+              <h3 class="show-title">Kiln Street</h3>
+            </li>
+            <li class="carousel__cell">
+              <a class="aa-poster" href="/movies/no-flour-no-fire/">
+                <img class="thumbnail aa-poster__image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+              </a>
+              <h3 class="show-title">No Flour, No Fire</h3>
+            </li>
+          </ul>
+        </section>
+      </main>
+
+      <footer class="site-footer" role="contentinfo">
+        <ul class="site-footer__links">
+          <li><a class="site-footer__link" href="/terms-of-use/">Terms of Use</a></li>
+          <li><a class="site-footer__link" href="/privacy-policy/">Privacy Policy</a></li>
+          <li><a class="site-footer__link" href="/support/">Support</a></li>
+        </ul>
+        <p class="site-footer__legal">&copy; 2026 Fictional Streaming Co.</p>
+      </footer>
+    </div>
+  </body>
+</html>

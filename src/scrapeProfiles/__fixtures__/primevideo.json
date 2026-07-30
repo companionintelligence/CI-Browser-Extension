@@ -1,0 +1,8 @@
+{
+  "url": "https://www.primevideo.com/watchlist",
+  "provenance": "synthetic",
+  "note": "Models the Watchlist grid with a 'More to explore' storefront row below it as a decoy. Two caveats a reviewer should carry: (1) the live watchlist URL is region-scoped (https://www.primevideo.com/region/na/watchlist/ref=...), which none of the profile's targetUrl globs match, so this fixture's URL is more permissive than reality; (2) `recommendations`' container (.av-card, .tst-hover-card, ._1Yh0O) is a strict subset of `watchlist`'s, so every card here is also reported as a recommendation. `continueWatching` is uncovered — that carousel is on the home page, which is not in targetUrl. Replace with a captured, scrubbed page next time someone is signed in — see README.md.",
+  "expect": {
+    "watchlist": 4
+  }
+}

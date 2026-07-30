@@ -1,0 +1,322 @@
+<!doctype html>
+<!--
+  Hulu "My Stuff" (www.hulu.com/my-stuff), signed in, Shows tab.
+  SYNTHETIC — models the structure of the real page; see README.md.
+
+  Every title, profile name, avatar and image URL is fabricated. The masthead
+  account flyout is rendered open because that is where Hulu lists the account's
+  profiles; the "Because you added" row below the grid is a decoy — those tiles
+  share the .Tile component class but are NOT saved items and must not be
+  picked up by the watchlist container.
+-->
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My Stuff - Hulu</title>
+  </head>
+  <body class="Body Body--dark">
+    <div id="web-client-app" class="AppRoot">
+      <a class="SkipLink" href="#content">Skip to main content</a>
+
+      <header class="Masthead" data-automationid="masthead">
+        <nav class="Masthead__nav" aria-label="Primary">
+          <a class="Masthead__logo" href="/hub/home" aria-label="Hulu">
+            <svg class="Logo" role="img" aria-hidden="true" viewBox="0 0 60 20"></svg>
+          </a>
+
+          <ul class="NavList">
+            <li class="NavList__item">
+              <a class="NavList__link" href="/hub/home">Home</a>
+            </li>
+            <li class="NavList__item">
+              <a class="NavList__link" href="/hub/tv">TV</a>
+            </li>
+            <li class="NavList__item">
+              <a class="NavList__link" href="/hub/movies">Movies</a>
+            </li>
+            <li class="NavList__item">
+              <a class="NavList__link" href="/hub/networks">Networks</a>
+            </li>
+            <li class="NavList__item NavList__item--selected">
+              <a class="NavList__link" href="/my-stuff" aria-current="page">My Stuff</a>
+            </li>
+          </ul>
+
+          <div class="Masthead__actions">
+            <button class="IconButton IconButton--search" type="button" aria-label="Search">
+              <svg class="Icon" aria-hidden="true" viewBox="0 0 24 24"></svg>
+            </button>
+
+            <div class="AccountMenu" data-automationid="account-menu">
+              <button
+                class="AccountMenu__toggle"
+                type="button"
+                aria-expanded="true"
+                aria-controls="account-menu-flyout"
+              >
+                <img
+                  class="AccountMenu__avatar"
+                  src="https://example.test/avatar-teal.png"
+                  alt=""
+                  width="28"
+                  height="28"
+                />
+                <span class="AccountMenu__label">Ada</span>
+              </button>
+
+              <div class="AccountMenu__flyout" id="account-menu-flyout" role="menu">
+                <p class="AccountMenu__heading" id="switch-profiles-label">Switch Profiles</p>
+                <ul class="ProfileSwitcher" aria-labelledby="switch-profiles-label">
+                  <li
+                    class="ProfileSwitcher__entry profile-card profile-card--current"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-profile-slot="0"
+                  >
+                    <img
+                      class="ProfileSwitcher__avatar avatar"
+                      src="https://example.test/avatar-teal.png"
+                      alt=""
+                      width="40"
+                      height="40"
+                    />
+                    <span class="profile-name">Ada Lovelace</span>
+                    <span class="ProfileSwitcher__badge">Viewing</span>
+                  </li>
+                  <li
+                    class="ProfileSwitcher__entry profile-card"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-profile-slot="1"
+                  >
+                    <img
+                      class="ProfileSwitcher__avatar avatar"
+                      src="https://example.test/avatar-plum.png"
+                      alt=""
+                      width="40"
+                      height="40"
+                    />
+                    <span class="profile-name">Grace H.</span>
+                  </li>
+                  <li
+                    class="ProfileSwitcher__entry profile-card profile-card--kids"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-profile-slot="2"
+                  >
+                    <img
+                      class="ProfileSwitcher__avatar avatar"
+                      src="https://example.test/avatar-lime.png"
+                      alt=""
+                      width="40"
+                      height="40"
+                    />
+                    <span class="profile-name">Sprouts</span>
+                    <span class="ProfileSwitcher__badge">Kids</span>
+                  </li>
+                </ul>
+
+                <!-- Decoy: same flyout, same list markup, not profiles. -->
+                <ul class="AccountMenu__links">
+                  <li class="AccountMenu__linkItem">
+                    <a class="AccountMenu__link" href="https://secure.hulu.com/account">Account</a>
+                  </li>
+                  <li class="AccountMenu__linkItem">
+                    <a class="AccountMenu__link" href="/profiles/manage">Manage Profiles</a>
+                  </li>
+                  <li class="AccountMenu__linkItem">
+                    <a class="AccountMenu__link" href="https://help.hulu.com/">Help</a>
+                  </li>
+                  <li class="AccountMenu__linkItem">
+                    <a class="AccountMenu__link" href="/logout">Log Out</a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <main id="content" class="MyStuffPage" role="main">
+        <div class="MyStuffPage__header">
+          <h1 class="MyStuffPage__title">My Stuff</h1>
+          <div class="TabBar" role="tablist" aria-label="My Stuff categories">
+            <button class="TabBar__tab TabBar__tab--active" role="tab" aria-selected="true" type="button">
+              Shows
+            </button>
+            <button class="TabBar__tab" role="tab" aria-selected="false" type="button">Movies</button>
+            <button class="TabBar__tab" role="tab" aria-selected="false" type="button">Networks</button>
+            <button class="TabBar__tab" role="tab" aria-selected="false" type="button">Sports</button>
+          </div>
+        </div>
+
+        <section class="Collection" data-automationid="my-stuff-shows" aria-label="Saved shows">
+          <ul class="Collection__grid" role="list">
+            <li
+              class="Tile Tile--vertical my-stuff-item"
+              data-entity-id="6bb1f00a-0000-4000-8000-000000000001"
+            >
+              <a class="Tile__link title-link" href="/series/quantum-bakers-6bb1f00a">
+                <div class="Tile__artwork">
+                  <img
+                    class="Tile__image thumbnail"
+                    src="https://example.test/img.jpg"
+                    alt=""
+                    width="320"
+                    height="180"
+                    loading="lazy"
+                  />
+                  <span class="Tile__flag Tile__flag--new">New Episodes</span>
+                </div>
+              </a>
+              <div class="Tile__hoverCard" aria-hidden="true">
+                <p class="description show-description">
+                  Rival pastry chefs are handed a kitchen that runs on impossible physics.
+                </p>
+              </div>
+              <div class="Tile__metadata">
+                <h3 class="title show-title">Quantum Bakers</h3>
+                <span class="Tile__subtitle">3 Seasons</span>
+                <button class="Tile__remove" type="button" aria-label="Remove Quantum Bakers from My Stuff">
+                  Remove
+                </button>
+              </div>
+            </li>
+
+            <li
+              class="Tile Tile--vertical my-stuff-item"
+              data-entity-id="6bb1f00a-0000-4000-8000-000000000002"
+            >
+              <a class="Tile__link title-link" href="/series/lighthouse-nine-4c21e8b7">
+                <div class="Tile__artwork">
+                  <img
+                    class="Tile__image thumbnail"
+                    src="https://example.test/img.jpg"
+                    alt=""
+                    width="320"
+                    height="180"
+                    loading="lazy"
+                  />
+                </div>
+              </a>
+              <div class="Tile__hoverCard" aria-hidden="true">
+                <p class="description show-description">
+                  A keeper on a shuttered island station starts receiving weather reports from
+                  a year that has not happened yet.
+                </p>
+              </div>
+              <div class="Tile__metadata">
+                <h3 class="title show-title">Lighthouse Nine</h3>
+                <span class="Tile__subtitle">1 Season</span>
+                <button class="Tile__remove" type="button" aria-label="Remove Lighthouse Nine from My Stuff">
+                  Remove
+                </button>
+              </div>
+            </li>
+
+            <li
+              class="Tile Tile--vertical my-stuff-item"
+              data-entity-id="6bb1f00a-0000-4000-8000-000000000003"
+            >
+              <a class="Tile__link title-link" href="/series/the-paper-orchard-9f30ab55">
+                <div class="Tile__artwork">
+                  <img
+                    class="Tile__image thumbnail"
+                    src="https://example.test/img.jpg"
+                    alt=""
+                    width="320"
+                    height="180"
+                    loading="lazy"
+                  />
+                  <span class="Tile__flag">Hulu Original</span>
+                </div>
+              </a>
+              <div class="Tile__hoverCard" aria-hidden="true">
+                <p class="description show-description">
+                  Three siblings inherit a print shop and, with it, every letter their town
+                  never mailed.
+                </p>
+              </div>
+              <div class="Tile__metadata">
+                <h3 class="title show-title">The Paper Orchard</h3>
+                <span class="Tile__subtitle">2 Seasons</span>
+                <button class="Tile__remove" type="button" aria-label="Remove The Paper Orchard from My Stuff">
+                  Remove
+                </button>
+              </div>
+            </li>
+
+            <li
+              class="Tile Tile--vertical my-stuff-item"
+              data-entity-id="6bb1f00a-0000-4000-8000-000000000004"
+            >
+              <a class="Tile__link title-link" href="/movie/salt-flats-marathon-1d7e6620">
+                <div class="Tile__artwork">
+                  <img
+                    class="Tile__image thumbnail"
+                    src="https://example.test/img.jpg"
+                    alt=""
+                    width="320"
+                    height="180"
+                    loading="lazy"
+                  />
+                </div>
+              </a>
+              <div class="Tile__hoverCard" aria-hidden="true">
+                <p class="description show-description">
+                  A retired courier runs one last delivery across a dry lake bed on foot.
+                </p>
+              </div>
+              <div class="Tile__metadata">
+                <h3 class="title show-title">Salt Flats Marathon</h3>
+                <span class="Tile__subtitle">1 hr 48 min</span>
+                <button class="Tile__remove" type="button" aria-label="Remove Salt Flats Marathon from My Stuff">
+                  Remove
+                </button>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <!--
+          Decoy row. Same Tile component, same .title / .thumbnail hooks, but
+          these are recommendations rather than saved items — the watchlist
+          container must not reach them.
+        -->
+        <section class="Collection Collection--row" data-automationid="rec-row" aria-label="Because you added Quantum Bakers">
+          <h2 class="Collection__heading">Because you added Quantum Bakers</h2>
+          <ul class="Collection__row" role="list">
+            <li class="Tile Tile--horizontal" data-entity-id="0000c4a1-0000-4000-8000-00000000000a">
+              <a class="Tile__link" href="/series/the-second-proof-0000c4a1">
+                <img class="Tile__image thumbnail" src="https://example.test/img.jpg" alt="" loading="lazy" />
+              </a>
+              <h3 class="title">The Second Proof</h3>
+            </li>
+            <li class="Tile Tile--horizontal" data-entity-id="0000c4a1-0000-4000-8000-00000000000b">
+              <a class="Tile__link" href="/series/kiln-street-0000c4a2">
+                <img class="Tile__image thumbnail" src="https://example.test/img.jpg" alt="" loading="lazy" />
+              </a>
+              <h3 class="title">Kiln Street</h3>
+            </li>
+            <li class="Tile Tile--horizontal" data-entity-id="0000c4a1-0000-4000-8000-00000000000c">
+              <a class="Tile__link" href="/movie/no-flour-no-fire-0000c4a3">
+                <img class="Tile__image thumbnail" src="https://example.test/img.jpg" alt="" loading="lazy" />
+              </a>
+              <h3 class="title">No Flour, No Fire</h3>
+            </li>
+          </ul>
+        </section>
+      </main>
+
+      <footer class="SiteFooter" role="contentinfo">
+        <ul class="SiteFooter__links">
+          <li><a class="SiteFooter__link" href="/about">About Ads</a></li>
+          <li><a class="SiteFooter__link" href="/terms">Terms of Use</a></li>
+          <li><a class="SiteFooter__link" href="/privacy">Privacy Policy</a></li>
+        </ul>
+        <p class="SiteFooter__legal">&copy; 2026 Fictional Streaming Co.</p>
+      </footer>
+    </div>
+  </body>
+</html>

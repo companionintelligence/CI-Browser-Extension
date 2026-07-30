@@ -142,4 +142,50 @@ describe("profile registry invariants", () => {
     );
     expect(sensitive).toEqual(["robinhood.com"]);
   });
+
+  /**
+   * Two selectors in one profile that share a container match the SAME elements,
+   * and every selector runs on every matched page — so each shared element is
+   * captured twice, under two names. Since source ids are scoped per selector,
+   * both land as separate rows rather than deduping.
+   *
+   * airbnb is the worst case: `wishlist` and `hosting` share a container but
+   * carry DIFFERENT personalDataTypes, so a saved listing is filed as both a
+   * travel preference and business activity.
+   *
+   * These four are pre-existing and are pinned rather than fixed, because
+   * making the containers disjoint needs the real page markup to verify against
+   * and guessing would risk breaking a selector that works. The point of the
+   * test is that a NEW overlap fails immediately.
+   */
+  it("has no container overlap beyond the four known cases", () => {
+    const overlaps: string[] = [];
+
+    for (const profile of SCRAPE_PROFILES) {
+      const entries = Object.entries(profile.dataSelectors).map(
+        ([name, config]) =>
+          [
+            name,
+            new Set(config.container.split(",").map((s) => s.trim())),
+          ] as const,
+      );
+
+      for (let i = 0; i < entries.length; i++) {
+        for (let j = i + 1; j < entries.length; j++) {
+          const [aName, a] = entries[i];
+          const [bName, b] = entries[j];
+          if ([...a].some((sel) => b.has(sel))) {
+            overlaps.push(`${profile.domain}:${aName}+${bName}`);
+          }
+        }
+      }
+    }
+
+    expect(overlaps.sort()).toEqual([
+      "airbnb.com:wishlist+hosting",
+      "disneyplus.com:watchlist+recommendations",
+      "netflix.com:watchlist+recommendations",
+      "primevideo.com:watchlist+recommendations",
+    ]);
+  });
 });

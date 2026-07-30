@@ -40,6 +40,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "scrape:check": "jest src/scrape/fixtures.test.ts --verbose -t",
     "prepare:store": "npm run clean && npm run zip:all",
     "check:types": "tsc --noEmit --skipLibCheck"
   },
