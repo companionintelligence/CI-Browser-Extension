@@ -113,29 +113,72 @@ export function applyTransform(
 }
 
 /**
- * Run the matching profile over `document`, or return null when this URL has no
- * profile or produced nothing.
+ * Extract a profile's data from a document, with a per-selector account of what
+ * happened.
  *
- * Every item carries its selector name and `personalDataType`, so the caller
- * can route each row to a typed destination rather than flattening the whole
- * page into one anonymous blob.
+ * The diagnostics exist because the two failure modes are otherwise
+ * indistinguishable from success-with-no-data:
+ *
+ *   containersMatched = 0                  the container selector is stale
+ *   containersMatched > 0, itemsProduced 0 containers found, but every field
+ *                                          selector missed — the classic shape
+ *                                          of a site redesign
+ *
+ * Both currently surface as "returned nothing", which is also what an empty
+ * page looks like. `perFieldHitRate` narrows it further: one field at 0.0 while
+ * the rest are 1.0 is a single renamed class, not a rewrite.
+ *
+ * This is the same signal the runtime drift detection will consume, so it lives
+ * here rather than in the test harness.
  */
-export function scrape(document: Document, url: string): ScrapeResult | null {
+export interface SelectorDiagnostic {
+  selector: string;
+  personalDataType: string;
+  containersMatched: number;
+  itemsProduced: number;
+  /** Fraction of containers in which each field selector found something, 0..1. */
+  perFieldHitRate: Record<string, number>;
+}
+
+export interface ExtractionReport {
+  result: ScrapeResult | null;
+  diagnostics: SelectorDiagnostic[];
+}
+
+/** True when a selector matched containers but produced no usable rows. */
+export function looksBroken(d: SelectorDiagnostic): boolean {
+  return d.containersMatched > 0 && d.itemsProduced === 0;
+}
+
+/**
+ * Run the matching profile over `document`. Pure and DOM-only, so it is
+ * testable against a saved fixture with no browser APIs in play.
+ */
+export function extract(document: Document, url: string): ExtractionReport {
   const profile = profileForUrl(url);
   if (!profile) {
-    return null;
+    return { result: null, diagnostics: [] };
   }
 
   const items: ScrapedItem[] = [];
+  const diagnostics: SelectorDiagnostic[] = [];
 
   for (const [selector, config] of Object.entries(profile.dataSelectors)) {
-    for (const container of document.querySelectorAll(config.container)) {
+    const containers = [...document.querySelectorAll(config.container)];
+    const fieldNames = Object.keys(config.fields);
+    const hits: Record<string, number> = Object.fromEntries(
+      fieldNames.map((f) => [f, 0]),
+    );
+    let produced = 0;
+
+    for (const container of containers) {
       const fields: Record<string, unknown> = {};
 
       for (const [fieldName, fieldConfig] of Object.entries(config.fields)) {
         const value = readField(container, fieldConfig, url);
         if (value !== undefined) {
           fields[fieldName] = value;
+          hits[fieldName] += 1;
         }
       }
 
@@ -148,19 +191,48 @@ export function scrape(document: Document, url: string): ScrapeResult | null {
           personalDataType: config.personalDataType,
           fields,
         });
+        produced += 1;
       }
     }
+
+    diagnostics.push({
+      selector,
+      personalDataType: config.personalDataType,
+      containersMatched: containers.length,
+      itemsProduced: produced,
+      perFieldHitRate: Object.fromEntries(
+        fieldNames.map((f) => [
+          f,
+          containers.length === 0 ? 0 : hits[f] / containers.length,
+        ]),
+      ),
+    });
   }
 
   if (items.length === 0) {
-    return null;
+    return { result: null, diagnostics };
   }
 
   return {
-    profileName: profile.name,
-    domain: profile.domain,
-    url,
-    timestamp: new Date().toISOString(),
-    items,
+    result: {
+      profileName: profile.name,
+      domain: profile.domain,
+      url,
+      timestamp: new Date().toISOString(),
+      items,
+    },
+    diagnostics,
   };
+}
+
+/**
+ * Run the matching profile over `document`, or return null when this URL has no
+ * profile or produced nothing.
+ *
+ * Every item carries its selector name and `personalDataType`, so the caller
+ * can route each row to a typed destination rather than flattening the whole
+ * page into one anonymous blob.
+ */
+export function scrape(document: Document, url: string): ScrapeResult | null {
+  return extract(document, url).result;
 }

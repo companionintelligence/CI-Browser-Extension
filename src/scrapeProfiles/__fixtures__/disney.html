@@ -1,0 +1,217 @@
+<!doctype html>
+<!--
+  Disney+ home (www.disneyplus.com/home), signed in on a personal profile.
+  SYNTHETIC — models the structure of the real page; see README.md.
+
+  All titles, artwork URLs and progress values are fabricated.
+
+  Structure notes that matter to the selectors:
+    * The row heading ("Because You Watched …", "Adventure") sits OUTSIDE the
+      tile, which is how Disney+ actually builds a shelf — so the per-tile
+      `category` and `recommendationReason` fields find nothing here. That is a
+      property of the page, not a defect in the fixture.
+    * Resume tiles are a distinct component from browse tiles: they carry the
+      progress bar and no .content-tile class.
+    * The brand row and the hero are decoys — same shelf scaffolding, no tiles.
+-->
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Disney+ | Home</title>
+  </head>
+  <body class="body--dark">
+    <div id="app-root" class="app-root">
+      <nav class="global-nav" data-testid="global-nav" aria-label="Primary">
+        <ul class="global-nav__list">
+          <li class="global-nav__item global-nav__item--active">
+            <a class="global-nav__link" href="/home" aria-current="page">Home</a>
+          </li>
+          <li class="global-nav__item"><a class="global-nav__link" href="/search">Search</a></li>
+          <li class="global-nav__item"><a class="global-nav__link" href="/browse/watchlist">Watchlist</a></li>
+          <li class="global-nav__item"><a class="global-nav__link" href="/browse/originals">Originals</a></li>
+          <li class="global-nav__item"><a class="global-nav__link" href="/browse/movies">Movies</a></li>
+          <li class="global-nav__item"><a class="global-nav__link" href="/browse/series">Series</a></li>
+        </ul>
+        <button class="global-nav__profile" type="button" data-testid="profile-button" aria-haspopup="menu">
+          <img class="avatar-image" src="https://example.test/avatar-teal.png" alt="Ada Lovelace" width="32" height="32" />
+        </button>
+      </nav>
+
+      <main id="main" class="page page--home" role="main">
+        <section class="hero" data-testid="hero" aria-label="Featured">
+          <div class="hero__artwork">
+            <img class="hero__image" src="https://example.test/img.jpg" alt="" />
+          </div>
+          <div class="hero__copy">
+            <h1 class="hero__logo-title">The Paper Orchard</h1>
+            <p class="hero__description">Season 2 now streaming.</p>
+            <a class="hero__cta" href="/series/the-paper-orchard/1AbCdEfGhIjK">Play</a>
+          </div>
+        </section>
+
+        <!-- Decoy shelf: brand tiles are links, not content tiles. -->
+        <section class="shelf shelf--brands" data-testid="brand-set" aria-label="Brands">
+          <div class="shelf__scroller">
+            <a class="brand-tile" href="/brand/disney/8ByYs2Lqs8"><img class="brand-tile__image" src="https://example.test/img.jpg" alt="Disney" /></a>
+            <a class="brand-tile" href="/brand/pixar/2Ci9L3Iw7C"><img class="brand-tile__image" src="https://example.test/img.jpg" alt="Pixar" /></a>
+            <a class="brand-tile" href="/brand/marvel/6bWG7Y4Vjc"><img class="brand-tile__image" src="https://example.test/img.jpg" alt="Marvel" /></a>
+          </div>
+        </section>
+
+        <section class="shelf shelf--continue" data-testid="set-continue-watching" aria-labelledby="shelf-continue-title">
+          <h2 class="shelf__title" id="shelf-continue-title">Continue Watching</h2>
+          <div class="shelf__scroller" role="list">
+            <div
+              class="shelf__item continue-watching-item"
+              data-testid="continue-watching"
+              role="listitem"
+              data-item-id="c1000000-0000-4000-8000-000000000001"
+            >
+              <a class="asset-link" data-testid="content-link" href="/video/quantum-bakers/7HkLm2Nop3Qr">
+                <div class="asset__artwork">
+                  <img class="content-image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+                  <span class="asset__play-icon" aria-hidden="true"></span>
+                </div>
+              </a>
+              <div class="asset__progress-track">
+                <div class="progress-bar" data-testid="progress" style="width: 62%;" role="presentation"></div>
+              </div>
+              <div class="asset__meta">
+                <span class="content-title" data-testid="content-title">Quantum Bakers</span>
+                <span class="asset__episode">S2:E4 The Proof</span>
+                <span class="time-remaining" data-testid="time-remaining">18m left</span>
+              </div>
+              <button class="asset__menu" type="button" aria-label="More options for Quantum Bakers"></button>
+            </div>
+
+            <div
+              class="shelf__item continue-watching-item"
+              data-testid="continue-watching"
+              role="listitem"
+              data-item-id="c1000000-0000-4000-8000-000000000002"
+            >
+              <a class="asset-link" data-testid="content-link" href="/video/lighthouse-nine/4StUv5Wxy6Za">
+                <div class="asset__artwork">
+                  <img class="content-image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+                  <span class="asset__play-icon" aria-hidden="true"></span>
+                </div>
+              </a>
+              <div class="asset__progress-track">
+                <div class="progress-bar" data-testid="progress" style="width: 9%;" role="presentation"></div>
+              </div>
+              <div class="asset__meta">
+                <span class="content-title" data-testid="content-title">Lighthouse Nine</span>
+                <span class="asset__episode">S1:E1 Fog Signal</span>
+                <span class="time-remaining" data-testid="time-remaining">47m left</span>
+              </div>
+              <button class="asset__menu" type="button" aria-label="More options for Lighthouse Nine"></button>
+            </div>
+
+            <div
+              class="shelf__item continue-watching-item"
+              data-testid="continue-watching"
+              role="listitem"
+              data-item-id="c1000000-0000-4000-8000-000000000003"
+            >
+              <a class="asset-link" data-testid="content-link" href="/movies/salt-flats-marathon/9BcDe8FgHi7J">
+                <div class="asset__artwork">
+                  <img class="content-image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+                  <span class="asset__play-icon" aria-hidden="true"></span>
+                </div>
+              </a>
+              <div class="asset__progress-track">
+                <div class="progress-bar" data-testid="progress" style="width: 88%;" role="presentation"></div>
+              </div>
+              <div class="asset__meta">
+                <span class="content-title" data-testid="content-title">Salt Flats Marathon</span>
+                <span class="time-remaining" data-testid="time-remaining">12m left</span>
+              </div>
+              <button class="asset__menu" type="button" aria-label="More options for Salt Flats Marathon"></button>
+            </div>
+          </div>
+        </section>
+
+        <section class="shelf shelf--recommended" data-testid="set-recommended" aria-labelledby="shelf-rec-title">
+          <h2 class="shelf__title" id="shelf-rec-title">
+            <span class="shelf__title-text">Recommended For You</span>
+          </h2>
+          <div class="shelf__scroller" role="list">
+            <div
+              class="shelf__item content-tile recommended-item"
+              data-testid="recommended-content"
+              role="listitem"
+              data-item-id="r1000000-0000-4000-8000-000000000001"
+            >
+              <a class="asset-link" data-testid="content-link" href="/series/the-second-proof/1KlMn2Opq3Rs">
+                <div class="asset__artwork">
+                  <img class="content-image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+                </div>
+                <span class="content-title" data-testid="content-title">The Second Proof</span>
+              </a>
+            </div>
+
+            <div
+              class="shelf__item content-tile recommended-item"
+              data-testid="recommended-content"
+              role="listitem"
+              data-item-id="r1000000-0000-4000-8000-000000000002"
+            >
+              <a class="asset-link" data-testid="content-link" href="/series/kiln-street/5TuVw6Xyz7Ab">
+                <div class="asset__artwork">
+                  <img class="content-image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+                </div>
+                <span class="content-title" data-testid="content-title">Kiln Street</span>
+              </a>
+            </div>
+
+            <!-- Real shelves continue for ~20 tiles; trimmed for the fixture. -->
+          </div>
+        </section>
+
+        <section class="shelf" data-testid="set-because-you-watched" aria-labelledby="shelf-byw-title">
+          <h2 class="shelf__title" id="shelf-byw-title">
+            <span class="shelf__title-text">Because You Watched The Paper Orchard</span>
+          </h2>
+          <div class="shelf__scroller" role="list">
+            <div
+              class="shelf__item content-tile recommended-item"
+              data-testid="recommended-content"
+              role="listitem"
+              data-item-id="r2000000-0000-4000-8000-000000000001"
+            >
+              <a class="asset-link" data-testid="content-link" href="/series/letters-to-the-lock-keeper/2UvWx3YzAb4C">
+                <div class="asset__artwork">
+                  <img class="content-image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+                </div>
+                <span class="content-title" data-testid="content-title">Letters to the Lock Keeper</span>
+              </a>
+            </div>
+
+            <div
+              class="shelf__item content-tile recommended-item"
+              data-testid="recommended-content"
+              role="listitem"
+              data-item-id="r2000000-0000-4000-8000-000000000002"
+            >
+              <a class="asset-link" data-testid="content-link" href="/movies/the-linotype-summer/6DeFg7HiJk8L">
+                <div class="asset__artwork">
+                  <img class="content-image" src="https://example.test/img.jpg" alt="" loading="lazy" />
+                </div>
+                <span class="content-title" data-testid="content-title">The Linotype Summer</span>
+              </a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer" role="contentinfo">
+        <ul class="site-footer__links">
+          <li><a class="site-footer__link" href="/legal/subscriber-agreement">Subscriber Agreement</a></li>
+          <li><a class="site-footer__link" href="/legal/privacy-policy">Privacy Policy</a></li>
+          <li><a class="site-footer__link" href="/help">Help</a></li>
+        </ul>
+      </footer>
+    </div>
+  </body>
+</html>

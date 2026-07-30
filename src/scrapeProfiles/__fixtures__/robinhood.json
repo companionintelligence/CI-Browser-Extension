@@ -1,0 +1,8 @@
+{
+  "url": "https://www.robinhood.com/account/investing",
+  "provenance": "synthetic",
+  "note": "Account → Investing holdings table: four invented positions, plus a 'recently viewed' strip that reuses the symbol/name/price atoms without the holding container. `orders` (account → History) and `watchlist` (the Lists rail on the logged-in dashboard) are other pages and are not covered — one fixture per profile means only one page's selectors can ever be exercised. Two things a captured page would settle: the live app is served from the apex robinhood.com, while this profile's targetUrl globs all require a literal `www.`, and the page that actually shows holdings and watchlist together is the site root, which no targetUrl pattern matches. All tickers, companies, share counts and balances are fictional; this is a `sensitive` profile, so a captured replacement must be scrubbed with particular care — see README.md.",
+  "expect": {
+    "portfolio": 4
+  }
+}

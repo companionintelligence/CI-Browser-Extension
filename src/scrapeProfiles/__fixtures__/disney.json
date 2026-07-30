@@ -1,0 +1,9 @@
+{
+  "url": "https://www.disneyplus.com/home",
+  "provenance": "synthetic",
+  "note": "Models the signed-in home page: one Continue Watching shelf and two recommendation shelves. `watchlist` and `profiles` are uncovered because neither belongs on home — the watchlist lives at /browse/watchlist and the profile list at /select-profile, which is not in targetUrl. Note that `recommendations`' container includes .content-tile, which is also `watchlist`'s container, so the recommendation tiles here are additionally reported as watchlist rows; and `category` / `recommendationReason` find nothing because Disney+ puts the shelf heading outside the tile. Replace with a captured, scrubbed page next time someone is signed in — see README.md.",
+  "expect": {
+    "continueWatching": 3,
+    "recommendations": 4
+  }
+}

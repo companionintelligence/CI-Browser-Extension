@@ -1,0 +1,8 @@
+{
+  "url": "https://www.airbnb.com/trips/v1",
+  "provenance": "synthetic",
+  "note": "Trips page: two upcoming and two past reservations built from the same card component, plus an upsell card that reuses the title/location/price atoms without the trip-card container. `wishlist` and `hosting` live on /wishlists/* and /hosting/* and are not covered here — both of those containers also share the `._8ssblpx` alternative, so they would collide on any page that carried it. Airbnb's real class names are per-build hashes, so this fixture leans on the profile's data-testid alternatives; only a captured page can show whether those testids exist on the live site. Replace with a captured, scrubbed page next time someone is signed in — see README.md.",
+  "expect": {
+    "trips": 4
+  }
+}

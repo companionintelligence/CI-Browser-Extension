@@ -1,0 +1,8 @@
+{
+  "url": "https://www.quora.com/Would-a-fictional-appliance-benefit-from-a-second-keyboard",
+  "provenance": "synthetic",
+  "note": "Question page with three fabricated answers, modelled on Quora's real `q-box` utility markup. The `questions` selector passes here for the wrong reason and the count should not be read as success: `.q-box` is the wrapper class Quora puts on nearly every div, so it matches 75 containers on this page and produces 26 rows — the logo link, the nav, the ad slot, the related-questions rail and the footer links included. Every one of those rows carries only `questionUrl`, populated by the bare `a` selector; `title` (0/75), `topics` and `timestamp` never hit, because `.QuestionText / .question-text / .TopicTag` are not Quora class names. That is 26 rows of site chrome classified as `social_activity`. `answers` and `following` are not covered: `[data-testid='answer'], .AnswerBase, .Answer, .UserCard` etc. match nothing — Quora emits no data-testid at all, and its real hooks are class names (`puppeteer_test_answer_content`, `dom_annotate_question_answer_item_N`), which the fixture keeps so a rewritten profile has something to aim at. Replace with a captured page — see README.md.",
+  "expect": {
+    "questions": 3
+  }
+}

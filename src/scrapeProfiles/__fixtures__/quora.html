@@ -1,0 +1,264 @@
+<!doctype html>
+<!--
+  Quora question page (www.quora.com/<question-slug>).
+  SYNTHETIC — models the structure of the real page; see README.md.
+  Every question, answer, author, credential and count is fabricated.
+
+  Structural details modelled from the live site, because they decide what the
+  profile's selectors can hit:
+    - Quora's markup is a deep tree of `q-box` / `q-text` / `q-flex` utility
+      wrappers. `q-box` is on essentially every div on the page — header, nav,
+      ad slots, footer, each answer, each row inside each answer.
+    - the page's real automation hooks are class names, not data attributes:
+      `puppeteer_test_question_title`, `puppeteer_test_answer_content`,
+      `puppeteer_test_link`, and `dom_annotate_question_answer_item_N` on each
+      answer in the list. There is no `data-testid` anywhere.
+    - the question title is a <div class="q-text ... puppeteer_test_question_title">
+      wrapping a <span class="q-box">; it is not a heading element.
+    - answer bodies are <span class="q-text ..."> blocks; timestamps are plain
+      <span class="q-box"> with a colour modifier class.
+-->
+<html lang="en">
+  <head>
+    <title>Would a fictional appliance benefit from a second keyboard? - Quora</title>
+    <meta name="description" content="Answer (1 of 4): This question is fabricated for a test fixture." />
+  </head>
+  <body>
+    <div id="root">
+      <div class="q-box qu-overflowX--hidden">
+        <div class="q-box qu-position--sticky qu-zIndex--header qu-bg--raised">
+          <div class="q-box qu-display--flex qu-alignItems--center qu-justifyContent--space-between qu-py--small qu-px--medium">
+            <div class="q-box qu-display--flex qu-alignItems--center">
+              <a class="q-box qu-display--block puppeteer_test_link" href="/">
+                <img src="https://example.test/img.jpg" alt="Quora" width="80" height="24" />
+              </a>
+              <div class="q-box qu-ml--medium">
+                <div class="q-flex qu-alignItems--center">
+                  <a class="q-box qu-display--block puppeteer_test_link" href="/">Home</a>
+                  <a class="q-box qu-display--block puppeteer_test_link qu-ml--medium" href="/following">Following</a>
+                  <a class="q-box qu-display--block puppeteer_test_link qu-ml--medium" href="/answer">Answer</a>
+                  <a class="q-box qu-display--block puppeteer_test_link qu-ml--medium" href="/spaces">Spaces</a>
+                </div>
+              </div>
+            </div>
+            <div class="q-box qu-display--flex qu-alignItems--center">
+              <div class="q-box qu-mr--small">
+                <input class="q-input qu-borderRadius--pill" type="search" placeholder="Search Quora" aria-label="Search Quora" />
+              </div>
+              <button class="q-click-wrapper qu-active--bg--darken qu-borderRadius--pill" type="button">
+                <span class="q-text qu-medium">Add question</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="q-box qu-display--flex qu-justifyContent--center qu-pt--large">
+          <div id="mainContent" class="q-box qu-maxWidth--content qu-mr--large">
+            <div class="q-box qu-bg--raised qu-borderRadius--small qu-mb--small">
+              <div class="q-box qu-px--medium qu-pt--medium">
+                <div class="q-text qu-dynamicFontSize--regular_title qu-fontWeight--bold puppeteer_test_question_title">
+                  <span class="q-box qu-userSelect--text"
+                    >Would a fictional appliance benefit from a second keyboard?</span
+                  >
+                </div>
+              </div>
+              <div class="q-box qu-px--medium qu-py--small">
+                <div class="q-flex qu-alignItems--center">
+                  <button class="q-click-wrapper qu-active--bg--darken qu-borderRadius--pill qu-mr--small" type="button">
+                    <span class="q-text qu-medium">Answer</span>
+                  </button>
+                  <button class="q-click-wrapper qu-active--bg--darken qu-borderRadius--pill qu-mr--small" type="button">
+                    <span class="q-text qu-medium">Follow · 12</span>
+                  </button>
+                  <button class="q-click-wrapper qu-active--bg--darken qu-borderRadius--pill" type="button">
+                    <span class="q-text qu-medium">Request</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="q-box qu-mb--small">
+              <div class="q-box qu-bg--raised qu-borderRadius--small qu-p--medium dom_annotate_ad_unit">
+                <div class="q-text qu-color--gray_light qu-fontSize--small">Sponsored</div>
+                <a class="q-box qu-display--block puppeteer_test_link" href="https://example.test/promo"
+                  >A fabricated promotion for a product that does not exist</a
+                >
+              </div>
+            </div>
+
+            <div class="q-box">
+              <div class="q-text qu-fontWeight--bold qu-mb--small">4 answers</div>
+
+              <div class="q-box dom_annotate_question_answer_item_0 qu-bg--raised qu-borderRadius--small qu-mb--small">
+                <div class="q-box qu-px--medium qu-pt--medium">
+                  <div class="q-flex qu-alignItems--flex-start">
+                    <a class="q-box qu-display--block puppeteer_test_link qu-mr--small" href="/profile/Ada-Lovelace">
+                      <img class="q-box qu-borderRadius--circle" src="https://example.test/img.jpg" alt="" width="36" height="36" />
+                    </a>
+                    <div class="q-box qu-flexGrow--1">
+                      <div class="q-flex qu-alignItems--center">
+                        <a class="q-box qu-display--block puppeteer_test_link" href="/profile/Ada-Lovelace">
+                          <span class="q-text qu-fontWeight--bold">Ada Lovelace</span>
+                        </a>
+                        <span class="q-box qu-color--gray_light qu-ml--small qu-fontSize--small">· Follow</span>
+                      </div>
+                      <div class="q-box qu-color--gray_light qu-fontSize--small">
+                        Fabricated credential at a company that does not exist
+                      </div>
+                      <div class="q-box qu-color--gray_light qu-fontSize--small">
+                        <span class="q-box qu-color--gray_light">Answered 2y</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="q-box qu-px--medium qu-py--small">
+                  <div class="q-text qu-wordBreak--break-word puppeteer_test_answer_content">
+                    <span class="q-box qu-userSelect--text">
+                      <p class="q-text qu-display--block qu-mb--small">
+                        No. The fictional appliance in question has exactly one imaginary user,
+                        and that user has, by the terms of this made-up scenario, one hand free
+                        at a time.
+                      </p>
+                      <p class="q-text qu-display--block">
+                        A second keyboard would double the invented bill of materials for no
+                        benefit anyone in this example can describe.
+                      </p>
+                    </span>
+                  </div>
+                </div>
+                <div class="q-box qu-px--medium qu-py--small qu-borderTop">
+                  <div class="q-flex qu-alignItems--center">
+                    <button class="q-click-wrapper qu-active--bg--darken qu-borderRadius--pill qu-mr--small" type="button">
+                      <span class="q-text qu-medium">Upvote · 1.2K</span>
+                    </button>
+                    <button class="q-click-wrapper qu-active--bg--darken qu-borderRadius--pill qu-mr--small" type="button">
+                      <span class="q-text qu-medium">Downvote</span>
+                    </button>
+                    <a class="q-box qu-display--block puppeteer_test_link" href="/Would-a-fictional-appliance-benefit-from-a-second-keyboard/answer/Ada-Lovelace"
+                      >37 comments</a
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <div class="q-box dom_annotate_question_answer_item_1 qu-bg--raised qu-borderRadius--small qu-mb--small">
+                <div class="q-box qu-px--medium qu-pt--medium">
+                  <div class="q-flex qu-alignItems--flex-start">
+                    <a class="q-box qu-display--block puppeteer_test_link qu-mr--small" href="/profile/Grace-Placeholder">
+                      <img class="q-box qu-borderRadius--circle" src="https://example.test/img.jpg" alt="" width="36" height="36" />
+                    </a>
+                    <div class="q-box qu-flexGrow--1">
+                      <div class="q-flex qu-alignItems--center">
+                        <a class="q-box qu-display--block puppeteer_test_link" href="/profile/Grace-Placeholder">
+                          <span class="q-text qu-fontWeight--bold">Grace Placeholder</span>
+                        </a>
+                        <span class="q-box qu-color--gray_light qu-ml--small qu-fontSize--small">· Follow</span>
+                      </div>
+                      <div class="q-box qu-color--gray_light qu-fontSize--small">
+                        Invented job title, invented employer
+                      </div>
+                      <div class="q-box qu-color--gray_light qu-fontSize--small">
+                        <span class="q-box qu-color--gray_light">Updated 8mo</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="q-box qu-px--medium qu-py--small">
+                  <div class="q-text qu-wordBreak--break-word puppeteer_test_answer_content">
+                    <span class="q-box qu-userSelect--text">
+                      <p class="q-text qu-display--block">
+                        Yes, but only in the fabricated variant where the appliance is operated
+                        by two people who refuse to take turns. That variant does not ship.
+                      </p>
+                    </span>
+                  </div>
+                </div>
+                <div class="q-box qu-px--medium qu-py--small qu-borderTop">
+                  <div class="q-flex qu-alignItems--center">
+                    <button class="q-click-wrapper qu-active--bg--darken qu-borderRadius--pill qu-mr--small" type="button">
+                      <span class="q-text qu-medium">Upvote · 431</span>
+                    </button>
+                    <button class="q-click-wrapper qu-active--bg--darken qu-borderRadius--pill" type="button">
+                      <span class="q-text qu-medium">Downvote</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="q-box dom_annotate_question_answer_item_2 qu-bg--raised qu-borderRadius--small qu-mb--small">
+                <div class="q-box qu-px--medium qu-pt--medium">
+                  <div class="q-flex qu-alignItems--flex-start">
+                    <a class="q-box qu-display--block puppeteer_test_link qu-mr--small" href="/profile/Sample-Person-42">
+                      <img class="q-box qu-borderRadius--circle" src="https://example.test/img.jpg" alt="" width="36" height="36" />
+                    </a>
+                    <div class="q-box qu-flexGrow--1">
+                      <div class="q-flex qu-alignItems--center">
+                        <a class="q-box qu-display--block puppeteer_test_link" href="/profile/Sample-Person-42">
+                          <span class="q-text qu-fontWeight--bold">Sample Person</span>
+                        </a>
+                        <span class="q-box qu-color--gray_light qu-ml--small qu-fontSize--small">· Follow</span>
+                      </div>
+                      <div class="q-box qu-color--gray_light qu-fontSize--small">
+                        Wrote a made-up book about made-up appliances
+                      </div>
+                      <div class="q-box qu-color--gray_light qu-fontSize--small">
+                        <span class="q-box qu-color--gray_light">Answered 3y</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="q-box qu-px--medium qu-py--small">
+                  <div class="q-text qu-wordBreak--break-word puppeteer_test_answer_content">
+                    <span class="q-box qu-userSelect--text">
+                      <p class="q-text qu-display--block">
+                        The premise is imaginary, so the honest answer is that it depends on
+                        details nobody has invented yet.
+                      </p>
+                    </span>
+                  </div>
+                </div>
+                <div class="q-box qu-px--medium qu-py--small qu-borderTop">
+                  <div class="q-flex qu-alignItems--center">
+                    <button class="q-click-wrapper qu-active--bg--darken qu-borderRadius--pill" type="button">
+                      <span class="q-text qu-medium">Upvote · 88</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="q-box qu-maxWidth--sidebar">
+            <div class="q-box qu-bg--raised qu-borderRadius--small qu-p--medium qu-mb--small dom_annotate_related_questions">
+              <div class="q-text qu-fontWeight--bold qu-mb--small">Related questions</div>
+              <div class="q-box qu-py--small qu-borderBottom">
+                <a class="q-box qu-display--block puppeteer_test_link" href="/How-many-keyboards-does-a-fictional-laptop-need"
+                  >How many keyboards does a fictional laptop need?</a
+                >
+              </div>
+              <div class="q-box qu-py--small qu-borderBottom">
+                <a class="q-box qu-display--block puppeteer_test_link" href="/Do-imaginary-devices-need-imaginary-batteries"
+                  >Do imaginary devices need imaginary batteries?</a
+                >
+              </div>
+              <div class="q-box qu-py--small">
+                <a class="q-box qu-display--block puppeteer_test_link" href="/What-would-a-made-up-appliance-cost-to-manufacture"
+                  >What would a made-up appliance cost to manufacture?</a
+                >
+              </div>
+            </div>
+
+            <div class="q-box qu-bg--raised qu-borderRadius--small qu-p--medium">
+              <div class="q-text qu-color--gray_light qu-fontSize--small">
+                <a class="q-box qu-display--inline" href="/about">About</a> ·
+                <a class="q-box qu-display--inline" href="/about/careers">Careers</a> ·
+                <a class="q-box qu-display--inline" href="/about/privacy">Privacy</a> ·
+                <a class="q-box qu-display--inline" href="/about/tos">Terms</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

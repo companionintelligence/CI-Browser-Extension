@@ -185,6 +185,22 @@ cannot drift apart. (They previously did: five profiles were registered but
 absent from the content script's hand-maintained match list, so they silently
 never ran.)
 
+Profiles are **schema-validated at load**, so a misspelled key, an unknown field
+`type`, or a selector missing its `personalDataType` fails immediately and by
+name rather than silently capturing nothing.
+
+**A fixture is required.** Every profile ships with a saved copy of a page it
+runs on plus the extraction expected from it
+([`src/scrapeProfiles/__fixtures__/`](src/scrapeProfiles/__fixtures__/)), and the
+test suite fails if one is missing. `yarn scrape:check <domain>` runs a profile
+against its fixture and reports, per selector, how many containers matched and
+how many items were produced — which is what distinguishes "this page is empty"
+from "this site was redesigned and every field selector now misses".
+
+Note what a fixture does *not* prove: one written by reading the profile's own
+selectors is circular, and only confirms the profile agrees with itself. That is
+why fixtures record a `provenance` of `captured` or `synthetic`. Prefer captured.
+
 ---
 
 ## 3. Where it goes

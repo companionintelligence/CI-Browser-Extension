@@ -10,6 +10,7 @@
  */
 
 import type { ScrapeProfile } from "./types";
+import { assertValidProfile } from "./validate";
 
 import airbnb from "@/scrapeProfiles/airbnb.json";
 import cnn from "@/scrapeProfiles/cnn.json";
@@ -26,23 +27,37 @@ import slashdot from "@/scrapeProfiles/slashdot.json";
 import wsj from "@/scrapeProfiles/wsj.json";
 
 // `template.json` is documentation, not a profile, and is deliberately absent.
-const PROFILE_MODULES = [
-  airbnb,
-  cnn,
-  disney,
-  github,
-  hulu,
-  max,
-  netflix,
-  paramount,
-  primevideo,
-  quora,
-  robinhood,
-  slashdot,
-  wsj,
-] as unknown as ScrapeProfile[];
+//
+// Paired with its filename so a validation failure names the file to fix rather
+// than an array index.
+const PROFILE_MODULES: [string, unknown][] = [
+  ["airbnb", airbnb],
+  ["cnn", cnn],
+  ["disney", disney],
+  ["github", github],
+  ["hulu", hulu],
+  ["max", max],
+  ["netflix", netflix],
+  ["paramount", paramount],
+  ["primevideo", primevideo],
+  ["quora", quora],
+  ["robinhood", robinhood],
+  ["slashdot", slashdot],
+  ["wsj", wsj],
+];
 
-export const SCRAPE_PROFILES: readonly ScrapeProfile[] = PROFILE_MODULES;
+/**
+ * Validated at module load rather than cast.
+ *
+ * These are JSON imports, so TypeScript checks nothing about their contents: a
+ * misspelled `atribute`, a missing `personalDataType`, or `type: "txt"` used to
+ * compile, ship, and then yield nothing at runtime — indistinguishable from a
+ * site that changed its markup. Failing loudly here converts a silent capture
+ * gap into an immediate, named error.
+ */
+export const SCRAPE_PROFILES: readonly ScrapeProfile[] = PROFILE_MODULES.map(
+  ([slug, raw]) => assertValidProfile(raw, `${slug}.json`),
+);
 
 /**
  * Every match pattern across all profiles, deduped and sorted.

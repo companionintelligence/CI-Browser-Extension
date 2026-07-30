@@ -1,0 +1,9 @@
+{
+  "url": "https://github.com/ada-lovelace/analytical-engine/milestone/3",
+  "provenance": "synthetic",
+  "note": "Milestone page — the one list view that mixes issue rows and pull-request rows in a single js-navigation-container, so it exercises both selectors. Three issue rows and two PR rows; `issues` over-matches and picks up all five (its container has no data-hovercard-type filter), so the expectation is the honest floor of three. `repositories`, `commits` and `activity` live on other pages and are not covered. Replace with a captured, scrubbed page next time someone is signed in — see README.md.",
+  "expect": {
+    "issues": 3,
+    "pullRequests": 2
+  }
+}

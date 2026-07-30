@@ -1,0 +1,309 @@
+<!doctype html>
+<!--
+  Slashdot front page (slashdot.org) — the firehose index.
+  SYNTHETIC — models the structure of the real page; see README.md.
+  Every story, editor handle, summary, department and comment count is fabricated.
+
+  Structural details modelled from the real index, because the selectors depend
+  on them:
+    - a story is <article class="article usualPaddingKiller grid_absolute">
+    - the headline lives in <h2 class="story"> and the *topic icon* anchor comes
+      FIRST inside that h2, before the anchor carrying the story title
+    - the summary is <div id="text-NNN" class="p">
+    - the comment count is <a class="comment-bubble">
+    - "from the ... dept." is plain text inside .story-byline; it carries no
+      class of its own
+-->
+<html lang="en">
+  <head>
+    <title>Slashdot: News for nerds, stuff that matters</title>
+    <meta name="description" content="Slashdot: News for nerds, stuff that matters" />
+  </head>
+  <body class="index2 firehose">
+    <div id="fh-cover"></div>
+
+    <div id="pagecontainer" class="grid_24">
+      <header id="masthead" class="grid_24">
+        <div id="logo">
+          <a href="//slashdot.org/"><img src="https://example.test/img.jpg" alt="Slashdot" /></a>
+        </div>
+        <div id="user-space">
+          <span class="user-not-logged-in"><a href="//slashdot.org/my/login">Log In</a></span>
+          <span class="nickname"><a href="//slashdot.org/my/mailpass">Sign up</a></span>
+        </div>
+        <nav id="menus" aria-label="Sections">
+          <ul class="menu">
+            <li class="menu-item"><a href="//tech.slashdot.org/">Technology</a></li>
+            <li class="menu-item"><a href="//science.slashdot.org/">Science</a></li>
+            <li class="menu-item"><a href="//it.slashdot.org/">IT</a></li>
+            <li class="menu-item"><a href="//hardware.slashdot.org/">Hardware</a></li>
+            <li class="menu-item"><a href="//linux.slashdot.org/">Linux</a></li>
+            <li class="menu-item"><a href="//politics.slashdot.org/">Politics</a></li>
+          </ul>
+        </nav>
+      </header>
+
+      <div id="slashboxes-header" class="grid_24">
+        <div class="block" id="topnav-block">
+          <div class="title"><h4>Follow Slashdot on <a href="//example.test/feed">RSS</a></h4></div>
+        </div>
+      </div>
+
+      <section id="firehoselist" class="fhblock grid_16">
+        <article
+          id="firehose-30112233"
+          class="article usualPaddingKiller grid_absolute"
+          data-fhid="30112233"
+        >
+          <header>
+            <h2 class="story">
+              <span class="topic">
+                <a href="//tech.slashdot.org/index2.pl?fhfilter=%22programming%22" title="Programming">
+                  <img src="https://example.test/img.jpg" alt="Programming" width="64" height="64" />
+                </a>
+              </span>
+              <span id="title-30112233">
+                <a
+                  href="//tech.slashdot.org/story/26/07/28/1512/fictional-standards-body-declares-semicolons-optional"
+                  >Fictional Standards Body Declares Semicolons Optional</a
+                >
+              </span>
+              <span class="story-sourcelnk">(example.test)</span>
+              <span class="storyviews">148</span>
+            </h2>
+            <div class="details">
+              <span class="story-byline">
+                Posted by
+                <a href="//slashdot.org/~SampleEditor" class="user">SampleEditor</a>
+                on
+                <time datetime="2026-07-28T15:12:00">Tuesday July 28, 2026 @03:12PM</time>
+                from the punctuation-is-a-suggestion dept.
+              </span>
+            </div>
+          </header>
+          <div class="body" id="fhbody-30112233">
+            <div id="text-30112233" class="p">
+              An entirely made-up standards committee has voted to make statement terminators
+              optional in the next revision of a language that does not exist, citing
+              <a href="https://example.test/report">a survey</a> of 12 fictional developers.
+              Dissenting members have promised a competing specification by the end of the
+              imaginary fiscal year.
+            </div>
+            <div class="story-footer">
+              <span class="comments" id="comments-30112233">
+                <a
+                  href="//tech.slashdot.org/story/26/07/28/1512/fictional-standards-body-declares-semicolons-optional#comments"
+                  class="comment-bubble">217</a
+                >
+                comments
+              </span>
+              <span class="nbutton"><b><a href="//slashdot.org/my/submit">Share</a></b></span>
+            </div>
+          </div>
+        </article>
+
+        <article
+          id="firehose-30112240"
+          class="article usualPaddingKiller grid_absolute"
+          data-fhid="30112240"
+        >
+          <header>
+            <h2 class="story">
+              <span class="topic">
+                <a href="//science.slashdot.org/index2.pl?fhfilter=%22space%22" title="Space">
+                  <img src="https://example.test/img.jpg" alt="Space" width="64" height="64" />
+                </a>
+              </span>
+              <span id="title-30112240">
+                <a
+                  href="//science.slashdot.org/story/26/07/28/1340/imaginary-probe-returns-a-postcard-from-nowhere"
+                  >Imaginary Probe Returns a Postcard From Nowhere</a
+                >
+              </span>
+              <span class="story-sourcelnk">(example.test)</span>
+              <span class="storyviews">96</span>
+            </h2>
+            <div class="details">
+              <span class="story-byline">
+                Posted by
+                <a href="//slashdot.org/~AnotherEditor" class="user">AnotherEditor</a>
+                on
+                <time datetime="2026-07-28T13:40:00">Tuesday July 28, 2026 @01:40PM</time>
+                from the long-way-home dept.
+              </span>
+            </div>
+          </header>
+          <div class="body" id="fhbody-30112240">
+            <div id="text-30112240" class="p">
+              A fictional deep-space probe has phoned home after a made-up 14-year cruise,
+              transmitting a single low-resolution image that the invented mission team
+              describes as "mostly dark, but ours."
+            </div>
+            <div class="story-footer">
+              <span class="comments" id="comments-30112240">
+                <a
+                  href="//science.slashdot.org/story/26/07/28/1340/imaginary-probe-returns-a-postcard-from-nowhere#comments"
+                  class="comment-bubble">84</a
+                >
+                comments
+              </span>
+              <span class="nbutton"><b><a href="//slashdot.org/my/submit">Share</a></b></span>
+            </div>
+          </div>
+        </article>
+
+        <article
+          id="firehose-30112251"
+          class="article usualPaddingKiller grid_absolute"
+          data-fhid="30112251"
+        >
+          <header>
+            <h2 class="story">
+              <span class="topic">
+                <a href="//it.slashdot.org/index2.pl?fhfilter=%22security%22" title="Security">
+                  <img src="https://example.test/img.jpg" alt="Security" width="64" height="64" />
+                </a>
+              </span>
+              <span id="title-30112251">
+                <a
+                  href="//it.slashdot.org/story/26/07/28/1102/made-up-vendor-ships-patch-for-a-bug-nobody-reported"
+                  >Made-Up Vendor Ships Patch For a Bug Nobody Reported</a
+                >
+              </span>
+              <span class="story-sourcelnk">(example.test)</span>
+              <span class="storyviews">51</span>
+            </h2>
+            <div class="details">
+              <span class="story-byline">
+                Posted by
+                <a href="//slashdot.org/~SampleEditor" class="user">SampleEditor</a>
+                on
+                <time datetime="2026-07-28T11:02:00">Tuesday July 28, 2026 @11:02AM</time>
+                from the shipping-it-anyway dept.
+              </span>
+            </div>
+          </header>
+          <div class="body" id="fhbody-30112251">
+            <div id="text-30112251" class="p">
+              An invented appliance vendor pushed an out-of-band update this morning for a
+              vulnerability its own advisory admits "has never been observed, described, or
+              filed." Administrators report the patch reboots the fictional appliance twice.
+            </div>
+            <div class="story-footer">
+              <span class="comments" id="comments-30112251">
+                <a
+                  href="//it.slashdot.org/story/26/07/28/1102/made-up-vendor-ships-patch-for-a-bug-nobody-reported#comments"
+                  class="comment-bubble">309</a
+                >
+                comments
+              </span>
+              <span class="nbutton"><b><a href="//slashdot.org/my/submit">Share</a></b></span>
+            </div>
+          </div>
+        </article>
+
+        <article
+          id="firehose-30112262"
+          class="article usualPaddingKiller grid_absolute"
+          data-fhid="30112262"
+        >
+          <header>
+            <h2 class="story">
+              <span class="topic">
+                <a href="//hardware.slashdot.org/index2.pl?fhfilter=%22hardware%22" title="Hardware">
+                  <img src="https://example.test/img.jpg" alt="Hardware" width="64" height="64" />
+                </a>
+              </span>
+              <span id="title-30112262">
+                <a
+                  href="//hardware.slashdot.org/story/26/07/28/0915/nonexistent-laptop-adds-a-second-keyboard-for-symmetry"
+                  >Nonexistent Laptop Adds a Second Keyboard For Symmetry</a
+                >
+              </span>
+              <span class="story-sourcelnk">(example.test)</span>
+              <span class="storyviews">73</span>
+            </h2>
+            <div class="details">
+              <span class="story-byline">
+                Posted by
+                <a href="//slashdot.org/~AnotherEditor" class="user">AnotherEditor</a>
+                on
+                <time datetime="2026-07-28T09:15:00">Tuesday July 28, 2026 @09:15AM</time>
+                from the twice-the-typing dept.
+              </span>
+            </div>
+          </header>
+          <div class="body" id="fhbody-30112262">
+            <div id="text-30112262" class="p">
+              A hardware company that does not exist has announced a fictional notebook with a
+              keyboard on both halves of the chassis, arguing that users have "two hands and
+              only one keyboard, which is clearly an oversight."
+            </div>
+            <div class="story-footer">
+              <span class="comments" id="comments-30112262">
+                <a
+                  href="//hardware.slashdot.org/story/26/07/28/0915/nonexistent-laptop-adds-a-second-keyboard-for-symmetry#comments"
+                  class="comment-bubble">142</a
+                >
+                comments
+              </span>
+              <span class="nbutton"><b><a href="//slashdot.org/my/submit">Share</a></b></span>
+            </div>
+          </div>
+        </article>
+
+        <div id="fh-paginate" class="fhblock">
+          <a href="//slashdot.org/?page=2" class="more">More stories</a>
+        </div>
+      </section>
+
+      <aside id="slashboxes" class="grid_8">
+        <div class="block" id="pollBooth">
+          <div class="title"><h4>Poll</h4></div>
+          <div class="content">
+            <p class="poll-question">How many keyboards does a laptop need?</p>
+            <ul class="pollanswers">
+              <li>One</li>
+              <li>Two</li>
+              <li>CowboyNeal</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="block" id="firehose-sectional">
+          <div class="title"><h4>Recent Stories</h4></div>
+          <div class="content">
+            <ul class="recent-list">
+              <li class="recent-item">
+                <a href="//tech.slashdot.org/story/26/07/27/2210/fictional-compiler-warns-about-itself"
+                  >Fictional Compiler Warns About Itself</a
+                >
+              </li>
+              <li class="recent-item">
+                <a href="//science.slashdot.org/story/26/07/27/1955/invented-telescope-sees-invented-thing"
+                  >Invented Telescope Sees Invented Thing</a
+                >
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="block" id="sponsored-block">
+          <div class="title"><h4>Slashdot Deals</h4></div>
+          <div class="content">
+            <p>Fictional bundle, fictional discount. <a href="//example.test/deal">Details</a></p>
+          </div>
+        </div>
+      </aside>
+
+      <footer id="ft" class="grid_24">
+        <ul class="footer-links">
+          <li><a href="//slashdot.org/faq">FAQ</a></li>
+          <li><a href="//slashdot.org/archive.pl">Archive</a></li>
+          <li><a href="//slashdot.org/privacy">Privacy Statement</a></li>
+        </ul>
+        <p class="copyright">Copyright fictional entity. All trademarks are property of nobody.</p>
+      </footer>
+    </div>
+  </body>
+</html>

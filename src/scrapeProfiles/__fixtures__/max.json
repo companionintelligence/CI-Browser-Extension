@@ -1,0 +1,8 @@
+{
+  "url": "https://www.max.com/watchlist",
+  "provenance": "synthetic",
+  "note": "Models the My List grid: four saved titles plus one lazy-load placeholder card that matches the container but yields no fields, so the container count (5) is deliberately higher than the row count (4). `viewingHistory` and `recommendations` are uncovered — My List has neither a Continue Watching strip nor content rows. Replace with a captured, scrubbed page next time someone is signed in — see README.md.",
+  "expect": {
+    "watchlist": 4
+  }
+}
