@@ -21,8 +21,10 @@ never the cloud.
 
 The extension is a personal web-archival tool. It records **your own** browsing
 activity and sends it to your private CI Server, building a searchable digital
-memory of your online life. Lifescope never receives your data, and there are no
-third-party trackers.
+memory of your online life. Lifescope never receives your captured data, and
+there are no third-party trackers. (Signing in uses Lifescope's identity service,
+CI-Portal, which necessarily learns who you are — but never what you capture.
+You can point the extension at your own Portal under **Advanced**.)
 
 ## ✨ Features
 
@@ -34,9 +36,11 @@ third-party trackers.
   menu.
 - **Ignored Pages and Sites** — exclude any site or page from capture in one
   click. Nothing on your ignore list is ever uploaded.
-- **Supported-site profiles** — structured capture (e.g. watchlists) on Netflix,
-  Hulu, Disney+, Max, Paramount+, Prime Video, GitHub, and Slashdot — only on
-  those domains.
+- **Supported-site profiles** — structured capture from 13 sites: Netflix, Hulu,
+  Disney+, Max, Paramount+, Prime Video (incl. `amazon.com/gp/video`), CNN, WSJ,
+  Slashdot, GitHub, Quora, Airbnb, and Robinhood — each only on the specific
+  pages it was written for. Robinhood is **off unless you opt in**. See
+  [`CAPTURE.md`](CAPTURE.md).
 - **Reliable background sync** — uses the `chrome.alarms` lifecycle so scheduled
   work survives MV3 service-worker suspension.
 - **Self-hosted & token-secured** — point it at any CI Server domain; auth is a
@@ -52,6 +56,10 @@ data-handling disclosure, and [`CHANGELOG.md`](CHANGELOG.md) for release notes.
 | Sync to your server | Pick what's captured | Keep private sites private |
 |---|---|---|
 | ![](store-assets/shared/screenshot-1.png) | ![](store-assets/shared/screenshot-2.png) | ![](store-assets/shared/screenshot-3.png) |
+
+| One sign-in | Recover what services forget |
+|---|---|
+| ![](store-assets/shared/screenshot-4.png) | ![](store-assets/shared/screenshot-5.png) |
 
 ## 🚀 Installation
 
@@ -116,12 +124,14 @@ yarn prepare:store       # clean + zip all store targets into .output/
 src/
 ├── entrypoints/
 │   ├── background.ts            # sync engine, auth, alarms, device setup
-│   ├── content.ts              # scroll depth + page metadata + highlight save
+│   ├── content.ts              # scroll depth + page metadata (reports on request)
 │   ├── domainScraper.content.ts # supported-site capture
 │   └── popup/                  # popup UI (App.tsx, BlacklistManager.tsx)
+├── lib/                        # capture queue, ignore filter, validation
+├── scrape/                     # profile registry + scrape engine
 ├── scrapeProfiles/             # per-site scrape profile JSON
+├── services/                   # OIDC auth, portal discovery, ingest transport
 ├── store/                      # Redux Toolkit + webext-redux
-├── indexeddb.ts                # local queue
 └── utils.ts                    # URL parsing, ignore-list matching
 store-assets/                   # store + README art (regenerate via render.sh)
 ```
@@ -134,8 +144,8 @@ store-assets/                   # store + README art (regenerate via render.sh)
 - **Storage:** `browser.storage.local` — settings, synced-ID bookkeeping, and a
   bounded retry queue for live captures that fail to upload
 - **HTTP:** posts captures to your CI Server's typed bulk lanes —
-  `POST /api/v1/browser-activity` (visits, downloads, scrapes) and
-  `POST /api/v1/contents` (bookmarks, highlights) — then
+  `POST /api/v1/browser-activity` (visits, downloads) and
+  `POST /api/v1/contents` (bookmarks, highlights, scraped items) — then
   `POST /api/v1/ingest/finish` so what was written becomes searchable; device
   registration via `/api/devices`
 
@@ -147,12 +157,14 @@ MV3 (iOS via `build:safari-mobile`), plus Edge/Opera/Brave/DuckDuckGo
 1. Navigation events and manual/auto sync collect activity (minus your ignore lists).
 2. Items are de-duplicated against local sync bookkeeping.
 3. Batches POST to your CI Server's `/api/v1/browser-activity` and
-   `/api/v1/contents` with the portal `id_token` as the Bearer; the server dedups
+   `/api/v1/contents` with the portal `id_token` as the Bearer. Ignore-list rules
+   are applied to every capture path here, at the transport; the server dedups
    on `(source_type, source_system, source_id)`.
 4. A `POST /api/v1/ingest/finish` sweep indexes the batch — the bulk lanes write
    without indexing, so this is what makes captures searchable.
 5. A live capture whose upload fails (offline, server down) is queued locally and
-   retried on the next auto-sync tick rather than being dropped.
+   retried at the start of the next sync — automatic or manual — rather than
+   being dropped.
 6. Page title/description come from the page itself (a content-script read) — no
    third-party metadata service.
 
