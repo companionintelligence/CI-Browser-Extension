@@ -2,6 +2,9 @@
   "domain": "netflix.com",
   "name": "Netflix Data Scraper",
   "description": "Scrapes Netflix viewing history, watchlist, and account data",
+  "matchPatterns": [
+    "*://*.netflix.com/*"
+  ],
   "targetUrl": [
     "https://www.netflix.com/settings/viewed/*",
     "https://www.netflix.com/browse/my-list*",
@@ -9,6 +12,7 @@
   ],
   "dataSelectors": {
     "viewingHistory": {
+      "personalDataType": "entertainment_preferences",
       "container": "[data-uia='retableRow'], .retableRow, tr, .title-container",
       "fields": {
         "date": {
@@ -47,6 +51,7 @@
       }
     },
     "watchlist": {
+      "personalDataType": "entertainment_preferences",
       "container": ".title-card, [data-uia='title-card'], .slider-item, .title-wrapper, .boxart-container",
       "fields": {
         "title": {
@@ -74,6 +79,7 @@
       }
     },
     "recommendations": {
+      "personalDataType": "entertainment_preferences",
       "container": ".title-card, [data-uia='title-card'], .slider-item, .billboard-row .title-wrapper",
       "fields": {
         "title": {
@@ -99,22 +105,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "viewing_history",
-      "description": "Netflix viewing history entries with watch dates and titles",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "watchlist",
-      "description": "Netflix saved watchlist items",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "recommendations",
-      "description": "Netflix personalized recommendations",
-      "personalDataType": "entertainment_preferences"
-    }
-  ]
+  }
 }

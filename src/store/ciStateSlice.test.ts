@@ -60,6 +60,8 @@ describe("ciStateSlice", () => {
         bookmarkSyncEnabled: false,
         downloadSyncEnabled: false,
         historySyncEnabled: true,
+        // Financial scrape profiles are never captured without an explicit opt-in
+        sensitiveScrapingEnabled: false,
       });
     });
   });
@@ -198,6 +200,7 @@ describe("ciStateSlice", () => {
         "bookmarkSyncEnabled",
         "downloadSyncEnabled",
         "historySyncEnabled",
+        "sensitiveScrapingEnabled",
         "serverURL",
         "serverURLSource",
         "serverDomain",

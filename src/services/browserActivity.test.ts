@@ -7,6 +7,7 @@ import {
   toBrowserActivityRecord,
   toBookmarkContentRecord,
   toHighlightContentRecord,
+  toScrapeContentRecord,
   sendBrowserCaptures,
   sourceIdFor,
   toInstant,
@@ -26,6 +27,15 @@ function activity(over: Partial<BrowserActivity> = {}): BrowserActivity {
 
 const UUID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
 
+describe("SOURCE_SYSTEM", () => {
+  // Pinned deliberately: this string is part of the server-side dedup triple
+  // AND the join key for content→event auto-linking, so it has to match the
+  // platform event-ingest spec exactly. Changing it re-uploads everything.
+  it("matches the platform spec's name for this capture source", () => {
+    expect(SOURCE_SYSTEM).toBe("ci-browser-extension");
+  });
+});
+
 describe("url builders", () => {
   // The `/api` prefix is the gateway's — CI-Server mounts the controller at `v1`
   // and the gateway 405s a bare `/v1/...` without ever reaching the API.
@@ -43,16 +53,18 @@ describe("url builders", () => {
 });
 
 describe("isContentCapture", () => {
-  it("routes bookmarks and highlights to content", () => {
+  it("routes bookmarks, highlights and scrapes to content", () => {
     expect(isContentCapture(activity({ action_type: "bookmark" }))).toBe(true);
     expect(isContentCapture(activity({ action_type: "highlight" }))).toBe(true);
+    // Scrapes moved here: the browser-activity enum has no `scrape`, so they
+    // used to arrive as anonymous web.page_view rows.
+    expect(isContentCapture(activity({ action_type: "scrape" }))).toBe(true);
   });
 
-  it("leaves visits, searches, downloads and scrapes on browser-activity", () => {
+  it("leaves actual page activity on browser-activity", () => {
     expect(isContentCapture(activity({ action_type: "visit" }))).toBe(false);
     expect(isContentCapture(activity({ action_type: "search" }))).toBe(false);
     expect(isContentCapture(activity({ action_type: "download" }))).toBe(false);
-    expect(isContentCapture(activity({ action_type: "scrape" }))).toBe(false);
   });
 });
 
@@ -281,6 +293,82 @@ describe("toHighlightContentRecord", () => {
   });
 });
 
+describe("toScrapeContentRecord", () => {
+  function scraped(over: Partial<BrowserActivity> = {}): BrowserActivity {
+    return activity({
+      action_type: "scrape",
+      title: "Stranger Things",
+      url: "https://www.netflix.com/settings/viewed/x",
+      properties: {
+        source_id: "netflix.com:viewingHistory:0",
+        personal_data_type: "entertainment_preferences",
+        scrape_profile: "Netflix Data Scraper",
+        domain: "netflix.com",
+        data_type: "viewingHistory",
+        data: {
+          title: "Stranger Things",
+          date: "2026-03-04",
+          titleUrl: "https://www.netflix.com/title/1",
+        },
+      },
+      ...over,
+    });
+  }
+
+  // The whole point of moving scrapes off the browser-activity lane: the row is
+  // typed by what it is, not flattened into an anonymous page view.
+  it("types the record by the profile's personalDataType", () => {
+    expect(toScrapeContentRecord(scraped())?.type).toBe(
+      "entertainment_preferences",
+    );
+  });
+
+  it("points url at the item and source_url at the page it came from", () => {
+    const r = toScrapeContentRecord(scraped());
+    expect(r?.url).toBe("https://www.netflix.com/title/1");
+    expect(r?.source_url).toBe("https://www.netflix.com/settings/viewed/x");
+  });
+
+  it("falls back to the page url when the item has none of its own", () => {
+    const r = toScrapeContentRecord(
+      scraped({
+        properties: {
+          personal_data_type: "professional_activity",
+          data: { name: "some-repo" },
+        },
+      }),
+    );
+    expect(r?.url).toBe("https://www.netflix.com/settings/viewed/x");
+  });
+
+  // source_data is not search-indexed; text (weight 5) and title (10) are.
+  it("joins the item's own values into searchable text, minus url fields", () => {
+    const r = toScrapeContentRecord(scraped());
+    expect(r?.text).toBe("Stranger Things · 2026-03-04");
+    expect(r?.text).not.toContain("netflix.com/title/1");
+  });
+
+  it("carries provenance and the capture time", () => {
+    const r = toScrapeContentRecord(scraped());
+    expect(r).toMatchObject({
+      source_type: "capture",
+      source_system: SOURCE_SYSTEM,
+      source_id: "scrape:netflix.com:viewingHistory:0",
+    });
+    expect(r?.source_data).toMatchObject({
+      obtained_at: "2024-01-02T03:04:05.000Z",
+      scrape_profile: "Netflix Data Scraper",
+    });
+  });
+
+  it("skips an item with no classification or no page", () => {
+    expect(
+      toScrapeContentRecord(scraped({ properties: { data: {} } })),
+    ).toBeNull();
+    expect(toScrapeContentRecord(scraped({ url: "  " }))).toBeNull();
+  });
+});
+
 describe("sendBrowserCaptures", () => {
   function okFetch() {
     return jest.fn().mockResolvedValue({
@@ -290,7 +378,7 @@ describe("sendBrowserCaptures", () => {
     });
   }
 
-  it("splits bookmarks + highlights to /contents, the rest to /browser-activity", async () => {
+  it("splits bookmarks + highlights + scrapes to /contents, page activity to /browser-activity", async () => {
     const fetchMock = okFetch();
     (global as { fetch?: unknown }).fetch = fetchMock;
 
@@ -299,7 +387,18 @@ describe("sendBrowserCaptures", () => {
       "portal-jwt",
       [
         activity(),
-        activity({ action_type: "scrape", properties: { source_id: "s1" } }),
+        activity({
+          action_type: "download",
+          properties: { download_id: "d1" },
+        }),
+        activity({
+          action_type: "scrape",
+          properties: {
+            source_id: "s1",
+            personal_data_type: "entertainment_preferences",
+            data: { title: "Some Show" },
+          },
+        }),
         activity({
           action_type: "bookmark",
           properties: { bookmark_id: "b1" },
@@ -323,11 +422,12 @@ describe("sendBrowserCaptures", () => {
     );
     const ba = byUrl.get("https://hub.ci.computer/api/v1/browser-activity");
     const contents = byUrl.get("https://hub.ci.computer/api/v1/contents");
-    // visit + scrape stay on browser-activity; bookmark + highlight go to content.
+    // visit + download stay on browser-activity; the rest are content, each
+    // typed by what it is rather than collapsing into one bucket.
     expect((ba?.records as unknown[]).length).toBe(2);
     expect(
       (contents?.records as { type: string }[]).map((r) => r.type).sort(),
-    ).toEqual(["bookmark", "highlight"]);
+    ).toEqual(["bookmark", "entertainment_preferences", "highlight"]);
 
     const [, init] = fetchMock.mock.calls[0];
     expect(

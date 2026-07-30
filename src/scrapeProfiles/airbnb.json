@@ -2,6 +2,9 @@
   "domain": "airbnb.com",
   "name": "Airbnb Data Scraper",
   "description": "Scrapes Airbnb bookings, wishlist, and travel history",
+  "matchPatterns": [
+    "*://*.airbnb.com/*"
+  ],
   "targetUrl": [
     "https://www.airbnb.com/trips/*",
     "https://www.airbnb.com/wishlists/*",
@@ -9,6 +12,7 @@
   ],
   "dataSelectors": {
     "trips": {
+      "personalDataType": "travel_history",
       "container": "[data-testid='trip-card'], .trip-card, ._1h30gqq",
       "fields": {
         "propertyName": {
@@ -49,6 +53,7 @@
       }
     },
     "wishlist": {
+      "personalDataType": "travel_preferences",
       "container": "[data-testid='wishlist-item'], .wishlist-item, ._8ssblpx",
       "fields": {
         "propertyName": {
@@ -79,6 +84,7 @@
       }
     },
     "hosting": {
+      "personalDataType": "business_activity",
       "container": "[data-testid='listing'], .listing, ._8ssblpx",
       "fields": {
         "listingName": {
@@ -103,22 +109,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "travel_bookings",
-      "description": "Airbnb trip bookings and travel history",
-      "personalDataType": "travel_history"
-    },
-    {
-      "name": "travel_preferences",
-      "description": "Airbnb wishlist and saved properties",
-      "personalDataType": "travel_preferences"
-    },
-    {
-      "name": "hosting_activity",
-      "description": "Airbnb hosting listings and earnings",
-      "personalDataType": "business_activity"
-    }
-  ]
+  }
 }

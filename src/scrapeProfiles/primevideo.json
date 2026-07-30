@@ -2,6 +2,10 @@
   "domain": "primevideo.com",
   "name": "Prime Video Data Scraper",
   "description": "Scrapes Prime Video watchlist, viewing history, and recommendations",
+  "matchPatterns": [
+    "*://*.primevideo.com/*",
+    "*://*.amazon.com/gp/video/*"
+  ],
   "targetUrl": [
     "https://www.primevideo.com/watchlist*",
     "https://www.primevideo.com/profile*",
@@ -10,6 +14,7 @@
   ],
   "dataSelectors": {
     "watchlist": {
+      "personalDataType": "entertainment_preferences",
       "container": "[data-testid='watchlist-item'], .av-card, .tst-hover-card, ._1Yh0O",
       "fields": {
         "title": {
@@ -19,7 +24,7 @@
         },
         "titleUrl": {
           "selector": "a",
-          "type": "attribute", 
+          "type": "attribute",
           "attribute": "href",
           "transform": "absoluteUrl"
         },
@@ -42,6 +47,7 @@
       }
     },
     "continueWatching": {
+      "personalDataType": "entertainment_preferences",
       "container": "[data-testid='continue-watching'], .continue-watching-card, ._3F55p",
       "fields": {
         "title": {
@@ -68,6 +74,7 @@
       }
     },
     "recommendations": {
+      "personalDataType": "entertainment_preferences",
       "container": ".av-card, .tst-hover-card, ._1Yh0O",
       "fields": {
         "title": {
@@ -88,22 +95,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "watchlist",
-      "description": "Prime Video watchlist items",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "viewing_history",
-      "description": "Prime Video continue watching and viewing history",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "recommendations",
-      "description": "Prime Video personalized recommendations",
-      "personalDataType": "entertainment_preferences"
-    }
-  ]
+  }
 }

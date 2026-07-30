@@ -2,6 +2,9 @@
   "domain": "disneyplus.com",
   "name": "Disney+ Data Scraper",
   "description": "Scrapes Disney+ watchlist, viewing history, and account data",
+  "matchPatterns": [
+    "*://*.disneyplus.com/*"
+  ],
   "targetUrl": [
     "https://www.disneyplus.com/browse/watchlist*",
     "https://www.disneyplus.com/home*",
@@ -10,6 +13,7 @@
   ],
   "dataSelectors": {
     "watchlist": {
+      "personalDataType": "entertainment_preferences",
       "container": ".content-tile, .asset-tile, .watchlist-item, [data-testid='content-tile']",
       "fields": {
         "title": {
@@ -47,6 +51,7 @@
       }
     },
     "continueWatching": {
+      "personalDataType": "entertainment_preferences",
       "container": ".continue-watching-item, .resume-item, [data-testid='continue-watching']",
       "fields": {
         "title": {
@@ -79,6 +84,7 @@
       }
     },
     "recommendations": {
+      "personalDataType": "entertainment_preferences",
       "container": ".recommended-item, .content-tile, [data-testid='recommended-content']",
       "fields": {
         "title": {
@@ -105,6 +111,7 @@
       }
     },
     "profiles": {
+      "personalDataType": "account_data",
       "container": ".profile-tile, .user-profile, [data-testid='profile-tile']",
       "fields": {
         "profileName": {
@@ -126,6 +133,7 @@
       }
     },
     "accountInfo": {
+      "personalDataType": "account_data",
       "container": ".account-details, .subscription-info, [data-testid='account-info']",
       "fields": {
         "email": {
@@ -145,32 +153,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "watchlist",
-      "description": "Disney+ saved watchlist items",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "viewing_progress",
-      "description": "Disney+ continue watching and viewing progress",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "recommendations",
-      "description": "Disney+ personalized content recommendations",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "user_profiles",
-      "description": "Disney+ user profiles and settings",
-      "personalDataType": "account_data"
-    },
-    {
-      "name": "account_info",
-      "description": "Disney+ account and subscription information",
-      "personalDataType": "account_data"
-    }
-  ]
+  }
 }

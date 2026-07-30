@@ -2,6 +2,9 @@
   "domain": "hulu.com",
   "name": "Hulu Data Scraper",
   "description": "Scrapes Hulu account data, viewing history, and watchlist",
+  "matchPatterns": [
+    "*://*.hulu.com/*"
+  ],
   "targetUrl": [
     "https://secure.hulu.com/account*",
     "https://secure.hulu.com/*",
@@ -10,6 +13,7 @@
   ],
   "dataSelectors": {
     "accountInfo": {
+      "personalDataType": "account_data",
       "container": ".account-info, .profile-info, .user-details, .account-section",
       "fields": {
         "email": {
@@ -35,6 +39,7 @@
       }
     },
     "watchHistory": {
+      "personalDataType": "entertainment_preferences",
       "container": ".watch-history-item, .history-item, .viewing-activity-row",
       "fields": {
         "title": {
@@ -66,6 +71,7 @@
       }
     },
     "watchlist": {
+      "personalDataType": "entertainment_preferences",
       "container": ".watchlist-item, .my-stuff-item, .saved-item, .favorite-item",
       "fields": {
         "title": {
@@ -98,6 +104,7 @@
       }
     },
     "profiles": {
+      "personalDataType": "account_data",
       "container": ".profile-item, .user-profile, .profile-card",
       "fields": {
         "profileName": {
@@ -118,27 +125,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "account_info",
-      "description": "Hulu account information and subscription details",
-      "personalDataType": "account_data"
-    },
-    {
-      "name": "viewing_history",
-      "description": "Hulu viewing history and watch progress",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "watchlist",
-      "description": "Hulu saved watchlist and favorites",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "user_profiles",
-      "description": "Hulu user profiles and settings",
-      "personalDataType": "account_data"
-    }
-  ]
+  }
 }

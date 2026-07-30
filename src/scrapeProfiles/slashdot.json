@@ -2,12 +2,16 @@
   "domain": "slashdot.org",
   "name": "Slashdot History Scraper",
   "description": "Scrapes Slashdot articles and reading history",
+  "matchPatterns": [
+    "*://*.slashdot.org/*"
+  ],
   "targetUrl": [
     "https://slashdot.org/*",
     "https://*.slashdot.org/*"
   ],
   "dataSelectors": {
     "articles": {
+      "personalDataType": "browsing_history",
       "container": "article, .article, .story",
       "fields": {
         "title": {
@@ -43,14 +47,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "articles",
-      "description": "Slashdot articles and stories viewed",
-      "personalDataType": "browsing_history"
-    }
-  ]
+  }
 }
-
-

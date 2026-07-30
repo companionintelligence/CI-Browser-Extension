@@ -32,7 +32,7 @@ import {
 import { portalOidcConfig } from "@/services/portalConfig";
 import { fetchPortalApps, memoryAppsFrom } from "@/services/portalApps";
 import bowser from "bowser";
-import type { ScrapeResult } from "@/domainScraper";
+import type { ScrapeResult } from "@/scrape/types";
 
 const SLICE_SIZE = 100;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
@@ -1590,34 +1590,31 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
     return;
   }
 
-  // Map each scraped item to a browser activity. A per-item source_id keeps
-  // distinct items on the same page/timestamp from deduping into a single row
-  // server-side.
-  const activities: BrowserActivity[] = [];
-
-  for (const [dataType, items] of Object.entries(scrapeResult.data)) {
-    if (!Array.isArray(items)) {
-      continue;
-    }
-
-    items.forEach((item, index) => {
-      const itemData = item as Record<string, any>;
-      activities.push({
-        time: scrapeResult.timestamp,
-        device_id: deviceId || "",
-        url: scrapeResult.url,
-        title: itemData.title || `${scrapeResult.profileName} Data`,
-        action_type: "scrape",
-        properties: {
-          source_id: `${scrapeResult.profileName}:${dataType}:${index}`,
-          scrape_profile: scrapeResult.profileName,
-          domain: scrapeResult.domain,
-          data_type: dataType,
-          data: itemData,
-        },
-      });
-    });
-  }
+  // Each item carries its own personalDataType, which becomes the `type` of the
+  // content row it lands in — so a watched title files as
+  // entertainment_preferences rather than as an anonymous page view. The
+  // per-item source_id keeps distinct items on one page/timestamp from
+  // deduping into a single row server-side.
+  const activities: BrowserActivity[] = scrapeResult.items.map(
+    (item, index) => ({
+      time: scrapeResult.timestamp,
+      device_id: deviceId || "",
+      url: scrapeResult.url,
+      title:
+        typeof item.fields.title === "string" && item.fields.title.trim()
+          ? item.fields.title.trim()
+          : `${scrapeResult.profileName} — ${item.selector}`,
+      action_type: "scrape",
+      properties: {
+        source_id: `${scrapeResult.domain}:${item.selector}:${index}`,
+        personal_data_type: item.personalDataType,
+        scrape_profile: scrapeResult.profileName,
+        domain: scrapeResult.domain,
+        data_type: item.selector,
+        data: item.fields,
+      },
+    }),
+  );
 
   if (activities.length === 0) {
     return;
