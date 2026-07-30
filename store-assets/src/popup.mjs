@@ -78,7 +78,7 @@ function header() {
 
 function serverSection(y) {
   let s = txt(16, y + 14, "CI Server URL", { size: 16, fill: T.teal, weight: 600 });
-  s += txt(16, y + 34, "Enter the domain of your CI server", { size: 12, fill: T.muted });
+  s += txt(16, y + 34, "Enter the domain of your Companion Memory App (found in your hub)", { size: 12, fill: T.muted });
   s += rrect(16, y + 46, 230, 40, 8, "#0b1220", { stroke: T.border, sw: 1 });
   s += txt(28, y + 71, "my-ci.companionintelligence.com", { size: 12.5, fill: T.text, family: T.mono });
   s += button(254, y + 46, W - 16 - 254, 40, "Save", { size: 14 });
