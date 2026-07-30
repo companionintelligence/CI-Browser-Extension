@@ -76,6 +76,13 @@ export default defineConfig({
                   "websiteContent",
                   "browsingActivity",
                 ],
+                // Declared OPTIONAL, not required: the Robinhood profile is the
+                // only source of financial data and it does not run until the
+                // user turns on "Include financial accounts". Firefox surfaces
+                // optional categories as a separate consent, which is exactly
+                // the shape of this setting. Omitting it entirely would
+                // under-declare what the extension can collect.
+                optional: ["financialAndPaymentInfo"],
               },
             } as unknown as { id: string },
           },
