@@ -25,11 +25,14 @@ import {
 } from "@/services/browserActivity";
 import {
   getAccessToken,
+  attachAuthorizeTabId,
+  deliverOidcCallbackUrl,
   getIdToken,
   loadTokens,
   signIn,
   signInSilently,
   signOut,
+  type PreparedAuthorize,
 } from "@/services/oidcAuth";
 import { portalOidcConfig } from "@/services/portalConfig";
 import { fetchPortalApps, memoryAppsFrom } from "@/services/portalApps";
@@ -127,7 +130,7 @@ async function discoverMemoryServer(): Promise<void> {
             memoryAppChoices: null,
             discoveryHint: serverURL
               ? null
-              : "Signed in, but no Memory app was found on your Companion account. Install Memory from the Portal, or set the Memory server URL under Advanced.",
+              : "No Memory on this account.",
           }),
         );
 
@@ -188,8 +191,8 @@ async function discoverMemoryServer(): Promise<void> {
         setState({
           discoveryHint:
             result.status === "unsupported"
-              ? "Your Portal doesn't support app discovery — set the Memory server URL under Advanced."
-              : "Couldn't look up your Memory server from the Portal — set the Memory server URL under Advanced.",
+              ? "Portal can't discover Memory."
+              : "Couldn't find Memory.",
         }),
       );
     }
@@ -1989,7 +1992,9 @@ export default defineBackground({
         const token = idToken ?? store.getState().ciState.accessToken;
 
         // A signed-in user without a configured server may have gained a
-        // Memory app (or a portal upgrade) since sign-in.
+        // Memory app (or a portal upgrade) since sign-in. Re-runs discovery
+        // after Safari sign-in when the popup was closed (choices live in Redux
+        // only until the user picks one).
         if (token && !store.getState().ciState.serverURL) {
           await discoverMemoryServer();
         }
@@ -2037,8 +2042,11 @@ export default defineBackground({
     // then asked where the user's Memory app runs (auto-setting serverURL);
     // checkAuthenticationState mirrors the id_token into Redux and provisions
     // the device via the shared auth path.
-    async function authorizeWithPortal(): Promise<void> {
-      await signIn(oidcConfig());
+    async function authorizeWithPortal(
+      tabId?: number,
+      prepared?: PreparedAuthorize,
+    ): Promise<void> {
+      await signIn(oidcConfig(), { tabId, prepared });
       await discoverMemoryServer();
       await checkAuthenticationState();
     }
@@ -2258,20 +2266,64 @@ export default defineBackground({
           return true;
         }
 
+        if (message.action === "OIDC_CALLBACK") {
+          const url = typeof message.url === "string" ? message.url : "";
+          const delivered = deliverOidcCallbackUrl(url);
+          sendResponse({ success: delivered });
+
+          return false;
+        }
+
         if (message.action === "AUTHORIZE") {
-          authorizeWithPortal()
+          // Ack immediately. Completion via AUTH_STATE_UPDATED / AUTH_FAILED.
+          // Safari: popup sends `prepared` first (start capture), then opens the
+          // authorize tab; optional AUTHORIZE_TAB attaches the tab id later.
+          const tabId =
+            typeof message.tabId === "number" ? message.tabId : undefined;
+          const prepared =
+            message.prepared &&
+            typeof message.prepared.authorizeUrl === "string" &&
+            typeof message.prepared.verifier === "string" &&
+            typeof message.prepared.state === "string" &&
+            typeof message.prepared.redirectUri === "string" &&
+            typeof message.prepared.tokenEndpoint === "string"
+              ? (message.prepared as PreparedAuthorize)
+              : undefined;
+          void browser.storage.local.set({ oidcAuthInProgressAt: Date.now() });
+          sendResponse({ success: true, started: true });
+          authorizeWithPortal(tabId, prepared)
             .then(() => {
-              sendResponse({ success: true });
+              void browser.storage.local.remove("oidcAuthInProgressAt");
+              // checkAuthenticationState already broadcasts AUTH_STATE_UPDATED.
             })
             .catch((error) => {
               console.error("Authorization failed:", error);
-              sendResponse({
-                success: false,
-                error: error?.message || String(error),
-              });
+              void browser.storage.local.remove("oidcAuthInProgressAt");
+              if (tabId !== undefined) {
+                void browser.tabs.remove(tabId).catch(() => undefined);
+              }
+
+              browser.runtime
+                .sendMessage({
+                  action: "AUTH_FAILED",
+                  error: error?.message || String(error),
+                })
+                .catch(() => {
+                  console.log("No receiver for AUTH_FAILED (popup closed)");
+                });
             });
 
-          return true;
+          return false;
+        }
+
+        if (message.action === "AUTHORIZE_TAB") {
+          if (typeof message.tabId === "number") {
+            attachAuthorizeTabId(message.tabId);
+          }
+
+          sendResponse({ success: true });
+
+          return false;
         }
 
         if (message.action === "DOMAIN_SCRAPE_DATA") {

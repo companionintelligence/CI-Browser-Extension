@@ -16,6 +16,12 @@ import {
   getAccessToken,
   getIdToken,
   loadTokens,
+  shouldUseTabAuthFlow,
+  resolveRedirectUri,
+  launchAuthViaTab,
+  SAFARI_OIDC_REDIRECT_URI,
+  prepareAuthorizeRequest,
+  endpointsFromIssuer,
   type OidcConfig,
 } from "./oidcAuth";
 
@@ -41,6 +47,8 @@ const CONFIG: OidcConfig = {
   scopes: "openid profile email offline_access",
 };
 
+const SAFARI_CALLBACK = SAFARI_OIDC_REDIRECT_URI;
+
 const AUTHZ = "https://hub.ci.computer/api/auth/oauth2/authorize";
 const TOKEN = "https://hub.ci.computer/api/auth/oauth2/token";
 
@@ -48,11 +56,97 @@ const store: Record<string, unknown> = {};
 
 function installBrowser(launch: (url: string) => string | undefined) {
   (global as { browser?: unknown }).browser = {
+    runtime: {
+      getURL: jest.fn(() => "chrome-extension://abcd/"),
+    },
     identity: {
       getRedirectURL: jest.fn(() => "https://abcd.chromiumapp.org/"),
       launchWebAuthFlow: jest.fn(async ({ url }: { url: string }) =>
         launch(url),
       ),
+    },
+    tabs: {
+      create: jest.fn(),
+      remove: jest.fn(async () => undefined),
+      onUpdated: { addListener: jest.fn(), removeListener: jest.fn() },
+      onRemoved: { addListener: jest.fn(), removeListener: jest.fn() },
+    },
+    webNavigation: {
+      onBeforeNavigate: {
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+      },
+    },
+    storage: {
+      local: {
+        get: jest.fn(async (k: string) =>
+          k in store ? { [k]: store[k] } : {},
+        ),
+        set: jest.fn(async (obj: Record<string, unknown>) => {
+          Object.assign(store, obj);
+        }),
+        remove: jest.fn(async (k: string) => {
+          delete store[k];
+        }),
+      },
+    },
+  };
+}
+
+function installSafariTabBrowser(via: "tabs" | "webNavigation" = "webNavigation") {
+  type UpdatedListener = (tabId: number, changeInfo: { url?: string }) => void;
+  type RemovedListener = (tabId: number) => void;
+  type BeforeNavListener = (details: {
+    tabId: number;
+    url: string;
+    frameId: number;
+  }) => void;
+  let onUpdated: UpdatedListener | undefined;
+  let onRemoved: RemovedListener | undefined;
+  let onBeforeNav: BeforeNavListener | undefined;
+
+  (global as { browser?: unknown }).browser = {
+    runtime: {
+      getURL: jest.fn(() => "safari-web-extension://uuid-here/"),
+    },
+    // Safari: no usable identity intercept.
+    identity: {},
+    tabs: {
+      create: jest.fn(async ({ url }: { url: string }) => {
+        // Simulate Portal redirecting to the HTTPS extension callback.
+        const state = new URL(url).searchParams.get("state");
+        const redirect = `${SAFARI_CALLBACK}?code=AUTHCODE&state=${state}`;
+        queueMicrotask(() => {
+          if (via === "webNavigation") {
+            onBeforeNav?.({ tabId: 42, url: redirect, frameId: 0 });
+          } else {
+            onUpdated?.(42, { url: redirect });
+          }
+        });
+
+        return { id: 42 };
+      }),
+      remove: jest.fn(async () => undefined),
+      onUpdated: {
+        addListener: jest.fn((fn: UpdatedListener) => {
+          onUpdated = fn;
+        }),
+        removeListener: jest.fn(),
+      },
+      onRemoved: {
+        addListener: jest.fn((fn: RemovedListener) => {
+          onRemoved = fn;
+        }),
+        removeListener: jest.fn(),
+      },
+    },
+    webNavigation: {
+      onBeforeNavigate: {
+        addListener: jest.fn((fn: BeforeNavListener) => {
+          onBeforeNav = fn;
+        }),
+        removeListener: jest.fn(),
+      },
     },
     storage: {
       local: {
@@ -131,6 +225,7 @@ describe("authorize URL + redirect parsing", () => {
         scopes: "openid email",
         state: "st-1",
         codeChallenge: "chal",
+        prompt: "select_account",
       }),
     );
     expect(url.searchParams.get("response_type")).toBe("code");
@@ -141,6 +236,7 @@ describe("authorize URL + redirect parsing", () => {
     expect(url.searchParams.get("code_challenge")).toBe("chal");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.searchParams.get("state")).toBe("st-1");
+    expect(url.searchParams.get("prompt")).toBe("select_account");
   });
 
   it("parses code/state/error from the redirect", () => {
@@ -169,6 +265,139 @@ describe("discover", () => {
     const doc = await discover(CONFIG.issuer);
     expect(doc.authorization_endpoint).toBe(AUTHZ);
     expect(doc.token_endpoint).toBe(TOKEN);
+  });
+});
+
+describe("prepareAuthorizeRequest", () => {
+  it("builds authorize URL from issuer convention without network", async () => {
+    installSafariTabBrowser();
+    const prepared = await prepareAuthorizeRequest(CONFIG);
+    expect(prepared.authorizeUrl).toContain(
+      endpointsFromIssuer(CONFIG.issuer).authorization_endpoint,
+    );
+    expect(new URL(prepared.authorizeUrl).searchParams.get("prompt")).toBeNull();
+    const withPicker = await prepareAuthorizeRequest(CONFIG, {
+      prompt: "select_account",
+    });
+    expect(new URL(withPicker.authorizeUrl).searchParams.get("prompt")).toBe(
+      "select_account",
+    );
+    expect(prepared.redirectUri).toBe(SAFARI_CALLBACK);
+    expect(prepared.tokenEndpoint).toBe(
+      endpointsFromIssuer(CONFIG.issuer).token_endpoint,
+    );
+    expect(prepared.verifier.length).toBeGreaterThan(10);
+    expect(prepared.state.length).toBeGreaterThan(5);
+  });
+});
+
+describe("Safari / tab auth flow", () => {
+  it("uses the loopback redirect when identity is unavailable", () => {
+    installSafariTabBrowser();
+    expect(shouldUseTabAuthFlow()).toBe(true);
+    expect(resolveRedirectUri(CONFIG)).toBe(SAFARI_CALLBACK);
+  });
+
+  it("uses identity redirect when launchWebAuthFlow is present", () => {
+    installBrowser(() => undefined);
+    expect(shouldUseTabAuthFlow()).toBe(false);
+    expect(resolveRedirectUri(CONFIG)).toBe("https://abcd.chromiumapp.org/");
+  });
+
+  it("captures the Portal callback from webNavigation.onBeforeNavigate", async () => {
+    installSafariTabBrowser("webNavigation");
+    const redirect = await launchAuthViaTab(`${AUTHZ}?state=st`, SAFARI_CALLBACK);
+    expect(redirect).toContain("code=AUTHCODE");
+    expect(redirect).toContain("state=st");
+  });
+
+  it("falls back to tabs.onUpdated when that fires first", async () => {
+    installSafariTabBrowser("tabs");
+    const redirect = await launchAuthViaTab(`${AUTHZ}?state=st`, SAFARI_CALLBACK);
+    expect(redirect).toContain("code=AUTHCODE");
+  });
+
+  it("navigates a popup-opened tab instead of creating one", async () => {
+    type BeforeNavListener = (details: {
+      tabId: number;
+      url: string;
+      frameId: number;
+    }) => void;
+    let onBeforeNav: BeforeNavListener | undefined;
+    const update = jest.fn(
+      async (_id: number, props: { url: string }) => {
+        const state = new URL(props.url).searchParams.get("state");
+        queueMicrotask(() => {
+          onBeforeNav?.({
+            tabId: 99,
+            url: `${SAFARI_CALLBACK}?code=AUTHCODE&state=${state}`,
+            frameId: 0,
+          });
+        });
+
+        return { id: 99 };
+      },
+    );
+    (global as { browser?: unknown }).browser = {
+      runtime: {
+        getURL: jest.fn(() => "safari-web-extension://uuid-here/"),
+      },
+      identity: {},
+      tabs: {
+        create: jest.fn(async () => {
+          throw new Error("should not create");
+        }),
+        update,
+        remove: jest.fn(async () => undefined),
+        onUpdated: {
+          addListener: jest.fn(),
+          removeListener: jest.fn(),
+        },
+        onRemoved: {
+          addListener: jest.fn(),
+          removeListener: jest.fn(),
+        },
+      },
+      webNavigation: {
+        onBeforeNavigate: {
+          addListener: jest.fn((fn: BeforeNavListener) => {
+            onBeforeNav = fn;
+          }),
+          removeListener: jest.fn(),
+        },
+      },
+      storage: {
+        local: {
+          get: jest.fn(async () => ({})),
+          set: jest.fn(async () => undefined),
+          remove: jest.fn(async () => undefined),
+        },
+      },
+    };
+
+    const redirect = await launchAuthViaTab(
+      `${AUTHZ}?state=st`,
+      SAFARI_CALLBACK,
+      99,
+    );
+    expect(update).toHaveBeenCalled();
+    expect(redirect).toContain("code=AUTHCODE");
+  });
+
+  it("runs PKCE + tab redirect + code exchange on Safari", async () => {
+    installSafariTabBrowser();
+    const { captured } = installFetch({
+      access_token: "AT",
+      refresh_token: "RT",
+      expires_in: 3600,
+      id_token: "IT",
+    });
+
+    const tokens = await signIn(CONFIG);
+    expect(tokens.access_token).toBe("AT");
+    const params = new URLSearchParams(captured.tokenBody ?? "");
+    expect(params.get("redirect_uri")).toBe(SAFARI_CALLBACK);
+    expect(params.get("code")).toBe("AUTHCODE");
   });
 });
 

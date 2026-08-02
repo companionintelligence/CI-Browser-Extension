@@ -4,11 +4,16 @@
  * Phase 3 of the unified identity pipeline: replaces the legacy cookie/CSRF/
  * refresh flow with a standard public-client OIDC flow against CI-Portal. The
  * extension is registered as the `ci-browser-extension` public PKCE client
- * (CI-Portal #356); the redirect is `browser.identity.getRedirectURL()`
- * (`https://<extension-id>.chromiumapp.org/`, allowed by the portal redirect
- * allowlist). The **id_token** (getIdToken) — not the opaque OAuth access_token —
- * is the Bearer the extension sends to CI-Server's `/api/v1/*` bulk routes (which
- * validate the JWKS-signed portal JWT after CI-Server #1473).
+ * (CI-Portal #356). Chrome/Firefox use `browser.identity.getRedirectURL()`
+ * (`*.chromiumapp.org` / `*.extensions.allizom.org`). Safari has no stable
+ * vendor intercept redirect, so it opens a tab and uses a loopback
+ * `redirect_uri` (`SAFARI_OIDC_REDIRECT_URI`) that Portal already allows via
+ * private-IPv4 rules; the extension captures the navigation (nothing listens
+ * on that port). A Portal-hosted HTTPS callback is staged in CI-Portal but not
+ * required once loopback capture works. The **id_token** (getIdToken) — not
+ * the opaque OAuth access_token — is the Bearer the extension sends to
+ * CI-Server's `/api/v1/*` bulk routes (which validate the JWKS-signed portal
+ * JWT after CI-Server #1473).
  *
  * Every request here is sent with `credentials: "omit"` — see postToken; the
  * portal rejects cookie-bearing requests from the extension's origin.
@@ -18,6 +23,108 @@
  */
 
 const STORAGE_KEY = "oidcTokens";
+
+/**
+ * Safari / tab-auth redirect. Portal `isAllowedRedirect` accepts all of
+ * 127.0.0.0/8 today — unlike `{portal}/extension/oidc-callback`, which needs a
+ * Portal deploy. The Companion Intelligence macOS app serves this port; the
+ * extension also captures via a content script on the callback page.
+ */
+export const SAFARI_OIDC_REDIRECT_URI =
+  "http://127.0.0.1:8732/oidc-callback";
+
+const SAFARI_OIDC_REDIRECT_BASE = SAFARI_OIDC_REDIRECT_URI.split("?")[0];
+
+/** In-flight Safari capture: content script / AUTHORIZE_TAB feed this. */
+let activeCaptureSink: ((url: string) => void) | null = null;
+let pendingAuthorizeTabId: number | undefined;
+
+/**
+ * Deliver a loopback callback URL into the in-flight tab auth (from the
+ * oidcCallback content script). Returns true if a listener consumed it.
+ */
+export function deliverOidcCallbackUrl(url: string): boolean {
+  if (!url.startsWith(SAFARI_OIDC_REDIRECT_BASE) || !activeCaptureSink) {
+    return false;
+  }
+
+  activeCaptureSink(url);
+
+  return true;
+}
+
+/** Late-bind the authorize tab id after the popup opens it (Safari). */
+export function attachAuthorizeTabId(tabId: number): void {
+  pendingAuthorizeTabId = tabId;
+}
+
+/** @deprecated Prefer SAFARI_OIDC_REDIRECT_URI until Portal callback is live. */
+export const EXTENSION_OIDC_CALLBACK_PATH = "/extension/oidc-callback";
+
+const TAB_AUTH_TIMEOUT_MS = 2 * 60 * 1000;
+
+/** Portal origin from an issuer (`…/api/auth`) or a bare Portal URL. */
+export function portalOriginFromIssuer(issuerOrPortalUrl: string): string {
+  return issuerOrPortalUrl.replace(/\/+$/, "").replace(/\/api\/auth$/, "");
+}
+
+/** Portal-hosted Safari callback (requires deployed Portal allowlist). */
+export function extensionOidcCallbackUri(issuerOrPortalUrl: string): string {
+  return `${portalOriginFromIssuer(issuerOrPortalUrl)}${EXTENSION_OIDC_CALLBACK_PATH}`;
+}
+
+/**
+ * better-auth OIDC endpoints from the issuer (no network). Used so Safari can
+ * open the authorize URL immediately instead of parking on the Portal store.
+ */
+export function endpointsFromIssuer(issuer: string): DiscoveryDoc {
+  const base = issuer.replace(/\/+$/, "");
+
+  return {
+    authorization_endpoint: `${base}/oauth2/authorize`,
+    token_endpoint: `${base}/oauth2/token`,
+  };
+}
+
+/** PKCE + authorize URL ready to open in a tab (no network). */
+export interface PreparedAuthorize {
+  authorizeUrl: string;
+  redirectUri: string;
+  verifier: string;
+  state: string;
+  tokenEndpoint: string;
+}
+
+export async function prepareAuthorizeRequest(
+  config: OidcConfig,
+  opts?: { prompt?: string },
+): Promise<PreparedAuthorize> {
+  const { authorization_endpoint, token_endpoint } = endpointsFromIssuer(
+    config.issuer,
+  );
+  const verifier = randomString(32);
+  const challenge = await pkceChallenge(verifier);
+  const state = randomString(16);
+  const redirectUri = resolveRedirectUri(config);
+  const authorizeUrl = buildAuthorizeUrl(authorization_endpoint, {
+    clientId: config.clientId,
+    redirectUri,
+    scopes: config.scopes,
+    state,
+    codeChallenge: challenge,
+    // Callers pass `select_account` for interactive Sign in. Omit for silent
+    // renewal so Portal can reuse the existing SSO session without UI.
+    prompt: opts?.prompt,
+  });
+
+  return {
+    authorizeUrl,
+    redirectUri,
+    verifier,
+    state,
+    tokenEndpoint: token_endpoint,
+  };
+}
 
 export interface OidcConfig {
   /** Discovery issuer, e.g. https://hub.ci.computer/api/auth */
@@ -80,6 +187,8 @@ export function buildAuthorizeUrl(
     scopes: string;
     state: string;
     codeChallenge: string;
+    /** OIDC prompt, e.g. `select_account` or `login`. */
+    prompt?: string;
   },
 ): string {
   const u = new URL(endpoint);
@@ -90,6 +199,9 @@ export function buildAuthorizeUrl(
   u.searchParams.set("state", params.state);
   u.searchParams.set("code_challenge", params.codeChallenge);
   u.searchParams.set("code_challenge_method", "S256");
+  if (params.prompt) {
+    u.searchParams.set("prompt", params.prompt);
+  }
 
   return u.toString();
 }
@@ -198,33 +310,283 @@ export async function clearTokens(): Promise<void> {
 
 // ---- public flow ----
 
-/**
- * One Authorization-Code + PKCE round trip; stores the resulting tokens.
- *
- * `interactive: false` reuses the portal's existing browser session without
- * showing UI — the portal either redirects straight back with a code or errors
- * immediately. That is what makes a silent id_token renewal possible; see
- * signInSilently.
- */
-async function runAuthCodeFlow(
-  config: OidcConfig,
-  interactive: boolean,
-): Promise<OidcTokens> {
-  const { authorization_endpoint, token_endpoint } = await discover(
-    config.issuer,
-  );
-  const verifier = randomString(32);
-  const challenge = await pkceChallenge(verifier);
-  const state = randomString(16);
-  const redirectUri = browser.identity.getRedirectURL();
+/** True when we must open a normal tab instead of `identity.launchWebAuthFlow`. */
+export function shouldUseTabAuthFlow(): boolean {
+  // Safari Web Extensions use this scheme; Chrome/Firefox do not.
+  try {
+    const extensionBase = browser.runtime?.getURL?.("");
+    if (
+      typeof extensionBase === "string" &&
+      extensionBase.startsWith("safari-web-extension:")
+    ) {
+      return true;
+    }
+  } catch {
+    // runtime unavailable (unit tests without a full browser mock).
+  }
 
-  const authorizeUrl = buildAuthorizeUrl(authorization_endpoint, {
-    clientId: config.clientId,
-    redirectUri,
-    scopes: config.scopes,
-    state,
-    codeChallenge: challenge,
+  // Safari may expose a stub `identity` API that hangs without a window.
+  // Prefer the tab flow whenever the UA is Safari (not Chromium/Firefox).
+  try {
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    if (
+      /Safari/i.test(ua) &&
+      !/Chrome|Chromium|CriOS|Firefox|FxiOS|Edg/i.test(ua)
+    ) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  const identity = browser.identity as
+    | {
+        launchWebAuthFlow?: unknown;
+        getRedirectURL?: unknown;
+      }
+    | undefined;
+  if (
+    typeof identity?.launchWebAuthFlow !== "function" ||
+    typeof identity?.getRedirectURL !== "function"
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/** Redirect URI registered on the authorize request for this browser. */
+export function resolveRedirectUri(config?: OidcConfig): string {
+  if (shouldUseTabAuthFlow()) {
+    // Loopback is allowlisted on current Portal production. Switch to
+    // extensionOidcCallbackUri(config.issuer) once that Portal route ships.
+    void config;
+
+    return SAFARI_OIDC_REDIRECT_URI;
+  }
+
+  return browser.identity.getRedirectURL();
+}
+
+/**
+ * Interactive OIDC for Safari: navigate a tab to authorize, capture the
+ * loopback callback, then close the tab.
+ *
+ * Prefer an existing `tabId` opened from the popup click (Safari drops the
+ * user-gesture after async work, so background `tabs.create` often never
+ * shows a window). Otherwise create a tab here as a fallback.
+ *
+ * Safari often never fires a successful `tabs.onUpdated` for connection-refused
+ * loopback — the address bar still has `?code=` (as on the error page). We
+ * therefore also listen to webNavigation error/commit events and **poll**
+ * `tabs.get().url`.
+ */
+export function launchAuthViaTab(
+  authorizeUrl: string,
+  redirectUri: string,
+  existingTabId?: number,
+  opts?: { alreadyNavigated?: boolean },
+): Promise<string> {
+  const redirectBase = redirectUri.split("?")[0];
+  const alreadyNavigated = opts?.alreadyNavigated === true;
+
+  return new Promise((resolve, reject) => {
+    let tabId: number | undefined = existingTabId ?? pendingAuthorizeTabId;
+    let settled = false;
+    let pollTimer: ReturnType<typeof setInterval> | undefined;
+
+    const finish = (err?: Error, url?: string) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      activeCaptureSink = null;
+      pendingAuthorizeTabId = undefined;
+      clearTimeout(timer);
+      if (pollTimer !== undefined) {
+        clearInterval(pollTimer);
+      }
+
+      browser.tabs.onUpdated.removeListener(onUpdated);
+      browser.tabs.onRemoved.removeListener(onRemoved);
+      try {
+        browser.webNavigation?.onBeforeNavigate?.removeListener(onBeforeNav);
+        browser.webNavigation?.onCommitted?.removeListener(onNavUrl);
+        browser.webNavigation?.onErrorOccurred?.removeListener(onNavUrl);
+      } catch {
+        // webNavigation optional in some test mocks
+      }
+
+      if (tabId !== undefined) {
+        void browser.tabs.remove(tabId).catch(() => undefined);
+      }
+
+      if (err) {
+        reject(err);
+      } else if (url) {
+        resolve(url);
+      } else {
+        reject(new Error("OIDC sign-in cancelled"));
+      }
+    };
+
+    const maybeCapture = (url: string | undefined, forTabId?: number) => {
+      if (!url || !url.startsWith(redirectBase)) {
+        return;
+      }
+
+      // Accept the matching tab even if we learned tabId late (popup may open
+      // the authorize tab after AUTHORIZE already started listening).
+      if (forTabId !== undefined) {
+        tabId = forTabId;
+      }
+
+      finish(undefined, url);
+    };
+
+    activeCaptureSink = (url) => {
+      maybeCapture(url);
+    };
+
+    const pollTabUrl = async () => {
+      if (settled) {
+        return;
+      }
+
+      try {
+        if (tabId !== undefined) {
+          const tab = await browser.tabs.get(tabId);
+          maybeCapture(tab.url, tabId);
+
+          return;
+        }
+
+        // No tabId yet — scan every tab for the loopback callback (Safari often
+        // tears down the popup before AUTHORIZE_TAB can run).
+        const tabs = await browser.tabs.query({});
+        for (const tab of tabs) {
+          maybeCapture(tab.url, tab.id);
+          if (settled) {
+            return;
+          }
+        }
+      } catch {
+        // Tab closed or unavailable.
+      }
+    };
+
+    const onUpdated = (
+      updatedTabId: number,
+      changeInfo: { url?: string; status?: string },
+    ) => {
+      maybeCapture(changeInfo.url, updatedTabId);
+      if (changeInfo.status === "loading" || changeInfo.status === "complete") {
+        void pollTabUrl();
+      }
+    };
+
+    const onBeforeNav = (details: {
+      tabId: number;
+      url: string;
+      frameId: number;
+    }) => {
+      if (details.frameId !== 0) {
+        return;
+      }
+
+      maybeCapture(details.url, details.tabId);
+    };
+
+    const onNavUrl = (details: {
+      tabId: number;
+      url?: string;
+      frameId?: number;
+    }) => {
+      if (details.frameId !== undefined && details.frameId !== 0) {
+        return;
+      }
+
+      maybeCapture(details.url, details.tabId);
+    };
+
+    const onRemoved = (removedTabId: number) => {
+      if (removedTabId === tabId) {
+        finish(new Error("OIDC sign-in cancelled"));
+      }
+    };
+
+    const timer = setTimeout(() => {
+      finish(new Error("Sign-in timed out"));
+    }, TAB_AUTH_TIMEOUT_MS);
+
+    browser.tabs.onUpdated.addListener(onUpdated);
+    browser.tabs.onRemoved.addListener(onRemoved);
+    try {
+      browser.webNavigation?.onBeforeNavigate?.addListener(onBeforeNav);
+      browser.webNavigation?.onCommitted?.addListener(onNavUrl);
+      browser.webNavigation?.onErrorOccurred?.addListener(onNavUrl);
+    } catch {
+      // Fall back to tabs polling.
+    }
+
+    pollTimer = setInterval(() => {
+      void pollTabUrl();
+    }, 400);
+
+    const openOrNavigate = async () => {
+      // Popup already opened (or will open) the authorize tab — only listen/poll.
+      if (alreadyNavigated) {
+        void pollTabUrl();
+
+        return;
+      }
+
+      if (tabId !== undefined) {
+        await browser.tabs.update(tabId, {
+          url: authorizeUrl,
+          active: true,
+        });
+        void pollTabUrl();
+
+        return;
+      }
+
+      const tab = await browser.tabs.create({
+        url: authorizeUrl,
+        active: true,
+      });
+      tabId = tab.id;
+      if (tabId === undefined) {
+        throw new Error("OIDC sign-in failed to open a tab");
+      }
+    };
+
+    void openOrNavigate().catch((error: unknown) => {
+      finish(
+        error instanceof Error
+          ? error
+          : new Error("OIDC sign-in failed to open a tab"),
+      );
+    });
   });
+}
+
+async function launchAuthorizeRedirect(
+  authorizeUrl: string,
+  redirectUri: string,
+  interactive: boolean,
+  existingTabId?: number,
+): Promise<string> {
+  if (shouldUseTabAuthFlow() || existingTabId !== undefined) {
+    if (!interactive) {
+      // Silent renewal needs identity's non-interactive window; tab flow is
+      // always user-visible. Caller (signInSilently) treats this as "need human".
+      throw new Error("Silent OIDC not supported with tab auth flow");
+    }
+
+    return launchAuthViaTab(authorizeUrl, redirectUri, existingTabId);
+  }
 
   const redirectUrl = await browser.identity.launchWebAuthFlow({
     url: authorizeUrl,
@@ -234,12 +596,29 @@ async function runAuthCodeFlow(
     throw new Error("OIDC sign-in cancelled");
   }
 
+  return redirectUrl;
+}
+
+/**
+ * One Authorization-Code + PKCE round trip; stores the resulting tokens.
+ *
+ * `interactive: false` reuses the portal's existing browser session without
+ * showing UI — the portal either redirects straight back with a code or errors
+ * immediately. That is what makes a silent id_token renewal possible; see
+ * signInSilently. Safari uses a tab-based flow and does not support silent
+ * renewal this way.
+ */
+async function exchangeAuthorizationCode(
+  config: OidcConfig,
+  prepared: PreparedAuthorize,
+  redirectUrl: string,
+): Promise<OidcTokens> {
   const parsed = parseRedirect(redirectUrl);
   if (parsed.error) {
     throw new Error(`OIDC authorize error: ${parsed.error}`);
   }
 
-  if (parsed.state !== state) {
+  if (parsed.state !== prepared.state) {
     throw new Error("OIDC state mismatch");
   }
 
@@ -247,21 +626,75 @@ async function runAuthCodeFlow(
     throw new Error("OIDC authorize returned no code");
   }
 
-  const tokens = await postToken(token_endpoint, {
+  const tokens = await postToken(prepared.tokenEndpoint, {
     grant_type: "authorization_code",
     code: parsed.code,
-    redirect_uri: redirectUri,
+    redirect_uri: prepared.redirectUri,
     client_id: config.clientId,
-    code_verifier: verifier,
+    code_verifier: prepared.verifier,
   });
   await saveTokens(tokens);
 
   return tokens;
 }
 
-/** Interactive sign-in: PKCE + launchWebAuthFlow + code exchange; stores tokens. */
-export async function signIn(config: OidcConfig): Promise<OidcTokens> {
-  return runAuthCodeFlow(config, true);
+async function runAuthCodeFlow(
+  config: OidcConfig,
+  interactive: boolean,
+  existingTabId?: number,
+): Promise<OidcTokens> {
+  // Prefer issuer-derived endpoints so we can open/navigate the authorize URL
+  // before any network round-trip (Safari was stuck on the Portal store while
+  // discovery hung). Fall back to discovery if the convention POST fails later.
+  const prepared = await prepareAuthorizeRequest(
+    config,
+    interactive ? { prompt: "select_account" } : undefined,
+  );
+
+  const redirectUrl = await launchAuthorizeRedirect(
+    prepared.authorizeUrl,
+    prepared.redirectUri,
+    interactive,
+    existingTabId,
+  );
+
+  return exchangeAuthorizationCode(config, prepared, redirectUrl);
+}
+
+/**
+ * Finish a tab sign-in when the popup owns opening `prepared.authorizeUrl`.
+ * `tabId` may be omitted — we poll every tab for the loopback callback (Safari
+ * often destroys the popup before it can send the tab id).
+ */
+export async function completeTabSignIn(
+  config: OidcConfig,
+  prepared: PreparedAuthorize,
+  tabId?: number,
+): Promise<OidcTokens> {
+  const redirectUrl = await launchAuthViaTab(
+    prepared.authorizeUrl,
+    prepared.redirectUri,
+    tabId,
+    { alreadyNavigated: true },
+  );
+
+  return exchangeAuthorizationCode(config, prepared, redirectUrl);
+}
+
+/**
+ * Interactive sign-in: PKCE + auth window/tab + code exchange; stores tokens.
+ * Pass `prepared` when the popup builds the authorize URL and opens the tab
+ * (Safari). `tabId` is optional.
+ */
+export async function signIn(
+  config: OidcConfig,
+  opts?: { tabId?: number; prepared?: PreparedAuthorize },
+): Promise<OidcTokens> {
+  if (opts?.prepared) {
+    return completeTabSignIn(config, opts.prepared, opts.tabId);
+  }
+
+  return runAuthCodeFlow(config, true, opts?.tabId);
 }
 
 /**

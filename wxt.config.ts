@@ -41,6 +41,8 @@ export default defineConfig({
       "*://*.companionintelligence.com/*",
       "*://*.companionintel.com/*",
       "*://*.ci.computer/*",
+      // Safari tab OIDC captures this loopback redirect URL (see oidcAuth.ts).
+      ...(env.browser === "safari" ? ["http://127.0.0.1:8732/*"] : []),
       ...(env.mode === "development"
         ? ["*://*.ci.localhost/*", "*://ci-server.localhost/*"]
         : []),

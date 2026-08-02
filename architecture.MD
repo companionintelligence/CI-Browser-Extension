@@ -49,7 +49,7 @@ WXT compiles four entrypoint surfaces:
 1. **Background service worker** — [src/entrypoints/background.ts](src/entrypoints/background.ts) (~2.3k LOC). The brain of the extension.
 2. **Content script — universal** — [src/entrypoints/content.ts](src/entrypoints/content.ts). Runs on `<all_urls>`. Tracks scroll depth in memory and answers `getScrollDepth` / `getMetaDescription` messages from the background. It persists nothing.
 3. **Content script — domain scraper** — [src/entrypoints/domainScraper.content.ts](src/entrypoints/domainScraper.content.ts). Activated on the scraped domains listed in its `matches`; executes JSON scrape profiles ([src/scrapeProfiles/](src/scrapeProfiles/)) and posts structured personal data to the background via `DOMAIN_SCRAPE_DATA`.
-4. **Popup UI** — [src/entrypoints/popup/App.tsx](src/entrypoints/popup/App.tsx). Houses sign-in, Memory-server selection, sync toggles, the ignore-list manager, sync history, and an Advanced panel for the Portal / Memory URLs.
+4. **Popup UI** — [src/entrypoints/popup/App.tsx](src/entrypoints/popup/App.tsx). Houses sign-in, Memory picker, sync toggles, ignore list, logs, **Settings** (Memory URL), and a hidden developer panel (Portal/cloud env only).
 
 ## 4. Background Script — Responsibilities
 
@@ -175,12 +175,23 @@ Targets built: Chrome, Firefox, Edge, Opera, Brave, DuckDuckGo, Safari (incl. iO
 
 ## 10. Authentication Flow
 
-1. The user clicks "Sign in with Companion account" in the popup, which messages the background (`AUTHORIZE`).
-2. The background runs OIDC Authorization-Code + PKCE against the configured Portal URL (default `https://hub.ci.computer`), using `browser.identity.launchWebAuthFlow` with `browser.identity.getRedirectURL()` as the redirect.
-3. The code is exchanged at the token endpoint. Every portal request is sent with `credentials: "omit"` — the extension holds host permissions for the portal origin, so Chrome would otherwise attach the session cookie better-auth just set, and better-auth's origin check rejects cookie-bearing requests from a `chrome-extension://` origin.
-4. The extension asks the Portal where the user's Memory app runs and sets `serverURL` from it (never overwriting a manual choice).
-5. All CI-Server calls send `Authorization: Bearer <id_token>`. The opaque OAuth `access_token` is **not** usable against CI-Server — only the portal-issued, JWKS-signed `id_token` passes its `jwtVerify`. The `access_token` is used solely for Portal API calls.
-6. When the `id_token` expires, the extension first tries a non-interactive renewal; only if that fails does the popup drop to the sign-in view.
+Two hops, two credentials (same model as Companion Capture):
+
+| Credential | Used for | Validates |
+|---|---|---|
+| Opaque Portal `access_token` | `GET /api/users/me/apps` (Memory discovery) | Portal OAuth / `PUBLIC_CLIENTS` |
+| Portal JWT `id_token` (`aud=ci-browser-extension`) | Memory `/api/devices`, `/api/v1/*` | CI-Server `PortalTokenService` JWKS |
+| Same `id_token` | Hub Traefik forward-auth when Memory is behind edge SSO | Hub `portal-token` (audience includes `ci-browser-extension`) |
+
+1. The user clicks **Sign in** in the popup (`AUTHORIZE`). Work runs in the background; the popup is often torn down when the auth UI takes focus. Authorize uses `prompt=select_account` so Portal shows an account picker instead of silently reusing the last SSO cookie.
+2. OIDC Authorization-Code + PKCE against the configured Portal (default `https://hub.ci.computer`, issuer `{portal}/api/auth`):
+   - **Chrome / Firefox:** `browser.identity.launchWebAuthFlow` + `getRedirectURL()` (`*.chromiumapp.org` / `*.extensions.allizom.org`).
+   - **Safari:** open the authorize URL in a tab; `redirect_uri` is loopback `http://127.0.0.1:8732/oidc-callback` (Portal private-IP allowlist). The macOS container app serves that port; the extension captures `?code=` via a content script on the callback page (plus `webNavigation` / `tabs` polling), then exchanges the code.
+3. Token exchange uses `credentials: "omit"` so Portal session cookies are not attached from the extension origin.
+4. **Memory / device:** Portal `GET /me/apps?slug=ci-memory` lists this account’s Memory instances. One → auto-set `serverURL`. Several → popup **Choose Memory** (saved as a manual URL). A Settings URL marked manual is never overwritten. Each browser profile binds to one Memory; switching accounts uses **Use another account**.
+5. All CI-Server calls send `Authorization: Bearer <id_token>`. Never send the opaque `access_token` to Memory or Hub.
+6. When the `id_token` expires, Chrome/Firefox try non-interactive renewal; Safari requires Sign in again (no silent tab flow).
+7. Public Memory behind Hub edge SSO needs a Hub build that accepts Portal Bearer JWTs; Memory needs `PORTAL_OIDC_ENABLED` with audience including `ci-browser-extension`.
 
 ## 11. Known Architectural Tensions
 

@@ -90,14 +90,35 @@ npm run prepare:store  # Full pipeline: clean, lint, compile, zip
 ### Safari
 Safari doesn't support loading an unpacked extension folder — every test run
 has to go through the Xcode wrapper:
-1. `npm run build:safari` (or `:safari-mobile` for iOS)
-2. `xcrun safari-web-extension-converter .output/safari-mv2` to scaffold the
-   Xcode project
-3. Build & run the generated app target from Xcode
+1. `yarn build:safari` (or `yarn build:safari-mobile` for iOS)
+2. Regenerate / refresh the Xcode wrapper (gitignored under `.safari-xcode/`):
+   ```bash
+   xcrun safari-web-extension-converter \
+     --no-prompt \
+     --project-location .safari-xcode \
+     --bundle-identifier com.companionintel.extension \
+     --copy-resources \
+     --force \
+     .output/safari-mv2
+   ```
+3. Open the generated `.xcodeproj`, pick your Team under Signing, Run
 4. In Safari: Settings → Advanced → enable "Show features for web
    developers", then Develop → "Allow Unsigned Extensions" (needed for an
    ad-hoc/dev-signed build), then enable the extension in Settings →
    Extensions
+
+Sign-in on Safari does **not** use `browser.identity`. The Safari build opens
+the Portal authorize URL in a tab (`prompt=select_account` so you can pick
+which Companion account) and captures the loopback redirect
+`http://127.0.0.1:8732/oidc-callback` (already allowed by Portal). The
+**Companion Intelligence macOS app** (Xcode wrapper) must stay running — it
+listens on that port; a content script on the callback page reports `?code=`
+to the extension background. If you see Safari’s “Can’t Connect” page, the
+container app isn’t running. After tokens are stored, reopen the popup —
+it should show Connected / **Choose Memory** (when the account has more than
+one Memory). Portal/cloud switching is developer-only (⌥⇧. or 7× title
+click); Memory URL is under **Settings**. Use **Use another account** to
+clear the binding and pick a different Portal identity.
 
 ## Debugging
 
