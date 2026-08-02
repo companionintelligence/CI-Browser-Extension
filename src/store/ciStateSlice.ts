@@ -98,10 +98,12 @@ export const loadUserSettings = createAsyncThunk(
       settings.bookmarkSyncEnabled = false;
       clearSync.bookmarkSyncEnabled = false;
     }
+
     if (!hasDownloadsApi() && settings.downloadSyncEnabled) {
       settings.downloadSyncEnabled = false;
       clearSync.downloadSyncEnabled = false;
     }
+
     if (Object.keys(clearSync).length > 0) {
       await browser.storage.local.set(clearSync);
     }
