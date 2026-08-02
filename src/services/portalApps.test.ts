@@ -105,20 +105,28 @@ describe("portalApps", () => {
   });
 
   describe("memoryAppsFrom", () => {
-    it("returns an empty list when there is no memory app", () => {
+    it("returns an empty list when the Portal returned no apps", () => {
       expect(memoryAppsFrom([])).toEqual([]);
-      expect(
-        memoryAppsFrom([{ slug: "hub", url: "https://hub.example.com" }]),
-      ).toEqual([]);
     });
 
-    it("returns memory apps with normalized URLs", () => {
+    it("keeps renamed instances the Portal matched by canonical name", () => {
+      // Portal filters by ?slug=ci-memory (slug OR canonical name), so a
+      // returned app may carry a user-chosen slug like ci-memory2.
+      const apps = memoryAppsFrom([
+        { slug: "ci-memory2", url: "https://mem2.example.com" },
+      ]);
+
+      expect(apps.map((app) => app.url)).toEqual(["https://mem2.example.com"]);
+    });
+
+    it("returns memory apps with normalized URLs, keeping device identity", () => {
       expect(
         memoryAppsFrom([
           {
             slug: MEMORY_APP_SLUG,
             url: "https://mem.example.com/",
             deviceName: "Den",
+            deviceSlug: "disc-one",
           },
         ]),
       ).toEqual([
@@ -126,6 +134,7 @@ describe("portalApps", () => {
           slug: MEMORY_APP_SLUG,
           url: "https://mem.example.com",
           deviceName: "Den",
+          deviceSlug: "disc-one",
         },
       ]);
     });
@@ -135,7 +144,6 @@ describe("portalApps", () => {
         { slug: MEMORY_APP_SLUG, url: "https://one.example.com" },
         { slug: MEMORY_APP_SLUG, url: "https://two.example.com" },
         { slug: MEMORY_APP_SLUG, url: "https://one.example.com/" },
-        { slug: "hub", url: "https://hub.example.com" },
       ]);
 
       expect(apps.map((app) => app.url)).toEqual([

@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 .output
+.safari-xcode/
 
 # Yarn local state (yarn 4, nodeLinker: node-modules)
 .yarn/

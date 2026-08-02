@@ -98,10 +98,13 @@ yarn build:firefox       # Firefox MV2 → .output/firefox-mv2
    Portal (staging / dev / local presets, or a custom URL).
 2. After sign-in the extension asks the Portal where your **Memory** app runs
    and configures the server URL automatically. If Memory is installed on more
-   than one of your devices, the popup asks which one to use. If your Portal
+   than one of your devices, the popup asks which device's Memory to use. If
+   your account has no Memory app yet, the popup says so and offers **Check
+   again**, **Open Portal**, or manual URL entry. You can re-run discovery any
+   time from **Settings → Find my Memory** to switch devices. If your Portal
    doesn't support discovery (or you run an unusual setup), set the
-   **Memory server URL** manually under **Advanced**. Once signed in, the popup
-   shows **Authorized with Companion Intelligence** and your device.
+   **Memory URL** manually under **Settings**. Once signed in, the popup
+   shows the connected Memory host and your device.
 3. Choose a **sync time range** and click **Start History Sync**, or enable
    **Auto-sync** to run in the background.
 4. Toggle **History / Bookmarks / Downloads** to control what's captured.

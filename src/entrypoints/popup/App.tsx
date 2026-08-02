@@ -11,12 +11,38 @@ import {
   saveUserSettings,
 } from "@/store/ciStateSlice";
 import "@/theme.css";
-import { DEFAULT_PORTAL_URL } from "@/services/portalConfig";
 import { parseUrl } from "@/utils";
+import { portalOidcConfig } from "@/services/portalConfig";
+import { NO_MEMORY_HINT } from "@/services/portalApps";
+import {
+  prepareAuthorizeRequest,
+  savePendingAuth,
+  shouldUseTabAuthFlow,
+} from "@/services/oidcAuth";
 import bowser from "bowser";
 import BlacklistManager from "./BlacklistManager";
 import AdvancedSettings from "./AdvancedSettings";
+import MemorySettings from "./MemorySettings";
 import { Button, Checkbox, Field, Label, Card, Toaster } from "@ci/shadcn";
+
+/** Hidden developer panel: ⌥⇧. (Alt+Shift+Period), or 7 clicks on the title. */
+const DEV_CLICKS_NEEDED = 7;
+const DEV_CLICK_WINDOW_MS = 2500;
+
+// Safari accepts the `history` / `bookmarks` / `downloads` manifest
+// permissions but never implements the APIs (confirmed by Apple:
+// https://developer.apple.com/forums/thread/711080), so retroactive sync
+// cannot exist there. Pages are captured live as the user browses instead.
+// Feature-detect rather than UA-sniff so any future Safari support just works.
+const HISTORY_API_AVAILABLE =
+  typeof browser !== "undefined" &&
+  typeof browser.history?.search === "function";
+const BOOKMARKS_API_AVAILABLE =
+  typeof browser !== "undefined" &&
+  typeof browser.bookmarks?.getTree === "function";
+const DOWNLOADS_API_AVAILABLE =
+  typeof browser !== "undefined" &&
+  typeof browser.downloads?.search === "function";
 
 export default function App() {
   const dispatch = useDispatch();
@@ -33,7 +59,12 @@ export default function App() {
     portalUrl: string;
     discoveryHint: string | null;
     memoryAppChoices:
-      | { slug: string; url: string; deviceName?: string }[]
+      | {
+          slug: string;
+          url: string;
+          deviceName?: string;
+          deviceSlug?: string;
+        }[]
       | null;
     settingsLoaded: boolean;
     autoSyncEnabled: boolean;
@@ -80,33 +111,62 @@ export default function App() {
   } = ciState;
 
   const [showBlacklistManager, setShowBlacklistManager] = useState(false);
+  const [showMemorySettings, setShowMemorySettings] = useState(false);
   const [syncTimeRange, setSyncTimeRange] = useState("7");
   const [showSyncLogs, setShowSyncLogs] = useState(false);
   const [token, setToken] = useState(accessToken);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [devUnlocked, setDevUnlocked] = useState(false);
+  const [titleClicks, setTitleClicks] = useState<{ n: number; t: number }>({
+    n: 0,
+    t: 0,
+  });
   const [authorizing, setAuthorizing] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [rediscovering, setRediscovering] = useState(false);
 
   useEffect(() => {
-    if (serverURL) {
-      browser.runtime.sendMessage({
-        action: "CHECK_AUTH_STATUS",
-      });
-    }
+    browser.runtime.sendMessage({
+      action: "CHECK_AUTH_STATUS",
+    });
   }, [settingsLoaded, serverURL]);
 
   useEffect(() => {
     setToken(accessToken);
+    if (accessToken) {
+      setAuthorizing(false);
+    }
   }, [accessToken]);
 
   useEffect(() => {
     const browser_info = bowser.getParser(window.navigator.userAgent);
     setIsMobile(browser_info.getPlatformType() === "mobile");
 
-    // Check authentication status every time popup opens
+    // Safari tears the popup down during tab auth. On reopen, restore the
+    // "finish in the tab" state (or the persisted failure — AUTH_FAILED
+    // broadcasts are lost while the popup is closed) and refresh tokens.
     const checkAuthStatus = async () => {
       try {
-        // Send message to background to refresh auth status
+        const stored = await browser.storage.local.get([
+          "oidcAuthInProgressAt",
+          "oidcLastAuthError",
+        ]);
+        const lastError = stored.oidcLastAuthError as
+          | { message?: string }
+          | undefined;
+        if (lastError?.message) {
+          setAuthError(lastError.message);
+        }
+
+        // Mirror oidcAuth's TAB_AUTH_TIMEOUT_MS (10 min).
+        const startedAt = stored.oidcAuthInProgressAt;
+        if (
+          typeof startedAt === "number" &&
+          Date.now() - startedAt < 10 * 60 * 1000 &&
+          !lastError?.message
+        ) {
+          setAuthorizing(true);
+        }
+
         await browser.runtime.sendMessage({
           action: "CHECK_AUTH_STATUS",
         });
@@ -115,24 +175,103 @@ export default function App() {
       }
     };
 
-    // Check auth status immediately when popup opens. State updates arrive
-    // automatically through the webext-redux proxy store, so no manual
-    // settings reload is needed here.
     checkAuthStatus();
   }, []);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    // Mobile detection
     const browser_info = bowser.getParser(window.navigator.userAgent);
     setIsMobile(browser_info.getPlatformType() === "mobile");
 
-    browser.runtime.onMessage.addListener((message) => {
+    const onMessage = (message: {
+      action?: string;
+      payload?: { accessToken?: string | null };
+      error?: string;
+    }) => {
       if (message.action === "AUTH_STATE_UPDATED") {
-        setToken(message.payload.accessToken);
+        setToken(message.payload?.accessToken ?? null);
+        setAuthorizing(false);
+        setAuthError(null);
       }
-    });
+
+      if (message.action === "AUTH_FAILED") {
+        setAuthorizing(false);
+        setAuthError(
+          typeof message.error === "string" && message.error
+            ? message.error
+            : "Sign-in failed",
+        );
+      }
+    };
+
+    browser.runtime.onMessage.addListener(onMessage);
+
+    const onStorage = (
+      changes: { [key: string]: { newValue?: unknown; oldValue?: unknown } },
+      area: string,
+    ) => {
+      if (area !== "local") {
+        return;
+      }
+
+      if (
+        changes.oidcAuthInProgressAt &&
+        !changes.oidcAuthInProgressAt.newValue
+      ) {
+        // Auth finished while the popup was closed or open — re-check Redux.
+        setAuthorizing(false);
+        void browser.runtime.sendMessage({ action: "CHECK_AUTH_STATUS" });
+      }
+
+      // Live view of the persisted auth failure (set by the background while
+      // this popup may or may not be open).
+      if (changes.oidcLastAuthError) {
+        const next = changes.oidcLastAuthError.newValue as
+          | { message?: string }
+          | undefined;
+        if (next?.message) {
+          setAuthorizing(false);
+          setAuthError(next.message);
+        } else {
+          setAuthError(null);
+        }
+      }
+    };
+
+    browser.storage.onChanged.addListener(onStorage);
+
+    return () => {
+      browser.runtime.onMessage.removeListener(onMessage);
+      browser.storage.onChanged.removeListener(onStorage);
+    };
   }, []);
+
+  // Secret developer unlock — not advertised in the UI.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.shiftKey && (e.key === "." || e.code === "Period")) {
+        e.preventDefault();
+        setDevUnlocked((open) => !open);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const handleTitleClick = () => {
+    const now = Date.now();
+    const next =
+      now - titleClicks.t > DEV_CLICK_WINDOW_MS
+        ? { n: 1, t: now }
+        : { n: titleClicks.n + 1, t: titleClicks.t };
+    setTitleClicks(next);
+    if (next.n >= DEV_CLICKS_NEEDED) {
+      setDevUnlocked(true);
+      setTitleClicks({ n: 0, t: 0 });
+    }
+  };
 
   const handleAutoSyncToggle = () => {
     dispatch(toggleAutoSync());
@@ -157,25 +296,84 @@ export default function App() {
     dispatch(saveUserSettings());
   };
 
-  // Kick off the OIDC Auth-Code + PKCE sign-in. The flow runs in the background
-  // service worker (the popup is torn down when launchWebAuthFlow takes focus);
-  // the resulting token arrives back via the AUTH_STATE_UPDATED broadcast.
+  // Kick off Portal OIDC Auth-Code + PKCE. On Safari the popup itself
+  // persists the PKCE session to storage BEFORE anything else: the callback
+  // page's content script does the token exchange from that stored session,
+  // and the background — which used to own this write via the AUTHORIZE
+  // handler — may never wake (that gap produced "pending PKCE session
+  // missing" failures). The AUTHORIZE message is now purely best-effort so
+  // an awake background can run its capture fallbacks; nothing blocks on it.
   const handleAuthorize = async () => {
     setAuthorizing(true);
     setAuthError(null);
     try {
+      let tabId: number | undefined;
+      let prepared:
+        | Awaited<ReturnType<typeof prepareAuthorizeRequest>>
+        | undefined;
+
+      if (shouldUseTabAuthFlow()) {
+        prepared = await prepareAuthorizeRequest(
+          portalOidcConfig({ portalUrl }),
+          { prompt: "select_account" },
+        );
+        // The load-bearing write: the callback page exchanges against this.
+        await savePendingAuth(prepared);
+
+        // Best-effort: wakes the background's tab-capture fallbacks. Never
+        // await it — a sleeping background would hang this promise and the
+        // tab must open under the click gesture.
+        void browser.runtime
+          .sendMessage({ action: "AUTHORIZE", prepared })
+          .catch(() => undefined);
+
+        const tab = await browser.tabs.create({
+          url: prepared.authorizeUrl,
+          active: true,
+        });
+        tabId = tab.id;
+        if (tabId !== undefined) {
+          // Best-effort; capture also scans all tabs for the callback URL.
+          void browser.runtime
+            .sendMessage({ action: "AUTHORIZE_TAB", tabId })
+            .catch(() => undefined);
+        }
+
+        return;
+      }
+
       const response = await browser.runtime.sendMessage({
         action: "AUTHORIZE",
       });
 
-      if (!response?.success) {
-        setAuthError(response?.error || "Authorization failed");
+      if (response && response.success === false) {
+        setAuthError(response.error || "Sign-in failed");
+        setAuthorizing(false);
       }
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : String(error));
-    } finally {
       setAuthorizing(false);
     }
+  };
+
+  // "Check again": re-ask the Portal which Memories this account has. The
+  // background updates Redux (choices or a fresh hint); the proxy store
+  // re-renders this popup with the outcome.
+  const recheckMemories = async () => {
+    setRediscovering(true);
+    try {
+      await browser.runtime.sendMessage({ action: "DISCOVER_MEMORY" });
+    } catch (error) {
+      console.error("Memory re-discovery failed:", error);
+    } finally {
+      setRediscovering(false);
+    }
+  };
+
+  // Forced re-discovery lists choices even when already connected; keeping
+  // the current Memory just dismisses them.
+  const dismissMemoryChoices = () => {
+    dispatch(setState({ memoryAppChoices: null }));
   };
 
   // Multi-device pick: an explicit user choice, so it's saved as "manual" and
@@ -193,6 +391,40 @@ export default function App() {
     browser.runtime
       .sendMessage({ action: "CHECK_AUTH_STATUS" })
       .catch(console.error);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await browser.runtime.sendMessage({ action: "SIGN_OUT" });
+      setToken(null);
+      setAuthorizing(false);
+      setAuthError(null);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  /** Clear local session and open Portal with an account picker. */
+  const handleUseAnotherAccount = async () => {
+    try {
+      await browser.runtime.sendMessage({ action: "SIGN_OUT" });
+      setToken(null);
+      dispatch(
+        setState({
+          serverURL: "",
+          serverURLSource: null,
+          memoryAppChoices: null,
+          discoveryHint: null,
+          deviceId: null,
+          deviceName: null,
+        }),
+      );
+      dispatch(saveUserSettings());
+    } catch {
+      // Still attempt a fresh authorize.
+    }
+
+    await handleAuthorize();
   };
 
   const triggerHistorySync = async () => {
@@ -262,63 +494,131 @@ export default function App() {
     );
   }
 
+  if (showMemorySettings) {
+    return (
+      <>
+        <Toaster />
+        <div
+          className={`min-w-[280px] ${isMobile ? "w-full max-w-full" : "max-w-[400px]"} mx-auto p-4 box-border`}
+        >
+          <MemorySettings onBack={() => setShowMemorySettings(false)} />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <Toaster />
       <div
         className={`min-w-[280px] ${isMobile ? "w-full max-w-full p-2" : "w-[350px] max-w-[400px]"} mx-auto p-4 box-border`}
       >
-        {!token && (
-          <div className="mb-4 text-center">
-            <h4 className="m-0 mb-1 text-primary text-[1.25em] font-semibold">
-              Companion Intelligence
-            </h4>
-            <p className="m-0 mb-3 text-[0.9em] text-muted-foreground">
-              Sync your browsing to your Companion memory.
-            </p>
-          </div>
-        )}
+        <div className="mb-3 text-center">
+          <h4
+            className="m-0 text-primary text-[1.15em] font-semibold select-none cursor-default"
+            onClick={handleTitleClick}
+          >
+            Companion Intelligence
+          </h4>
+        </div>
 
         {token ? (
           <Button
-            className="text-center mb-4 size-4 p-2 text-muted-foreground rounded-lg h-10 border-t bg-primary/10 block w-full font-medium no-underline hover:bg-primary/15 transition-colors"
+            className="text-center mb-3 p-2 text-muted-foreground rounded-lg h-10 bg-primary/10 block w-full max-w-full overflow-hidden font-medium hover:bg-primary/15 transition-colors"
+            title={serverURL || undefined}
             onClick={() => {
               window.open(serverURL || portalUrl, "_blank");
             }}
           >
-            Authorized with Companion Intelligence
+            {/* Memory hosts can be long (device-user-org subdomains); keep
+                them on one line and ellipsize instead of overflowing. */}
+            <span className="block w-full truncate">
+              {serverURL
+                ? (parseUrl(serverURL)?.host ?? "Connected")
+                : memoryAppChoices && memoryAppChoices.length > 0
+                  ? "Signed in — choose a Memory below"
+                  : "Signed in — no Memory connected"}
+            </span>
           </Button>
         ) : (
           <Button
             onClick={handleAuthorize}
             disabled={authorizing}
             style={{ background: "var(--gradient-brand)" }}
-            className="text-center mb-4 p-2 rounded-lg h-10 block w-full font-medium no-underline transition-all text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="text-center mb-3 p-2 rounded-lg h-10 block w-full font-medium transition-all text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {authorizing ? "Signing in…" : "Sign in with Companion account"}
+            {authorizing ? "Finish sign-in in the tab…" : "Sign in"}
           </Button>
         )}
 
+        {authorizing && (
+          <div className="mb-3 p-2 rounded text-[0.8em] text-muted-foreground bg-primary/10">
+            After Portal says sign-in is complete, reopen this popup. On Safari,
+            allow this extension for your Portal site under Settings →
+            Extensions if the popup stays on Sign in.
+          </div>
+        )}
+
         {authError && (
-          <div className="mb-4 p-2 rounded text-[0.85em] text-destructive bg-destructive/10">
+          <div className="mb-3 p-2 rounded text-[0.85em] text-destructive bg-destructive/10">
             {authError}
           </div>
         )}
 
-        {discoveryHint && (!token || !serverURL) && (
-          <div className="mb-4 p-2 rounded text-[0.85em] text-muted-foreground bg-primary/10">
-            {discoveryHint}
-          </div>
-        )}
+        {/* NO_MEMORY_HINT gets the dedicated panel below, not this banner. */}
+        {discoveryHint &&
+          discoveryHint !== NO_MEMORY_HINT &&
+          (!token || !serverURL) && (
+            <div className="mb-3 p-2 rounded text-[0.85em] text-muted-foreground bg-primary/10">
+              {discoveryHint}
+            </div>
+          )}
 
-        {/* Memory runs on several devices — ask which one to sync to */}
+        {token &&
+          discoveryHint === NO_MEMORY_HINT &&
+          !(memoryAppChoices && memoryAppChoices.length > 0) && (
+            <div className="mb-3 p-3 rounded-lg bg-primary/5 text-left">
+              <p className="m-0 mb-1 text-[0.9em] font-semibold text-primary">
+                No Memory found
+              </p>
+              <p className="m-0 mb-2 text-[0.8em] text-muted-foreground">
+                This account doesn’t have a Memory app yet. Install Memory on
+                one of your devices from the Portal, then check again — or enter
+                your Memory URL manually in Settings.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={recheckMemories}
+                  disabled={rediscovering}
+                  className="w-full min-h-[36px] text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {rediscovering ? "Checking…" : "Check again"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(portalUrl, "_blank")}
+                  className="w-full min-h-[36px] text-sm"
+                >
+                  Open Portal
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowMemorySettings(true)}
+                  className="w-full min-h-[32px] text-sm text-muted-foreground"
+                >
+                  Enter URL manually
+                </Button>
+              </div>
+            </div>
+          )}
+
         {token && memoryAppChoices && memoryAppChoices.length > 0 && (
-          <div className="mb-4 p-3 rounded-lg bg-primary/5 text-left">
-            <p className="m-0 mb-1 text-[0.9em] font-semibold text-primary">
-              Choose your Memory
+          <div className="mb-3 p-3 rounded-lg bg-primary/5 text-left">
+            <p className="m-0 mb-2 text-[0.9em] font-semibold text-primary">
+              Choose Memory
             </p>
             <p className="m-0 mb-2 text-[0.8em] text-muted-foreground">
-              Your Companion account has Memory on more than one device.
+              Pick which device’s Memory this browser should sync with.
             </p>
             <div className="flex flex-col gap-2">
               {memoryAppChoices.map((choice) => (
@@ -328,29 +628,34 @@ export default function App() {
                   onClick={() => chooseMemory(choice)}
                   className="w-full min-h-[40px] px-3 py-2 flex flex-col items-start gap-0 bg-transparent text-left border-border hover:bg-primary/10 hover:border-primary transition-colors"
                 >
-                  <span className="text-[0.9em] font-medium text-foreground">
+                  <span className="max-w-full truncate text-[0.9em] font-medium text-foreground">
                     {choice.deviceName ??
+                      choice.deviceSlug ??
                       parseUrl(choice.url)?.host ??
                       choice.url}
+                    {choice.url === serverURL ? " (current)" : ""}
                   </span>
-                  <span className="text-[0.75em] text-muted-foreground">
+                  <span className="max-w-full truncate text-[0.75em] text-muted-foreground">
                     {parseUrl(choice.url)?.host ?? choice.url}
                   </span>
                 </Button>
               ))}
+              {serverURL && (
+                <Button
+                  variant="ghost"
+                  onClick={dismissMemoryChoices}
+                  className="w-full min-h-[32px] text-sm text-muted-foreground"
+                >
+                  Keep current
+                </Button>
+              )}
             </div>
           </div>
         )}
 
         {token && (
-          <div className="mt-6 pt-4">
-            <div className="mb-4">
-              <h4 className="m-0 mb-2 text-primary text-[1.25em] font-semibold pt-4 border-t border-border">
-                Browser History Sync
-              </h4>
-            </div>
-
-            <Field className="mb-4 p-4 bg-primary/5 rounded-lg text-left">
+          <div className="mt-2 pt-3 border-t border-border">
+            <Field className="mb-3 p-3 bg-primary/5 rounded-lg text-left">
               <Field orientation="horizontal">
                 <Checkbox
                   id="auto-sync-enabled"
@@ -359,93 +664,75 @@ export default function App() {
                   onCheckedChange={handleAutoSyncToggle}
                   className="w-[18px] h-[18px] cursor-pointer accent-primary"
                 />
-                <Field.Label
-                  htmlFor="auto-sync-enabled"
-                  className="text-[1.2em]"
-                >
-                  Auto-sync all browser history
-                </Field.Label>
+                <Field.Label htmlFor="auto-sync-enabled">Auto-sync</Field.Label>
               </Field>
-              <Field.Description className="mt-2 ml-7 text-muted-foreground leading-[1.4] text-[0.9em]">
-                Excludes ignored sites and pages
-              </Field.Description>
             </Field>
 
             {deviceId ? (
-              <div className="mb-4 p-3 rounded text-left">
-                <p className="m-0 text-[0.9em] text-primary">
-                  Device: {deviceName || "Unknown Device"}
-                </p>
-              </div>
+              <p className="m-0 mb-3 text-[0.85em] text-muted-foreground">
+                {deviceName || "This device"}
+              </p>
             ) : (
-              // This branch is reached while SIGNED IN — it means device
-              // registration against the Memory server has not completed. The
-              // old copy here ("Not Authenticated · Please log in through the
-              // main application first") was left over from the retired
-              // cookie flow and sent the user to sign in again, which cannot
-              // help: they are already signed in. The usual real cause is a
-              // server that rejects the portal token.
-              <div className="mb-4 p-3 rounded text-left">
-                <p className="m-0 text-[0.9em] text-muted-foreground mb-2">
-                  Setting up this device…
-                </p>
-                <p className="text-[0.8em] text-muted-foreground my-1">
-                  If this persists, your Memory server may be unreachable or may
-                  not have Companion sign-in enabled (
-                  <code>PORTAL_OIDC_ENABLED</code>).
-                </p>
-              </div>
+              <p className="m-0 mb-3 text-[0.85em] text-muted-foreground">
+                Setting up device…
+              </p>
             )}
 
-            {/* Sync Time Range and Manual Sync Section */}
-            <div className="mb-4">
-              <div className="mb-3 flex items-center gap-2 flex-wrap">
-                <label
-                  htmlFor="syncTimeRange"
-                  className="text-[0.9em] font-medium text-muted-foreground"
-                >
-                  Sync time range:
-                </label>
-                <select
-                  id="syncTimeRange"
-                  value={syncTimeRange}
-                  onChange={(e) => setSyncTimeRange(e.target.value)}
-                  disabled={historySyncInProgress}
-                  className="w-[140px] min-h-[36px] text-sm rounded-md text-foreground border border-border bg-transparent px-3 py-2 outline-none focus:border-primary focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-primary/5"
-                >
-                  <option value="1">Last 24 hours</option>
-                  <option value="7">Last 7 days</option>
-                  <option value="30">Last 30 days</option>
-                  <option value="90">Last 90 days</option>
-                  <option value="365">Last year</option>
-                </select>
-              </div>
+            {HISTORY_API_AVAILABLE ? (
+              <div className="mb-3">
+                <div className="mb-2 flex items-center gap-2 flex-wrap">
+                  <label
+                    htmlFor="syncTimeRange"
+                    className="text-[0.85em] text-muted-foreground"
+                  >
+                    Range
+                  </label>
+                  <select
+                    id="syncTimeRange"
+                    value={syncTimeRange}
+                    onChange={(e) => setSyncTimeRange(e.target.value)}
+                    disabled={historySyncInProgress}
+                    className="w-[140px] min-h-[36px] text-sm rounded-md text-foreground border border-border bg-transparent px-3 py-2 outline-none focus:border-primary focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-primary/5"
+                  >
+                    <option value="1">24 hours</option>
+                    <option value="7">7 days</option>
+                    <option value="30">30 days</option>
+                    <option value="90">90 days</option>
+                    <option value="365">1 year</option>
+                  </select>
+                </div>
 
-              <Button
-                onClick={triggerHistorySync}
-                disabled={historySyncInProgress}
-                className={`rounded-lg border border-transparent px-[1.4em] py-[0.8em] text-base font-medium font-inherit cursor-pointer transition-all min-h-[44px] min-w-[44px] w-full touch-manipulation ${
-                  historySyncInProgress
-                    ? "opacity-60 cursor-not-allowed bg-muted text-muted-foreground border-border"
-                    : "bg-primary text-primary-foreground border-primary hover:bg-primary/90 active:translate-y-[1px]"
-                }`}
-              >
-                {historySyncInProgress ? "Syncing..." : "Start History Sync"}
-              </Button>
-            </div>
+                <Button
+                  onClick={triggerHistorySync}
+                  disabled={historySyncInProgress}
+                  className={`rounded-lg border border-transparent px-[1.4em] py-[0.8em] text-base font-medium font-inherit cursor-pointer transition-all min-h-[44px] min-w-[44px] w-full touch-manipulation ${
+                    historySyncInProgress
+                      ? "opacity-60 cursor-not-allowed bg-muted text-muted-foreground border-border"
+                      : "bg-primary text-primary-foreground border-primary hover:bg-primary/90 active:translate-y-[1px]"
+                  }`}
+                >
+                  {historySyncInProgress ? "Syncing…" : "Sync history"}
+                </Button>
+              </div>
+            ) : (
+              <div className="mb-3 p-2 rounded text-[0.85em] text-muted-foreground bg-primary/10">
+                Safari doesn’t share past history. Visits are captured as you
+                browse, on sites where this extension is allowed (Safari
+                Settings → Extensions).
+              </div>
+            )}
             {historySyncStatus && (
               <div className="text-[0.85em] text-muted-foreground my-2 p-2 rounded bg-primary/10">
                 {historySyncStatus}
               </div>
             )}
             {lastHistorySync && (
-              <div className="text-[1em] text-muted-foreground text-center">
-                Last sync: {new Date(lastHistorySync).toLocaleString()}
+              <div className="text-[0.8em] text-muted-foreground text-center mb-2">
+                Last: {new Date(lastHistorySync).toLocaleString()}
               </div>
             )}
 
-            {/* Compact sync toggles moved below sync button */}
-            <div className="flex flex-col gap-2 mt-4 p-4 bg-primary/5 rounded-lg border-t border-primary/20">
+            <div className="flex flex-col gap-2 mt-3 p-3 bg-primary/5 rounded-lg">
               <Field.Group className="max-w-lg w-full">
                 <Field orientation="horizontal">
                   <Checkbox
@@ -463,8 +750,12 @@ export default function App() {
                     name="bookmark-sync-enabled"
                     checked={bookmarkSyncEnabled}
                     onCheckedChange={handleBookmarkSyncToggle}
+                    disabled={!BOOKMARKS_API_AVAILABLE}
                   />
-                  <Label htmlFor="bookmark-sync-enabled">Bookmarks</Label>
+                  <Label htmlFor="bookmark-sync-enabled">
+                    Bookmarks
+                    {!BOOKMARKS_API_AVAILABLE && " (not available in Safari)"}
+                  </Label>
                 </Field>
                 <Field orientation="horizontal">
                   <Checkbox
@@ -472,14 +763,16 @@ export default function App() {
                     name="download-sync-enabled"
                     checked={downloadSyncEnabled}
                     onCheckedChange={handleDownloadSyncToggle}
+                    disabled={!DOWNLOADS_API_AVAILABLE}
                   />
-                  <Label htmlFor="download-sync-enabled">Downloads</Label>
+                  <Label htmlFor="download-sync-enabled">
+                    Downloads
+                    {!DOWNLOADS_API_AVAILABLE && " (not available in Safari)"}
+                  </Label>
                 </Field>
               </Field.Group>
 
-              {/* Sensitive scrape profiles are opt-in: financial holdings are
-                  not something an extension should capture by default. */}
-              <Field orientation="horizontal" className="mt-3">
+              <Field orientation="horizontal" className="mt-2">
                 <Checkbox
                   id="sensitive-scraping-enabled"
                   name="sensitive-scraping-enabled"
@@ -487,20 +780,15 @@ export default function App() {
                   onCheckedChange={handleSensitiveScrapingToggle}
                 />
                 <Label htmlFor="sensitive-scraping-enabled">
-                  Include financial accounts
-                  <span className="block text-[0.75em] text-muted-foreground font-normal">
-                    Capture portfolio holdings and trade history from brokerage
-                    sites. Off by default.
-                  </span>
+                  Financial accounts
                 </Label>
               </Field>
             </div>
 
-            {/* Sync History & Logs Section */}
-            <div className="mt-6 pt-6 border-t border-border">
-              <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-                <h4 className="text-[0.95em] m-0 text-primary font-semibold">
-                  Sync History & Logs
+            <div className="mt-4 pt-4 border-t border-border">
+              <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
+                <h4 className="text-[0.9em] m-0 text-primary font-semibold">
+                  Logs
                 </h4>
                 <div className="flex gap-2 items-center flex-wrap">
                   <Button
@@ -508,9 +796,7 @@ export default function App() {
                     variant="outline"
                     className="text-xs px-2 py-1 bg-transparent text-primary border-primary hover:bg-primary/10 min-h-[36px]"
                   >
-                    {showSyncLogs
-                      ? "Hide Logs"
-                      : `Show Logs (${syncHistoryLogs.length})`}
+                    {showSyncLogs ? "Hide" : `Show (${syncHistoryLogs.length})`}
                   </Button>
                   {syncHistoryLogs.length > 0 && (
                     <>
@@ -518,7 +804,7 @@ export default function App() {
                         onClick={exportSyncLogs}
                         variant="outline"
                         className="text-xs px-2 py-1 bg-transparent text-primary border-primary hover:bg-primary/10 min-h-[36px]"
-                        title="Export logs as JSON file"
+                        title="Export JSON"
                       >
                         Export
                       </Button>
@@ -526,7 +812,7 @@ export default function App() {
                         onClick={clearSyncLogs}
                         variant="destructive"
                         className="text-xs px-2 py-1 min-h-[36px]"
-                        title="Clear all sync logs"
+                        title="Clear logs"
                       >
                         Clear
                       </Button>
@@ -536,15 +822,15 @@ export default function App() {
               </div>
 
               {showSyncLogs && (
-                <div className="mt-3">
+                <div className="mt-2">
                   {syncHistoryLogs.length === 0 ? (
-                    <div className="text-center p-4 text-muted-foreground text-xs italic bg-white/5 border border-dashed border-border rounded">
-                      No sync operations recorded yet.
+                    <div className="text-center p-3 text-muted-foreground text-xs bg-white/5 border border-dashed border-border rounded">
+                      No logs yet
                     </div>
                   ) : (
                     <Card className="bg-card rounded border border-border overflow-hidden">
                       <div className="grid gap-2 p-2 bg-muted font-semibold text-xs text-foreground grid-cols-[2fr_1fr_1fr]">
-                        <span>Date & Time</span>
+                        <span>When</span>
                         <span>Range</span>
                         <span>Status</span>
                       </div>
@@ -580,10 +866,10 @@ export default function App() {
                                 log.status.slice(1)}
                               {log.error && (
                                 <div
-                                  className="text-[10px] text-destructive mt-1 italic truncate"
+                                  className="text-[10px] text-destructive mt-1 truncate"
                                   title={log.error}
                                 >
-                                  ⚠️ {log.error.substring(0, 20)}...
+                                  {log.error.substring(0, 24)}…
                                 </div>
                               )}
                             </div>
@@ -596,37 +882,64 @@ export default function App() {
               )}
             </div>
 
-            <div className="flex flex-col gap-2 mb-4 mt-4">
+            <div className="flex flex-col gap-2 mb-2 mt-3">
               <Button
                 onClick={() => setShowBlacklistManager(true)}
                 className="rounded-lg border border-transparent px-[1.4em] py-[0.8em] text-base font-medium font-inherit cursor-pointer transition-all min-h-[44px] min-w-[44px] touch-manipulation bg-secondary text-secondary-foreground border-secondary hover:bg-secondary/80 hover:border-secondary/80 active:translate-y-[1px] w-full"
               >
-                Ignored Pages and Sites
+                Ignore list
               </Button>
-              <div className="flex justify-around p-2 bg-muted rounded text-[0.85em]">
+              <div className="flex justify-around p-2 bg-muted rounded text-[0.8em]">
                 <span className="text-muted-foreground">
-                  Sites: {siteBlacklist.length}
+                  Sites {siteBlacklist.length}
                 </span>
                 <span className="text-muted-foreground">
-                  Pages: {pageBlacklist.length}
+                  Pages {pageBlacklist.length}
                 </span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Unobtrusive connection settings (Portal + Memory server URL) */}
-        <div className="mt-4 text-center">
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="text-xs text-muted-foreground bg-transparent border-0 p-0 cursor-pointer underline underline-offset-2 hover:text-primary transition-colors"
+        <div className="mt-3 flex flex-col gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowMemorySettings(true)}
+            className="w-full min-h-[40px] text-sm"
           >
-            {!token && portalUrl !== DEFAULT_PORTAL_URL
-              ? `Signing in to ${parseUrl(portalUrl)?.host ?? portalUrl} — change`
-              : "Advanced"}
-          </button>
-          {showAdvanced && <AdvancedSettings />}
+            Settings
+          </Button>
+          {token && (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleUseAnotherAccount}
+                disabled={authorizing}
+                className="w-full min-h-[40px] text-sm"
+              >
+                Use another account
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={handleSignOut}
+                className="w-full min-h-[36px] text-sm text-muted-foreground"
+              >
+                Sign out
+              </Button>
+            </>
+          )}
+          {devUnlocked && (
+            <div>
+              <AdvancedSettings />
+              <button
+                type="button"
+                onClick={() => setDevUnlocked(false)}
+                className="mt-2 text-[0.7em] text-muted-foreground bg-transparent border-0 p-0 cursor-pointer hover:text-foreground"
+              >
+                Hide
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </>

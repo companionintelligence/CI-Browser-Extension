@@ -90,14 +90,50 @@ npm run prepare:store  # Full pipeline: clean, lint, compile, zip
 ### Safari
 Safari doesn't support loading an unpacked extension folder — every test run
 has to go through the Xcode wrapper:
-1. `npm run build:safari` (or `:safari-mobile` for iOS)
-2. `xcrun safari-web-extension-converter .output/safari-mv2` to scaffold the
-   Xcode project
-3. Build & run the generated app target from Xcode
+1. `yarn build:safari` (or `yarn build:safari-mobile` for iOS)
+2. Regenerate / refresh the Xcode wrapper (gitignored under `.safari-xcode/`):
+   ```bash
+   xcrun safari-web-extension-converter \
+     --no-prompt \
+     --project-location .safari-xcode \
+     --bundle-identifier com.companionintel.extension \
+     --copy-resources \
+     --force \
+     .output/safari-mv2
+   ```
+3. Open the generated `.xcodeproj`, pick your Team under Signing, Run
 4. In Safari: Settings → Advanced → enable "Show features for web
    developers", then Develop → "Allow Unsigned Extensions" (needed for an
    ad-hoc/dev-signed build), then enable the extension in Settings →
    Extensions
+
+Sign-in on Safari does **not** use `browser.identity`. The Safari build opens
+the Portal authorize URL in a tab (`prompt=select_account` so you can pick
+which Companion account); the redirect lands on the Portal HTTPS page
+`{portal}/extension/oidc-callback` (CI-Portal #451). The content script on
+that page **performs the PKCE token exchange itself**
+(`exchangeFromCallbackPage`): it reads the pending PKCE session from
+`browser.storage.local`, POSTs `/oauth2/token` same-origin, and stores the
+tokens — the Safari background page (which Safari unloads aggressively and
+does not reliably wake) is not in the critical path. The page shows
+"Signed in" or the real exchange error inline. Fallbacks, in order: the URL
+is stashed in storage before the exchange (crash insurance; the background
+finishes it on its next wake after an ~8s ownership window), and a
+message-retry loop covers the case where another path owns the attempt.
+After tokens are stored, reopen the popup — it should show Connected /
+**Choose Memory** (when the account has more than one Memory). The Memory
+URL is discovered via Portal `/me/apps` (opaque `access_token`); CI-Server
+calls use the Portal `id_token` Bearer.
+
+**Safari site access:** Settings → Extensions → Companion Intelligence → allow
+the Portal host (`hub.companionintelligence.com` for Development). Without
+that, the callback page loads but the extension never sees `?code=`.
+
+Developer Portal switch: ⌥⇧. or 7× title → **Development**. Use **Use another
+account** to clear the binding and pick a different Portal identity.
+
+> Loopback (`127.0.0.1:8732`) lives on `feat/safari-oidc-loopback` if you need
+> to test without the Portal HTTPS callback.
 
 ## Debugging
 
