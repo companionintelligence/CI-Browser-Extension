@@ -22,6 +22,15 @@ import {
   extensionOidcCallbackUri,
   prepareAuthorizeRequest,
   endpointsFromIssuer,
+  savePendingAuth,
+  stashPendingCallbackUrl,
+  finishStoredCallback,
+  finishOidcCallback,
+  exchangeFromCallbackPage,
+  deliverOidcCallbackUrl,
+  loadPendingAuth,
+  loadLastAuthFailure,
+  CALLBACK_PAGE_OWNERSHIP_MS,
   type OidcConfig,
 } from "./oidcAuth";
 
@@ -85,8 +94,10 @@ function installBrowser(launch: (url: string) => string | undefined) {
         set: jest.fn(async (obj: Record<string, unknown>) => {
           Object.assign(store, obj);
         }),
-        remove: jest.fn(async (k: string) => {
-          delete store[k];
+        remove: jest.fn(async (k: string | string[]) => {
+          for (const key of Array.isArray(k) ? k : [k]) {
+            delete store[key];
+          }
         }),
       },
     },
@@ -94,7 +105,7 @@ function installBrowser(launch: (url: string) => string | undefined) {
 }
 
 function installSafariTabBrowser(
-  via: "tabs" | "webNavigation" = "webNavigation",
+  via: "tabs" | "webNavigation" | "none" = "webNavigation",
 ) {
   type UpdatedListener = (tabId: number, changeInfo: { url?: string }) => void;
   type BeforeNavListener = (details: {
@@ -113,19 +124,22 @@ function installSafariTabBrowser(
     identity: {},
     tabs: {
       create: jest.fn(async ({ url }: { url: string }) => {
-        // Simulate Portal redirecting to the HTTPS extension callback.
+        // Simulate Portal redirecting to the HTTPS extension callback
+        // ("none": the background never captures anything — the callback
+        // page's content script is on its own).
         const state = new URL(url).searchParams.get("state");
         const redirect = `${SAFARI_CALLBACK}?code=AUTHCODE&state=${state}`;
         queueMicrotask(() => {
           if (via === "webNavigation") {
             onBeforeNav?.({ tabId: 42, url: redirect, frameId: 0 });
-          } else {
+          } else if (via === "tabs") {
             onUpdated?.(42, { url: redirect });
           }
         });
 
         return { id: 42 };
       }),
+      query: jest.fn(async () => []),
       remove: jest.fn(async () => undefined),
       onUpdated: {
         addListener: jest.fn((fn: UpdatedListener) => {
@@ -154,8 +168,10 @@ function installSafariTabBrowser(
         set: jest.fn(async (obj: Record<string, unknown>) => {
           Object.assign(store, obj);
         }),
-        remove: jest.fn(async (k: string) => {
-          delete store[k];
+        remove: jest.fn(async (k: string | string[]) => {
+          for (const key of Array.isArray(k) ? k : [k]) {
+            delete store[key];
+          }
         }),
       },
     },
@@ -391,6 +407,44 @@ describe("Safari / tab auth flow", () => {
     expect(redirect).toContain("code=AUTHCODE");
   });
 
+  it("finishes a stashed callback URL on the next background wake", async () => {
+    installSafariTabBrowser();
+    installFetch({
+      access_token: "AT",
+      refresh_token: "RT",
+      expires_in: 3600,
+      id_token: "IT",
+    });
+
+    // The popup prepared the request and the background persisted it before
+    // Safari unloaded the page…
+    const prepared = await prepareAuthorizeRequest(CONFIG);
+    await savePendingAuth(prepared);
+
+    // …then the callback content script stashed the URL because none of its
+    // runtime messages found a receiver.
+    await stashPendingCallbackUrl(
+      `${SAFARI_CALLBACK}?code=AUTHCODE&state=${prepared.state}`,
+    );
+
+    // A fresh stash is owned by the callback page (it exchanges directly);
+    // the background leaves it alone to avoid double-POSTing the code.
+    expect(await finishStoredCallback(CONFIG)).toBeNull();
+    expect(store.oidcPendingCallbackUrl).toBeDefined();
+
+    // Once the ownership window lapses, the background takes over.
+    (store.oidcPendingCallbackUrl as { at: number }).at =
+      Date.now() - CALLBACK_PAGE_OWNERSHIP_MS - 1;
+
+    const tokens = await finishStoredCallback(CONFIG);
+
+    expect(tokens?.access_token).toBe("AT");
+    expect((await loadTokens())?.id_token).toBe("IT");
+
+    // The stash is consumed: the next wake has nothing to do.
+    expect(await finishStoredCallback(CONFIG)).toBeNull();
+  });
+
   it("runs PKCE + tab redirect + code exchange on Safari", async () => {
     installSafariTabBrowser();
     const { captured } = installFetch({
@@ -405,6 +459,148 @@ describe("Safari / tab auth flow", () => {
     const params = new URLSearchParams(captured.tokenBody ?? "");
     expect(params.get("redirect_uri")).toBe(SAFARI_CALLBACK);
     expect(params.get("code")).toBe("AUTHCODE");
+  });
+});
+
+describe("exchangeFromCallbackPage (callback page owns the Safari exchange)", () => {
+  it("exchanges the code, stores tokens, and clears pending state + stash", async () => {
+    installSafariTabBrowser();
+    const { captured } = installFetch({
+      access_token: "AT",
+      refresh_token: "RT",
+      expires_in: 3600,
+      id_token: "IT",
+    });
+
+    const prepared = await prepareAuthorizeRequest(CONFIG);
+    await savePendingAuth(prepared);
+    const url = `${SAFARI_CALLBACK}?code=AUTHCODE&state=${prepared.state}`;
+    await stashPendingCallbackUrl(url);
+
+    const tokens = await exchangeFromCallbackPage(url);
+
+    expect(tokens?.access_token).toBe("AT");
+    expect((await loadTokens())?.id_token).toBe("IT");
+
+    const params = new URLSearchParams(captured.tokenBody ?? "");
+    expect(params.get("grant_type")).toBe("authorization_code");
+    expect(params.get("code")).toBe("AUTHCODE");
+    expect(params.get("client_id")).toBe("ci-browser-extension");
+    expect(params.get("code_verifier")).toBe(prepared.verifier);
+    expect(captured.tokenInit?.credentials).toBe("omit");
+
+    // Pending session, stash, and in-progress marker are all consumed.
+    expect(await loadPendingAuth()).toBeNull();
+    expect(store.oidcPendingCallbackUrl).toBeUndefined();
+    expect(store.oidcAuthInProgressAt).toBeUndefined();
+  });
+
+  it("returns null without a POST when no pending PKCE session exists", async () => {
+    installSafariTabBrowser();
+    const { fetchMock } = installFetch({ access_token: "AT" });
+
+    const result = await exchangeFromCallbackPage(
+      `${SAFARI_CALLBACK}?code=AUTHCODE&state=whatever`,
+    );
+
+    expect(result).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a state mismatch and records the failure for the popup", async () => {
+    installSafariTabBrowser();
+    installFetch({ access_token: "AT" });
+
+    const prepared = await prepareAuthorizeRequest(CONFIG);
+    await savePendingAuth(prepared);
+
+    await expect(
+      exchangeFromCallbackPage(`${SAFARI_CALLBACK}?code=AUTHCODE&state=WRONG`),
+    ).rejects.toThrow(/state mismatch/);
+
+    expect((await loadLastAuthFailure())?.message).toMatch(/state mismatch/);
+    expect(await loadTokens()).toBeNull();
+  });
+
+  it("surfaces the token-endpoint body on failure and keeps pending for the fallback", async () => {
+    installSafariTabBrowser();
+    (global as { fetch?: unknown }).fetch = jest.fn(async () => ({
+      ok: false,
+      status: 400,
+      text: async () => '{"error":"invalid_grant"}',
+    }));
+
+    const prepared = await prepareAuthorizeRequest(CONFIG);
+    await savePendingAuth(prepared);
+    const url = `${SAFARI_CALLBACK}?code=USED&state=${prepared.state}`;
+
+    await expect(exchangeFromCallbackPage(url)).rejects.toThrow(
+      /HTTP 400 — .*invalid_grant/,
+    );
+
+    expect((await loadLastAuthFailure())?.message).toMatch(/invalid_grant/);
+    // The pending session survives so the background fallback may retry.
+    expect(await loadPendingAuth()).not.toBeNull();
+  });
+
+  it("completes signIn when only the callback page performs the exchange", async () => {
+    installSafariTabBrowser("none");
+    installFetch({
+      access_token: "AT",
+      expires_in: 3600,
+      id_token: "IT",
+    });
+
+    // The popup persists the PKCE session itself before opening the tab
+    // (the background may never wake to do it)…
+    const prepared = await prepareAuthorizeRequest(CONFIG);
+    await savePendingAuth(prepared);
+
+    // …the background's AUTHORIZE handler may still run its waiters, but no
+    // capture path ever fires in this scenario…
+    const signInPromise = signIn(CONFIG, { prepared });
+
+    // …and the callback page completes the exchange entirely on its own.
+    const url = `${SAFARI_CALLBACK}?code=AUTHCODE&state=${prepared.state}`;
+    await exchangeFromCallbackPage(url);
+
+    // completeTabSignIn's storage poll notices tokens + cleared pending.
+    const tokens = await signInPromise;
+    expect(tokens.access_token).toBe("AT");
+
+    // The late AUTHORIZE must not have resurrected the consumed session.
+    expect(await loadPendingAuth()).toBeNull();
+
+    // Settle the still-listening tab capture so its timers are cleared.
+    deliverOidcCallbackUrl(url);
+  });
+
+  it("single-flights concurrent finishOidcCallback callers (one POST)", async () => {
+    installSafariTabBrowser();
+    const { fetchMock } = installFetch({
+      access_token: "AT",
+      expires_in: 3600,
+      id_token: "IT",
+    });
+
+    const prepared = await prepareAuthorizeRequest(CONFIG);
+    await savePendingAuth(prepared);
+    const url = `${SAFARI_CALLBACK}?code=AUTHCODE&state=${prepared.state}`;
+
+    // Tab polling, webNavigation, storage event, and content-script message
+    // can all fire in the same tick; only one may POST the single-use code.
+    const [a, b] = await Promise.all([
+      finishOidcCallback(CONFIG, url),
+      finishOidcCallback(CONFIG, url),
+    ]);
+
+    expect(a?.access_token).toBe("AT");
+    expect(b?.access_token).toBe("AT");
+
+    const tokenPosts = fetchMock.mock.calls.filter(([u]) =>
+      String(u).includes("/oauth2/token"),
+    );
+    expect(tokenPosts).toHaveLength(1);
   });
 });
 

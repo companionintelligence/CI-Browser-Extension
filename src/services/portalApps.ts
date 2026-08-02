@@ -5,12 +5,18 @@
  * user's Memory (CI-Server, app slug `ci-memory`) runs so serverURL can be
  * configured automatically. The endpoint is Bearer-authenticated with the
  * OAuth access_token (a Portal API — unlike CI-Server calls, which use the
- * id_token) and returns `{ apps: [{ slug, url, deviceName }] }`.
+ * id_token) and returns `{ apps: [{ slug, url, deviceName, deviceSlug }] }`.
  */
 
 import { normalizeServerUrl } from "@/utils";
 
 export const MEMORY_APP_SLUG = "ci-memory";
+
+/**
+ * Discovery hint for an account with zero `ci-memory` apps — the popup keys a
+ * dedicated "No Memory found" panel off this exact value, so keep it in sync.
+ */
+export const NO_MEMORY_HINT = "No Memory on this account.";
 
 const FETCH_TIMEOUT_MS = 5000;
 
@@ -18,6 +24,9 @@ export interface PortalApp {
   slug: string;
   url: string;
   deviceName?: string;
+  // One Memory per device: the owning device's slug (Portal ≥ #449). Stable
+  // identity for telling several Memories apart when deviceName is missing.
+  deviceSlug?: string;
 }
 
 export type PortalAppsResult =
@@ -75,16 +84,21 @@ export async function fetchPortalApps(
 }
 
 /**
- * The user's Memory candidates: ci-memory entries with normalized URLs,
- * deduplicated by URL. One entry → auto-configure it; several (Memory
- * installed on more than one device) → the popup asks the user which to use.
+ * The user's Memory candidates: normalized URLs, deduplicated by URL. One
+ * entry → auto-configure it; several (Memory installed on more than one
+ * device) → the popup asks the user which to use.
+ *
+ * No slug re-filter here: the Portal already matched `?slug=ci-memory` and —
+ * since CI-Portal matches the canonical app *name* too — a returned instance
+ * may carry a user-chosen slug like `ci-memory2` (the Hub install form's
+ * exposure subdomain). Re-checking for the exact slug dropped those.
  */
 export function memoryAppsFrom(apps: PortalApp[]): PortalApp[] {
   const seen = new Set<string>();
   const memoryApps: PortalApp[] = [];
 
   for (const app of apps) {
-    if (app.slug !== MEMORY_APP_SLUG || typeof app.url !== "string") {
+    if (typeof app.url !== "string") {
       continue;
     }
 

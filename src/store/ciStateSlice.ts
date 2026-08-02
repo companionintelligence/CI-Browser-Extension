@@ -117,7 +117,9 @@ interface CiState {
   // Memory candidates needing a user decision (Memory installed on several
   // devices and no valid serverURL); transient, not persisted — discovery
   // repopulates it after a service-worker restart.
-  memoryAppChoices: { slug: string; url: string; deviceName?: string }[] | null;
+  memoryAppChoices:
+    | { slug: string; url: string; deviceName?: string; deviceSlug?: string }[]
+    | null;
   settingsLoaded: boolean;
   autoSyncEnabled: boolean;
   siteBlacklist: string[];

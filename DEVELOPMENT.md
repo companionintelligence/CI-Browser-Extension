@@ -109,13 +109,21 @@ has to go through the Xcode wrapper:
 
 Sign-in on Safari does **not** use `browser.identity`. The Safari build opens
 the Portal authorize URL in a tab (`prompt=select_account` so you can pick
-which Companion account) and captures the Portal HTTPS redirect
-`{portal}/extension/oidc-callback` (CI-Portal #451). A content script on that
-page reports `?code=` to the extension background (with retries + a durable
-pending PKCE session). After tokens are stored, reopen the popup — it should
-show Connected / **Choose Memory** (when the account has more than one
-Memory). The Memory URL is discovered via Portal `/me/apps` (opaque
-`access_token`); CI-Server calls use the Portal `id_token` Bearer.
+which Companion account); the redirect lands on the Portal HTTPS page
+`{portal}/extension/oidc-callback` (CI-Portal #451). The content script on
+that page **performs the PKCE token exchange itself**
+(`exchangeFromCallbackPage`): it reads the pending PKCE session from
+`browser.storage.local`, POSTs `/oauth2/token` same-origin, and stores the
+tokens — the Safari background page (which Safari unloads aggressively and
+does not reliably wake) is not in the critical path. The page shows
+"Signed in" or the real exchange error inline. Fallbacks, in order: the URL
+is stashed in storage before the exchange (crash insurance; the background
+finishes it on its next wake after an ~8s ownership window), and a
+message-retry loop covers the case where another path owns the attempt.
+After tokens are stored, reopen the popup — it should show Connected /
+**Choose Memory** (when the account has more than one Memory). The Memory
+URL is discovered via Portal `/me/apps` (opaque `access_token`); CI-Server
+calls use the Portal `id_token` Bearer.
 
 **Safari site access:** Settings → Extensions → Companion Intelligence → allow
 the Portal host (`hub.companionintelligence.com` for Development). Without

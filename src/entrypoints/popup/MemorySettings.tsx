@@ -4,17 +4,20 @@ import { setState, saveUserSettings } from "@/store/ciStateSlice";
 import { normalizeServerUrl } from "@/utils";
 import { Button, Field, Input } from "@ci/shadcn";
 
-/** User-facing Memory (CI-Server) URL override. */
+/** User-facing Memory (CI-Server) URL override + Portal re-discovery. */
 export default function MemorySettings({ onBack }: { onBack: () => void }) {
   const dispatch = useDispatch();
-  const { serverURL, serverURLSource } = useSelector(
+  const { serverURL, serverURLSource, accessToken } = useSelector(
     (state: { ciState: unknown }) => state.ciState,
   ) as {
     serverURL: string;
     serverURLSource: "auto" | "manual" | null;
+    accessToken: string | null;
   };
 
   const [draft, setDraft] = useState(serverURL);
+  const [finding, setFinding] = useState(false);
+  const [findError, setFindError] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(serverURL);
@@ -36,6 +39,29 @@ export default function MemorySettings({ onBack }: { onBack: () => void }) {
     browser.runtime
       .sendMessage({ action: "CHECK_AUTH_STATUS" })
       .catch(console.error);
+  };
+
+  // Ask the Portal which Memories this account has; found choices (or the
+  // "no Memory" panel) render in the main popup view, so navigate back.
+  const findMyMemory = async () => {
+    setFinding(true);
+    setFindError(null);
+    try {
+      const response = await browser.runtime.sendMessage({
+        action: "DISCOVER_MEMORY",
+      });
+      if (response && response.success === false) {
+        setFindError(response.error || "Discovery failed");
+
+        return;
+      }
+
+      onBack();
+    } catch (error) {
+      setFindError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setFinding(false);
+    }
   };
 
   const clearManual = () => {
@@ -92,6 +118,25 @@ export default function MemorySettings({ onBack }: { onBack: () => void }) {
         >
           Clear manual URL
         </Button>
+      )}
+      {accessToken && (
+        <div className="mt-1 pt-3 border-t border-border flex flex-col gap-2">
+          <Button
+            variant="outline"
+            onClick={findMyMemory}
+            disabled={finding}
+            className="text-sm min-h-[36px]"
+          >
+            {finding ? "Asking Portal…" : "Find my Memory"}
+          </Button>
+          <p className="m-0 text-[0.75em] text-muted-foreground">
+            Lists the Memory apps on your account so you can pick which one this
+            browser syncs with.
+          </p>
+          {findError && (
+            <p className="m-0 text-[0.8em] text-destructive">{findError}</p>
+          )}
+        </div>
       )}
     </div>
   );

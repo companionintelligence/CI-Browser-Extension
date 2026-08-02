@@ -26,17 +26,24 @@ import {
 import {
   getAccessToken,
   attachAuthorizeTabId,
+  CALLBACK_PAGE_OWNERSHIP_MS,
   finishOidcCallback,
+  finishStoredCallback,
   getIdToken,
   isOidcCallbackUrl,
   loadTokens,
+  recordAuthFailure,
   signIn,
   signInSilently,
   signOut,
   type PreparedAuthorize,
 } from "@/services/oidcAuth";
 import { portalOidcConfig } from "@/services/portalConfig";
-import { fetchPortalApps, memoryAppsFrom } from "@/services/portalApps";
+import {
+  fetchPortalApps,
+  memoryAppsFrom,
+  NO_MEMORY_HINT,
+} from "@/services/portalApps";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/scrape/types";
 
@@ -62,6 +69,12 @@ async function runLastSeenUpdate() {
 // Periodic auto-sync, driven by the AUTO_SYNC_ALARM
 async function runAutoSync() {
   try {
+    // Deliver queued live captures even with auto-sync off. On Safari there is
+    // no manual "Sync history" button (no history API), so without this the
+    // alarm-independent queue — including visits recorded before a Memory
+    // server was chosen — never drained. No-op when the queue is empty.
+    await retryQueuedCaptures();
+
     const state = store.getState().ciState;
 
     if (state.autoSyncEnabled && !state.historySyncInProgress) {
@@ -82,6 +95,13 @@ async function runAutoSync() {
 // Re-send live captures whose upload failed. Bounded and self-trimming; see
 // @/lib/captureQueue for the retention policy.
 async function retryQueuedCaptures(): Promise<void> {
+  // Without a serverURL, postBrowserCaptures resolves without sending, which
+  // the drain would read as "delivered" and delete the queue. Hold the queue
+  // until a Memory server is actually configured.
+  if (!store.getState().ciState.serverURL) {
+    return;
+  }
+
   try {
     const result = await drainCaptureQueue((activities) =>
       postBrowserCaptures(activities),
@@ -89,6 +109,9 @@ async function retryQueuedCaptures(): Promise<void> {
 
     if (result.sent > 0) {
       console.log(`Re-sent ${result.sent} queued capture(s)`);
+      // Drained captures need the same index sweep as any live capture —
+      // with auto-sync off nothing else asks CI-Server to index them.
+      requestIngestFinish();
     }
   } catch (error) {
     console.error("Capture retry failed:", error);
@@ -112,7 +135,17 @@ function oidcConfig() {
 // overwritten. When Memory runs on several devices and there is no valid
 // choice yet, the candidates go to memoryAppChoices and the popup asks the
 // user which to use.
-async function discoverMemoryServer(): Promise<void> {
+//
+// `force` (popup "Check again" / Settings "Find my Memory") re-asks the Portal
+// on the user's behalf: every candidate goes to memoryAppChoices — even a
+// single one, and even when a serverURL is already configured — so the user
+// can confirm or switch. serverURL itself is still only changed by an explicit
+// pick (chooseMemory saves it as manual).
+async function discoverMemoryServer(
+  options: { force?: boolean } = {},
+): Promise<void> {
+  const { force = false } = options;
+
   try {
     const accessToken = await getAccessToken(oidcConfig());
     if (!accessToken) {
@@ -129,8 +162,22 @@ async function discoverMemoryServer(): Promise<void> {
         store.dispatch(
           setState({
             memoryAppChoices: null,
-            discoveryHint: serverURL ? null : "No Memory on this account.",
+            // Forced checks always report back; the passive path stays quiet
+            // when a server is already configured.
+            discoveryHint: serverURL && !force ? null : NO_MEMORY_HINT,
           }),
+        );
+
+        return;
+      }
+
+      if (force) {
+        console.log(
+          "[CI] Forced Memory re-discovery; offering choices:",
+          memoryApps.map((app) => app.url),
+        );
+        store.dispatch(
+          setState({ memoryAppChoices: memoryApps, discoveryHint: null }),
         );
 
         return;
@@ -183,9 +230,9 @@ async function discoverMemoryServer(): Promise<void> {
       return;
     }
 
-    // unsupported / unauthorized / error: keep whatever is configured; only
-    // hint when nothing is.
-    if (!serverURL) {
+    // unsupported / unauthorized / error: keep whatever is configured; hint
+    // when nothing is, or when the user explicitly asked for a re-check.
+    if (!serverURL || force) {
       store.dispatch(
         setState({
           discoveryHint:
@@ -282,6 +329,17 @@ function applyIgnoreList(activities: BrowserActivity[]): BrowserActivity[] {
  * path goes through here rather than calling postBrowserCaptures directly.
  */
 async function postLiveCapture(activities: BrowserActivity[]): Promise<void> {
+  // postBrowserCaptures silently no-ops without a serverURL, which turned
+  // "signed in but Memory not chosen yet" into permanent data loss — every
+  // visit between sign-in and picking a Memory vanished. Queue those instead;
+  // the retry drain delivers them once a server is configured. The ignore
+  // list still applies at delivery time (postBrowserCaptures enforces it).
+  if (!store.getState().ciState.serverURL) {
+    await enqueueCaptures(activities);
+
+    return;
+  }
+
   try {
     await postBrowserCaptures(activities);
     requestIngestFinish();
@@ -1016,6 +1074,36 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     currentTime: Date.now(),
     currentDate: new Date().toISOString(),
   });
+
+  // Safari accepts the `history` manifest permission but never implements the
+  // API (https://developer.apple.com/forums/thread/711080), so a retroactive
+  // sync is impossible there. Fail loudly with a persisted log — the silent
+  // alternative looked like a sync that "just didn't work".
+  if (typeof browser.history?.search !== "function") {
+    const message =
+      "This browser doesn't expose browsing history to extensions (Safari never does). New visits are captured live as you browse instead.";
+    store.dispatch(
+      setState({
+        historySyncInProgress: false,
+        historySyncStatus: message,
+      }),
+    );
+    store.dispatch(
+      addSyncHistoryLog({
+        timestamp: new Date().toISOString(),
+        timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)),
+        totalEntries: 0,
+        processedEntries: 0,
+        uploadedEntries: 0,
+        status: "failed",
+        error: message,
+        duration: Date.now() - startTime,
+      }),
+    );
+    store.dispatch(saveUserSettings());
+
+    return;
+  }
 
   try {
     // Check if history sync is enabled
@@ -1952,6 +2040,23 @@ export default defineBackground({
     // migration. Runs on the auth-check alarm, on load, and on popup demand.
     async function checkAuthenticationState() {
       try {
+        // Safari may not wake this page for the callback content script's
+        // runtime messages; the callback page stashes its URL in storage
+        // instead. Finish that exchange on any wake — popup CHECK_AUTH_STATUS,
+        // the 1-minute auth alarm, or startup.
+        try {
+          const finished = await finishStoredCallback(oidcConfig());
+
+          if (finished) {
+            console.log("[CI] Completed sign-in from a stashed callback URL");
+            await discoverMemoryServer();
+            await closeOidcCallbackTabs();
+          }
+        } catch (error) {
+          console.error("Stashed OIDC callback exchange failed:", error);
+          await recordAuthFailure(error);
+        }
+
         // Phase 3: the CI-Server bearer is the portal **id_token** (the opaque
         // OAuth access_token is rejected by CI-Server's JWKS verify). getIdToken
         // returns null when there is no usable session or once the id_token has
@@ -2067,8 +2172,43 @@ export default defineBackground({
       await checkAuthenticationState();
     }
 
-    // Safari: if the content script is delayed, still catch the Portal callback
-    // from navigation events whenever a pending PKCE session exists.
+    // Safari: when this page IS alive, react to the callback stash. The
+    // callback page itself owns the exchange for a fresh stash (it POSTs the
+    // code directly), so wait out its ownership window first — this listener
+    // is the rescue for a callback page that died before finishing.
+    browser.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes.oidcPendingCallbackUrl?.newValue) {
+        return;
+      }
+
+      setTimeout(() => {
+        void (async () => {
+          try {
+            // Null when the callback page already finished (stash cleared)
+            // or the stash is somehow fresh again — nothing to rescue.
+            const tokens = await finishStoredCallback(oidcConfig());
+
+            if (!tokens) {
+              return;
+            }
+
+            await discoverMemoryServer();
+            await checkAuthenticationState();
+            await closeOidcCallbackTabs();
+          } catch (error) {
+            console.error("OIDC storage-stash callback failed:", error);
+            await recordAuthFailure(error);
+          }
+        })();
+      }, CALLBACK_PAGE_OWNERSHIP_MS + 500);
+    });
+
+    // Safari: rescue for a callback page whose content script never injected
+    // (e.g. missing per-site permission). Delayed past the page's ownership
+    // window — the content script exchanges the code itself, and a second
+    // context POSTing the same single-use code would invalidate the first.
+    // If the page finished, pending auth is cleared and finishOidcCallback
+    // just returns the stored tokens (no second POST).
     try {
       browser.webNavigation?.onCommitted?.addListener((details) => {
         if (
@@ -2079,20 +2219,26 @@ export default defineBackground({
           return;
         }
 
-        void (async () => {
-          try {
-            const tokens = await finishOidcCallback(oidcConfig(), details.url);
-            if (!tokens) {
-              return;
-            }
+        setTimeout(() => {
+          void (async () => {
+            try {
+              const tokens = await finishOidcCallback(
+                oidcConfig(),
+                details.url,
+              );
+              if (!tokens) {
+                return;
+              }
 
-            await discoverMemoryServer();
-            await checkAuthenticationState();
-            await closeOidcCallbackTabs();
-          } catch (error) {
-            console.error("OIDC webNavigation callback failed:", error);
-          }
-        })();
+              await discoverMemoryServer();
+              await checkAuthenticationState();
+              await closeOidcCallbackTabs();
+            } catch (error) {
+              console.error("OIDC webNavigation callback failed:", error);
+              await recordAuthFailure(error);
+            }
+          })();
+        }, CALLBACK_PAGE_OWNERSHIP_MS + 500);
       });
     } catch (error) {
       console.debug("OIDC webNavigation listener unavailable:", error);
@@ -2297,6 +2443,31 @@ export default defineBackground({
           return true;
         }
 
+        // Popup "Check again" / Settings "Find my Memory": re-ask the Portal
+        // which Memories this account has and surface them as choices. The
+        // response reports what was found so the caller can give feedback.
+        if (message.action === "DISCOVER_MEMORY") {
+          discoverMemoryServer({ force: true })
+            .then(() => {
+              const { memoryAppChoices, discoveryHint } =
+                store.getState().ciState;
+              sendResponse({
+                success: true,
+                found: memoryAppChoices?.length ?? 0,
+                hint: discoveryHint,
+              });
+            })
+            .catch((error) => {
+              console.error("Forced Memory discovery failed:", error);
+              sendResponse({
+                success: false,
+                error: error?.message || String(error),
+              });
+            });
+
+          return true;
+        }
+
         if (message.action === "SIGN_OUT") {
           signOutOfPortal()
             .then(() => {
@@ -2319,7 +2490,13 @@ export default defineBackground({
             try {
               const tokens = await finishOidcCallback(oidcConfig(), url);
               if (!tokens) {
-                sendResponse({ success: false });
+                // No pending PKCE session (expired after 2 min, or sign-in was
+                // started against a different Portal). Retrying won't help.
+                sendResponse({
+                  success: false,
+                  error:
+                    "No sign-in in progress. Reopen the extension popup and press Sign in again.",
+                });
 
                 return;
               }
@@ -2332,6 +2509,7 @@ export default defineBackground({
               sendResponse({ success: true });
             } catch (error) {
               console.error("OIDC_CALLBACK failed:", error);
+              await recordAuthFailure(error);
               sendResponse({
                 success: false,
                 error: error instanceof Error ? error.message : String(error),
@@ -2342,6 +2520,30 @@ export default defineBackground({
                   error: error instanceof Error ? error.message : String(error),
                 })
                 .catch(() => undefined);
+            }
+          })();
+
+          return true;
+        }
+
+        if (message.action === "SIGNED_IN") {
+          // The callback content script completed the PKCE exchange itself
+          // and stored the tokens; this is a best-effort nudge so an awake
+          // background runs discovery and closes the callback tab right away.
+          // If this message never arrives (background unloaded), the reopened
+          // popup's CHECK_AUTH_STATUS does the same from the stored tokens.
+          void (async () => {
+            try {
+              await discoverMemoryServer();
+              await checkAuthenticationState();
+              await closeOidcCallbackTabs();
+              sendResponse({ success: true });
+            } catch (error) {
+              console.error("SIGNED_IN follow-up failed:", error);
+              sendResponse({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+              });
             }
           })();
 
@@ -2371,6 +2573,7 @@ export default defineBackground({
             })
             .catch((error) => {
               console.error("Authorization failed:", error);
+              void recordAuthFailure(error);
               if (tabId !== undefined) {
                 void browser.tabs.remove(tabId).catch(() => undefined);
               }

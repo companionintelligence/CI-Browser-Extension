@@ -13,8 +13,10 @@ import {
 import "@/theme.css";
 import { parseUrl } from "@/utils";
 import { portalOidcConfig } from "@/services/portalConfig";
+import { NO_MEMORY_HINT } from "@/services/portalApps";
 import {
   prepareAuthorizeRequest,
+  savePendingAuth,
   shouldUseTabAuthFlow,
 } from "@/services/oidcAuth";
 import bowser from "bowser";
@@ -26,6 +28,21 @@ import { Button, Checkbox, Field, Label, Card, Toaster } from "@ci/shadcn";
 /** Hidden developer panel: ⌥⇧. (Alt+Shift+Period), or 7 clicks on the title. */
 const DEV_CLICKS_NEEDED = 7;
 const DEV_CLICK_WINDOW_MS = 2500;
+
+// Safari accepts the `history` / `bookmarks` / `downloads` manifest
+// permissions but never implements the APIs (confirmed by Apple:
+// https://developer.apple.com/forums/thread/711080), so retroactive sync
+// cannot exist there. Pages are captured live as the user browses instead.
+// Feature-detect rather than UA-sniff so any future Safari support just works.
+const HISTORY_API_AVAILABLE =
+  typeof browser !== "undefined" &&
+  typeof browser.history?.search === "function";
+const BOOKMARKS_API_AVAILABLE =
+  typeof browser !== "undefined" &&
+  typeof browser.bookmarks?.getTree === "function";
+const DOWNLOADS_API_AVAILABLE =
+  typeof browser !== "undefined" &&
+  typeof browser.downloads?.search === "function";
 
 export default function App() {
   const dispatch = useDispatch();
@@ -42,7 +59,12 @@ export default function App() {
     portalUrl: string;
     discoveryHint: string | null;
     memoryAppChoices:
-      | { slug: string; url: string; deviceName?: string }[]
+      | {
+          slug: string;
+          url: string;
+          deviceName?: string;
+          deviceSlug?: string;
+        }[]
       | null;
     settingsLoaded: boolean;
     autoSyncEnabled: boolean;
@@ -100,6 +122,7 @@ export default function App() {
   });
   const [authorizing, setAuthorizing] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [rediscovering, setRediscovering] = useState(false);
 
   useEffect(() => {
     browser.runtime.sendMessage({
@@ -119,14 +142,27 @@ export default function App() {
     setIsMobile(browser_info.getPlatformType() === "mobile");
 
     // Safari tears the popup down during tab auth. On reopen, restore the
-    // "finish in the tab" state and refresh tokens from the background.
+    // "finish in the tab" state (or the persisted failure — AUTH_FAILED
+    // broadcasts are lost while the popup is closed) and refresh tokens.
     const checkAuthStatus = async () => {
       try {
-        const stored = await browser.storage.local.get("oidcAuthInProgressAt");
+        const stored = await browser.storage.local.get([
+          "oidcAuthInProgressAt",
+          "oidcLastAuthError",
+        ]);
+        const lastError = stored.oidcLastAuthError as
+          | { message?: string }
+          | undefined;
+        if (lastError?.message) {
+          setAuthError(lastError.message);
+        }
+
+        // Mirror oidcAuth's TAB_AUTH_TIMEOUT_MS (10 min).
         const startedAt = stored.oidcAuthInProgressAt;
         if (
           typeof startedAt === "number" &&
-          Date.now() - startedAt < 2 * 60 * 1000
+          Date.now() - startedAt < 10 * 60 * 1000 &&
+          !lastError?.message
         ) {
           setAuthorizing(true);
         }
@@ -185,6 +221,20 @@ export default function App() {
         // Auth finished while the popup was closed or open — re-check Redux.
         setAuthorizing(false);
         void browser.runtime.sendMessage({ action: "CHECK_AUTH_STATUS" });
+      }
+
+      // Live view of the persisted auth failure (set by the background while
+      // this popup may or may not be open).
+      if (changes.oidcLastAuthError) {
+        const next = changes.oidcLastAuthError.newValue as
+          | { message?: string }
+          | undefined;
+        if (next?.message) {
+          setAuthorizing(false);
+          setAuthError(next.message);
+        } else {
+          setAuthError(null);
+        }
       }
     };
 
@@ -246,10 +296,13 @@ export default function App() {
     dispatch(saveUserSettings());
   };
 
-  // Kick off Portal OIDC Auth-Code + PKCE. On Safari: (1) start background
-  // capture, (2) open authorize tab under the click gesture. Starting capture
-  // first matters — opening the tab often tears the popup down before a
-  // follow-up message can run. Completion via AUTH_STATE_UPDATED / AUTH_FAILED.
+  // Kick off Portal OIDC Auth-Code + PKCE. On Safari the popup itself
+  // persists the PKCE session to storage BEFORE anything else: the callback
+  // page's content script does the token exchange from that stored session,
+  // and the background — which used to own this write via the AUTHORIZE
+  // handler — may never wake (that gap produced "pending PKCE session
+  // missing" failures). The AUTHORIZE message is now purely best-effort so
+  // an awake background can run its capture fallbacks; nothing blocks on it.
   const handleAuthorize = async () => {
     setAuthorizing(true);
     setAuthError(null);
@@ -264,14 +317,15 @@ export default function App() {
           portalOidcConfig({ portalUrl }),
           { prompt: "select_account" },
         );
-        // Begin listening before the tab steals focus / kills this popup.
-        const start = await browser.runtime.sendMessage({
-          action: "AUTHORIZE",
-          prepared,
-        });
-        if (start && start.success === false) {
-          throw new Error(start.error || "Sign-in failed");
-        }
+        // The load-bearing write: the callback page exchanges against this.
+        await savePendingAuth(prepared);
+
+        // Best-effort: wakes the background's tab-capture fallbacks. Never
+        // await it — a sleeping background would hang this promise and the
+        // tab must open under the click gesture.
+        void browser.runtime
+          .sendMessage({ action: "AUTHORIZE", prepared })
+          .catch(() => undefined);
 
         const tab = await browser.tabs.create({
           url: prepared.authorizeUrl,
@@ -300,6 +354,26 @@ export default function App() {
       setAuthError(error instanceof Error ? error.message : String(error));
       setAuthorizing(false);
     }
+  };
+
+  // "Check again": re-ask the Portal which Memories this account has. The
+  // background updates Redux (choices or a fresh hint); the proxy store
+  // re-renders this popup with the outcome.
+  const recheckMemories = async () => {
+    setRediscovering(true);
+    try {
+      await browser.runtime.sendMessage({ action: "DISCOVER_MEMORY" });
+    } catch (error) {
+      console.error("Memory re-discovery failed:", error);
+    } finally {
+      setRediscovering(false);
+    }
+  };
+
+  // Forced re-discovery lists choices even when already connected; keeping
+  // the current Memory just dismisses them.
+  const dismissMemoryChoices = () => {
+    dispatch(setState({ memoryAppChoices: null }));
   };
 
   // Multi-device pick: an explicit user choice, so it's saved as "manual" and
@@ -450,14 +524,21 @@ export default function App() {
 
         {token ? (
           <Button
-            className="text-center mb-3 p-2 text-muted-foreground rounded-lg h-10 bg-primary/10 block w-full font-medium hover:bg-primary/15 transition-colors"
+            className="text-center mb-3 p-2 text-muted-foreground rounded-lg h-10 bg-primary/10 block w-full max-w-full overflow-hidden font-medium hover:bg-primary/15 transition-colors"
+            title={serverURL || undefined}
             onClick={() => {
               window.open(serverURL || portalUrl, "_blank");
             }}
           >
-            {serverURL
-              ? (parseUrl(serverURL)?.host ?? "Connected")
-              : "Signed in — choose Memory below"}
+            {/* Memory hosts can be long (device-user-org subdomains); keep
+                them on one line and ellipsize instead of overflowing. */}
+            <span className="block w-full truncate">
+              {serverURL
+                ? (parseUrl(serverURL)?.host ?? "Connected")
+                : memoryAppChoices && memoryAppChoices.length > 0
+                  ? "Signed in — choose a Memory below"
+                  : "Signed in — no Memory connected"}
+            </span>
           </Button>
         ) : (
           <Button
@@ -484,11 +565,52 @@ export default function App() {
           </div>
         )}
 
-        {discoveryHint && (!token || !serverURL) && (
-          <div className="mb-3 p-2 rounded text-[0.85em] text-muted-foreground bg-primary/10">
-            {discoveryHint}
-          </div>
-        )}
+        {/* NO_MEMORY_HINT gets the dedicated panel below, not this banner. */}
+        {discoveryHint &&
+          discoveryHint !== NO_MEMORY_HINT &&
+          (!token || !serverURL) && (
+            <div className="mb-3 p-2 rounded text-[0.85em] text-muted-foreground bg-primary/10">
+              {discoveryHint}
+            </div>
+          )}
+
+        {token &&
+          discoveryHint === NO_MEMORY_HINT &&
+          !(memoryAppChoices && memoryAppChoices.length > 0) && (
+            <div className="mb-3 p-3 rounded-lg bg-primary/5 text-left">
+              <p className="m-0 mb-1 text-[0.9em] font-semibold text-primary">
+                No Memory found
+              </p>
+              <p className="m-0 mb-2 text-[0.8em] text-muted-foreground">
+                This account doesn’t have a Memory app yet. Install Memory on
+                one of your devices from the Portal, then check again — or enter
+                your Memory URL manually in Settings.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={recheckMemories}
+                  disabled={rediscovering}
+                  className="w-full min-h-[36px] text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {rediscovering ? "Checking…" : "Check again"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(portalUrl, "_blank")}
+                  className="w-full min-h-[36px] text-sm"
+                >
+                  Open Portal
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowMemorySettings(true)}
+                  className="w-full min-h-[32px] text-sm text-muted-foreground"
+                >
+                  Enter URL manually
+                </Button>
+              </div>
+            </div>
+          )}
 
         {token && memoryAppChoices && memoryAppChoices.length > 0 && (
           <div className="mb-3 p-3 rounded-lg bg-primary/5 text-left">
@@ -496,7 +618,7 @@ export default function App() {
               Choose Memory
             </p>
             <p className="m-0 mb-2 text-[0.8em] text-muted-foreground">
-              Pick which device’s Memory this browser should use.
+              Pick which device’s Memory this browser should sync with.
             </p>
             <div className="flex flex-col gap-2">
               {memoryAppChoices.map((choice) => (
@@ -506,16 +628,27 @@ export default function App() {
                   onClick={() => chooseMemory(choice)}
                   className="w-full min-h-[40px] px-3 py-2 flex flex-col items-start gap-0 bg-transparent text-left border-border hover:bg-primary/10 hover:border-primary transition-colors"
                 >
-                  <span className="text-[0.9em] font-medium text-foreground">
+                  <span className="max-w-full truncate text-[0.9em] font-medium text-foreground">
                     {choice.deviceName ??
+                      choice.deviceSlug ??
                       parseUrl(choice.url)?.host ??
                       choice.url}
+                    {choice.url === serverURL ? " (current)" : ""}
                   </span>
-                  <span className="text-[0.75em] text-muted-foreground">
+                  <span className="max-w-full truncate text-[0.75em] text-muted-foreground">
                     {parseUrl(choice.url)?.host ?? choice.url}
                   </span>
                 </Button>
               ))}
+              {serverURL && (
+                <Button
+                  variant="ghost"
+                  onClick={dismissMemoryChoices}
+                  className="w-full min-h-[32px] text-sm text-muted-foreground"
+                >
+                  Keep current
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -545,41 +678,49 @@ export default function App() {
               </p>
             )}
 
-            <div className="mb-3">
-              <div className="mb-2 flex items-center gap-2 flex-wrap">
-                <label
-                  htmlFor="syncTimeRange"
-                  className="text-[0.85em] text-muted-foreground"
-                >
-                  Range
-                </label>
-                <select
-                  id="syncTimeRange"
-                  value={syncTimeRange}
-                  onChange={(e) => setSyncTimeRange(e.target.value)}
-                  disabled={historySyncInProgress}
-                  className="w-[140px] min-h-[36px] text-sm rounded-md text-foreground border border-border bg-transparent px-3 py-2 outline-none focus:border-primary focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-primary/5"
-                >
-                  <option value="1">24 hours</option>
-                  <option value="7">7 days</option>
-                  <option value="30">30 days</option>
-                  <option value="90">90 days</option>
-                  <option value="365">1 year</option>
-                </select>
-              </div>
+            {HISTORY_API_AVAILABLE ? (
+              <div className="mb-3">
+                <div className="mb-2 flex items-center gap-2 flex-wrap">
+                  <label
+                    htmlFor="syncTimeRange"
+                    className="text-[0.85em] text-muted-foreground"
+                  >
+                    Range
+                  </label>
+                  <select
+                    id="syncTimeRange"
+                    value={syncTimeRange}
+                    onChange={(e) => setSyncTimeRange(e.target.value)}
+                    disabled={historySyncInProgress}
+                    className="w-[140px] min-h-[36px] text-sm rounded-md text-foreground border border-border bg-transparent px-3 py-2 outline-none focus:border-primary focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-primary/5"
+                  >
+                    <option value="1">24 hours</option>
+                    <option value="7">7 days</option>
+                    <option value="30">30 days</option>
+                    <option value="90">90 days</option>
+                    <option value="365">1 year</option>
+                  </select>
+                </div>
 
-              <Button
-                onClick={triggerHistorySync}
-                disabled={historySyncInProgress}
-                className={`rounded-lg border border-transparent px-[1.4em] py-[0.8em] text-base font-medium font-inherit cursor-pointer transition-all min-h-[44px] min-w-[44px] w-full touch-manipulation ${
-                  historySyncInProgress
-                    ? "opacity-60 cursor-not-allowed bg-muted text-muted-foreground border-border"
-                    : "bg-primary text-primary-foreground border-primary hover:bg-primary/90 active:translate-y-[1px]"
-                }`}
-              >
-                {historySyncInProgress ? "Syncing…" : "Sync history"}
-              </Button>
-            </div>
+                <Button
+                  onClick={triggerHistorySync}
+                  disabled={historySyncInProgress}
+                  className={`rounded-lg border border-transparent px-[1.4em] py-[0.8em] text-base font-medium font-inherit cursor-pointer transition-all min-h-[44px] min-w-[44px] w-full touch-manipulation ${
+                    historySyncInProgress
+                      ? "opacity-60 cursor-not-allowed bg-muted text-muted-foreground border-border"
+                      : "bg-primary text-primary-foreground border-primary hover:bg-primary/90 active:translate-y-[1px]"
+                  }`}
+                >
+                  {historySyncInProgress ? "Syncing…" : "Sync history"}
+                </Button>
+              </div>
+            ) : (
+              <div className="mb-3 p-2 rounded text-[0.85em] text-muted-foreground bg-primary/10">
+                Safari doesn’t share past history. Visits are captured as you
+                browse, on sites where this extension is allowed (Safari
+                Settings → Extensions).
+              </div>
+            )}
             {historySyncStatus && (
               <div className="text-[0.85em] text-muted-foreground my-2 p-2 rounded bg-primary/10">
                 {historySyncStatus}
@@ -609,8 +750,12 @@ export default function App() {
                     name="bookmark-sync-enabled"
                     checked={bookmarkSyncEnabled}
                     onCheckedChange={handleBookmarkSyncToggle}
+                    disabled={!BOOKMARKS_API_AVAILABLE}
                   />
-                  <Label htmlFor="bookmark-sync-enabled">Bookmarks</Label>
+                  <Label htmlFor="bookmark-sync-enabled">
+                    Bookmarks
+                    {!BOOKMARKS_API_AVAILABLE && " (not available in Safari)"}
+                  </Label>
                 </Field>
                 <Field orientation="horizontal">
                   <Checkbox
@@ -618,8 +763,12 @@ export default function App() {
                     name="download-sync-enabled"
                     checked={downloadSyncEnabled}
                     onCheckedChange={handleDownloadSyncToggle}
+                    disabled={!DOWNLOADS_API_AVAILABLE}
                   />
-                  <Label htmlFor="download-sync-enabled">Downloads</Label>
+                  <Label htmlFor="download-sync-enabled">
+                    Downloads
+                    {!DOWNLOADS_API_AVAILABLE && " (not available in Safari)"}
+                  </Label>
                 </Field>
               </Field.Group>
 

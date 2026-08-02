@@ -20,8 +20,19 @@
  * separated from the `browser`/network flow so they unit-test without a browser.
  */
 
+import { OIDC_CLIENT_ID } from "./portalConfig";
+
 const STORAGE_KEY = "oidcTokens";
 const PENDING_AUTH_KEY = "oidcPendingAuth";
+// Safari tears the popup down during tab auth, so AUTH_FAILED broadcasts go
+// nowhere. Persist the last failure so the reopened popup (and the callback
+// page) can explain why sign-in did not complete.
+const LAST_AUTH_ERROR_KEY = "oidcLastAuthError";
+// Safari aggressively unloads the background page and does not reliably wake
+// it for content-script runtime messages. The callback page stashes its URL
+// here (storage writes need no receiver); the background completes the
+// exchange on its next wake — popup open, the auth alarm, or a storage event.
+const PENDING_CALLBACK_URL_KEY = "oidcPendingCallbackUrl";
 
 /** Fixed path on Portal for Safari / tab-based extension OIDC. */
 export const EXTENSION_OIDC_CALLBACK_PATH = "/extension/oidc-callback";
@@ -36,9 +47,14 @@ export const SAFARI_OIDC_REDIRECT_URI = "http://127.0.0.1:8732/oidc-callback";
 let activeCaptureSink: ((url: string) => void) | null = null;
 let pendingAuthorizeTabId: number | undefined;
 /** Dedupes content-script + tab-listener + webNavigation completing the same code. */
-let inFlightExchange: Promise<OidcTokens> | null = null;
+let inFlightExchange: Promise<OidcTokens | null> | null = null;
 
-const TAB_AUTH_TIMEOUT_MS = 2 * 60 * 1000;
+// Generous on purpose: on Safari the user signs in on Portal (password /
+// passkey / account picker) and then has to reopen the popup before the
+// background can finish the exchange. The 2-minute window this started with
+// silently expired real sign-ins. The authorization code itself may still
+// expire sooner on the Portal side — that failure is surfaced, not silent.
+const TAB_AUTH_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** True when `url` is a Portal (or legacy loopback) extension OIDC callback. */
 export function isOidcCallbackUrl(url: string): boolean {
@@ -73,9 +89,126 @@ export function attachAuthorizeTabId(tabId: number): void {
   pendingAuthorizeTabId = tabId;
 }
 
+export interface LastAuthError {
+  message: string;
+  at: number;
+}
+
+export async function recordAuthFailure(error: unknown): Promise<void> {
+  const message = error instanceof Error ? error.message : String(error);
+  try {
+    await browser.storage.local.set({
+      [LAST_AUTH_ERROR_KEY]: {
+        message,
+        at: Date.now(),
+      } satisfies LastAuthError,
+    });
+  } catch {
+    // Storage unavailable — the console error remains the only trace.
+  }
+}
+
+export async function loadLastAuthFailure(): Promise<LastAuthError | null> {
+  const got = await browser.storage.local.get(LAST_AUTH_ERROR_KEY);
+  const err = (got as Record<string, LastAuthError | undefined>)[
+    LAST_AUTH_ERROR_KEY
+  ];
+
+  return err && typeof err.message === "string" ? err : null;
+}
+
+export async function clearAuthFailure(): Promise<void> {
+  try {
+    await browser.storage.local.remove(LAST_AUTH_ERROR_KEY);
+  } catch {
+    // Best-effort.
+  }
+}
+
+/** Stash a callback URL for the background to pick up on its next wake. */
+export async function stashPendingCallbackUrl(url: string): Promise<void> {
+  await browser.storage.local.set({
+    [PENDING_CALLBACK_URL_KEY]: { url, at: Date.now() },
+  });
+}
+
+export async function clearPendingCallbackUrl(): Promise<void> {
+  try {
+    await browser.storage.local.remove(PENDING_CALLBACK_URL_KEY);
+  } catch {
+    // Best-effort.
+  }
+}
+
+// A stash younger than this belongs to the callback page that just wrote it:
+// exchangeFromCallbackPage is running right now in that page. The background
+// claiming it too (storage event fires immediately) would double-POST the
+// single-use code from a second JS context — the in-memory single-flight
+// guard cannot span contexts. If the page dies mid-exchange, the stash
+// survives and the next wake (popup open / 1-minute auth alarm) finishes it.
+export const CALLBACK_PAGE_OWNERSHIP_MS = 8_000;
+
+/**
+ * Complete a PKCE exchange from a stashed callback URL, if one is waiting.
+ * Returns tokens when an exchange completed (or was already completed), null
+ * when there is nothing to do. Throws when the exchange itself fails so the
+ * caller can record the failure. The stash is consumed either way (except
+ * while still owned by the callback page — see CALLBACK_PAGE_OWNERSHIP_MS).
+ */
+export async function finishStoredCallback(
+  config: OidcConfig,
+): Promise<OidcTokens | null> {
+  const got = await browser.storage.local.get(PENDING_CALLBACK_URL_KEY);
+  const stored = (got as Record<string, { url?: string; at?: number }>)[
+    PENDING_CALLBACK_URL_KEY
+  ];
+
+  if (!stored?.url || typeof stored.at !== "number") {
+    return null;
+  }
+
+  const stashAgeMs = Date.now() - stored.at;
+
+  if (stashAgeMs < CALLBACK_PAGE_OWNERSHIP_MS) {
+    return null;
+  }
+
+  if (stashAgeMs > TAB_AUTH_TIMEOUT_MS) {
+    await clearPendingCallbackUrl();
+
+    return null;
+  }
+
+  try {
+    const tokens = await finishOidcCallback(config, stored.url);
+
+    // A stashed callback with nothing to exchange against means the pending
+    // PKCE session expired (or a different Portal was configured mid-flight).
+    // Silence here looked like "signed out for no reason" — fail loudly, and
+    // name the evidence so the next debugging session starts with facts.
+    if (!tokens) {
+      const pending = await loadPendingAuth();
+      const hadTokens = Boolean(await loadTokens());
+      throw new Error(
+        "Sign-in expired before the extension could finish " +
+          `(callback stashed ${Math.round(stashAgeMs / 1000)}s ago; pending PKCE session ` +
+          `${pending ? "present" : "missing"}; stored tokens ${hadTokens ? "present" : "none"}). ` +
+          "Press Sign in and complete within 10 minutes.",
+      );
+    }
+
+    return tokens;
+  } finally {
+    await clearPendingCallbackUrl();
+  }
+}
+
 export async function savePendingAuth(
   prepared: PreparedAuthorize,
 ): Promise<void> {
+  // A fresh attempt supersedes any stale failure message or stashed callback.
+  await clearAuthFailure();
+  await clearPendingCallbackUrl();
   await browser.storage.local.set({
     [PENDING_AUTH_KEY]: { prepared, startedAt: Date.now() },
     oidcAuthInProgressAt: Date.now(),
@@ -128,23 +261,73 @@ export async function finishOidcCallback(
     return inFlightExchange;
   }
 
-  const prepared = await loadPendingAuth();
-  if (!prepared) {
-    // Already exchanged (pending cleared) — return whatever is stored.
-    return loadTokens();
-  }
+  // Reserve the in-flight slot before the first await. Several capture paths
+  // (tab polling, webNavigation, storage event, content-script message) can
+  // fire in the same tick; an async gap here let two of them read the pending
+  // session and both POST the single-use code — the loser got invalid_grant.
+  inFlightExchange = (async (): Promise<OidcTokens | null> => {
+    const prepared = await loadPendingAuth();
+    if (!prepared) {
+      // Already exchanged (pending cleared) — return whatever is stored.
+      return loadTokens();
+    }
 
-  inFlightExchange = exchangeAuthorizationCode(config, prepared, redirectUrl)
-    .then(async (tokens) => {
-      await clearPendingAuth();
+    const tokens = await exchangeAuthorizationCode(
+      prepared.clientId ?? config.clientId,
+      prepared,
+      redirectUrl,
+    );
+    await clearPendingAuth();
 
-      return tokens;
-    })
-    .finally(() => {
-      inFlightExchange = null;
-    });
+    return tokens;
+  })().finally(() => {
+    inFlightExchange = null;
+  });
 
   return inFlightExchange;
+}
+
+/**
+ * Complete the PKCE exchange directly from the Portal callback page (content
+ * script context). The callback page is guaranteed alive at the exact moment
+ * the authorization code arrives and runs on the Portal's own origin, so the
+ * token POST is same-origin — the Safari background page (which Safari unloads
+ * aggressively and does not reliably wake) is out of the critical path.
+ *
+ * Returns null when there is no pending PKCE session to own — the background
+ * or legacy message paths may already have exchanged this attempt, so null
+ * means "fall back, don't fail". On success the tokens are stored and all
+ * pending state (PKCE session, stashed callback URL, in-progress marker) is
+ * cleared. On failure the error is recorded for the popup and rethrown so the
+ * callback page can display it.
+ */
+export async function exchangeFromCallbackPage(
+  redirectUrl: string,
+): Promise<OidcTokens | null> {
+  if (!isOidcCallbackUrl(redirectUrl)) {
+    return null;
+  }
+
+  const prepared = await loadPendingAuth();
+  if (!prepared) {
+    return null;
+  }
+
+  try {
+    // saveTokens (inside the exchange) also clears any last-auth-error.
+    const tokens = await exchangeAuthorizationCode(
+      prepared.clientId ?? OIDC_CLIENT_ID,
+      prepared,
+      redirectUrl,
+    );
+    await clearPendingAuth();
+    await clearPendingCallbackUrl();
+
+    return tokens;
+  } catch (error) {
+    await recordAuthFailure(error);
+    throw error;
+  }
 }
 
 /** Portal origin from an issuer (`…/api/auth`) or a bare Portal URL. */
@@ -177,6 +360,12 @@ export interface PreparedAuthorize {
   verifier: string;
   state: string;
   tokenEndpoint: string;
+  /**
+   * Client id captured at prepare time so the callback content script can
+   * exchange without access to the extension's config (optional because a
+   * pending session persisted by an older build may lack it).
+   */
+  clientId?: string;
 }
 
 export async function prepareAuthorizeRequest(
@@ -207,6 +396,7 @@ export async function prepareAuthorizeRequest(
     verifier,
     state,
     tokenEndpoint: token_endpoint,
+    clientId: config.clientId,
   };
 }
 
@@ -378,6 +568,7 @@ async function postToken(
 
 async function saveTokens(tokens: OidcTokens): Promise<void> {
   await browser.storage.local.set({ [STORAGE_KEY]: tokens });
+  await clearAuthFailure();
 }
 
 export async function loadTokens(): Promise<OidcTokens | null> {
@@ -693,7 +884,7 @@ async function launchAuthorizeRedirect(
  * renewal this way.
  */
 async function exchangeAuthorizationCode(
-  config: OidcConfig,
+  clientId: string,
   prepared: PreparedAuthorize,
   redirectUrl: string,
 ): Promise<OidcTokens> {
@@ -714,7 +905,7 @@ async function exchangeAuthorizationCode(
     grant_type: "authorization_code",
     code: parsed.code,
     redirect_uri: prepared.redirectUri,
-    client_id: config.clientId,
+    client_id: clientId,
     code_verifier: prepared.verifier,
   });
   await saveTokens(tokens);
@@ -742,7 +933,7 @@ async function runAuthCodeFlow(
     existingTabId,
   );
 
-  return exchangeAuthorizationCode(config, prepared, redirectUrl);
+  return exchangeAuthorizationCode(config.clientId, prepared, redirectUrl);
 }
 
 /**
@@ -759,7 +950,17 @@ export async function completeTabSignIn(
   prepared: PreparedAuthorize,
   tabId?: number,
 ): Promise<OidcTokens> {
-  await savePendingAuth(prepared);
+  // The popup persists this session before messaging us (it must — this
+  // background page may never wake on Safari, and the callback page
+  // exchanges against the stored session). Only save here when that didn't
+  // happen (a direct caller), and never for a matching state: if the message
+  // arrived late, re-saving would resurrect a session the callback page
+  // already consumed, stranding a stale pending that poisons the next
+  // callback with a state mismatch.
+  const existing = await loadPendingAuth();
+  if (existing?.state !== prepared.state) {
+    await savePendingAuth(prepared);
+  }
 
   const viaTab = launchAuthViaTab(
     prepared.authorizeUrl,
