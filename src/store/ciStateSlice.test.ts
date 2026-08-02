@@ -342,5 +342,28 @@ describe("ciStateSlice", () => {
         "serverEnvironmentId",
       );
     });
+
+    it("force-off bookmark/download sync when those APIs are missing", async () => {
+      // Test browser mock has no bookmarks/downloads namespaces (Safari-like).
+      mockBrowserStorage.local.get.mockResolvedValue({
+        bookmarkSyncEnabled: true,
+        downloadSyncEnabled: true,
+      });
+
+      await (store.dispatch as (action: unknown) => unknown)(
+        loadUserSettings(),
+      );
+
+      const state = (store.getState() as { ciState: unknown }).ciState as {
+        bookmarkSyncEnabled: boolean;
+        downloadSyncEnabled: boolean;
+      };
+      expect(state.bookmarkSyncEnabled).toBe(false);
+      expect(state.downloadSyncEnabled).toBe(false);
+      expect(mockBrowserStorage.local.set).toHaveBeenCalledWith({
+        bookmarkSyncEnabled: false,
+        downloadSyncEnabled: false,
+      });
+    });
   });
 });

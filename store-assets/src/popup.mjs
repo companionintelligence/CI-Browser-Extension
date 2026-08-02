@@ -132,6 +132,9 @@ function statusLine(y, text, tone = "muted") {
   return { svg: s, y: y + 40 };
 }
 
+// Chrome/Firefox store screenshots only — Safari hides Bookmarks/Downloads in
+// the real popup (those APIs are unimplemented). Regenerate a Safari variant
+// here if App Store listing assets need to match.
 function togglesRow(y) {
   let s = rrect(16, y, W - 32, 48, 10, T.panelAccent, { stroke: "rgba(171,212,216,0.12)", sw: 1 });
   const cols = [["History", true], ["Bookmarks", true], ["Downloads", false]];

@@ -20,6 +20,11 @@ import {
   shouldUseTabAuthFlow,
 } from "@/services/oidcAuth";
 import bowser from "bowser";
+import {
+  hasBookmarksApi,
+  hasDownloadsApi,
+  hasHistoryApi,
+} from "@/lib/browserCapabilities";
 import BlacklistManager from "./BlacklistManager";
 import AdvancedSettings from "./AdvancedSettings";
 import MemorySettings from "./MemorySettings";
@@ -29,20 +34,9 @@ import { Button, Checkbox, Field, Label, Card, Toaster } from "@ci/shadcn";
 const DEV_CLICKS_NEEDED = 7;
 const DEV_CLICK_WINDOW_MS = 2500;
 
-// Safari accepts the `history` / `bookmarks` / `downloads` manifest
-// permissions but never implements the APIs (confirmed by Apple:
-// https://developer.apple.com/forums/thread/711080), so retroactive sync
-// cannot exist there. Pages are captured live as the user browses instead.
-// Feature-detect rather than UA-sniff so any future Safari support just works.
-const HISTORY_API_AVAILABLE =
-  typeof browser !== "undefined" &&
-  typeof browser.history?.search === "function";
-const BOOKMARKS_API_AVAILABLE =
-  typeof browser !== "undefined" &&
-  typeof browser.bookmarks?.getTree === "function";
-const DOWNLOADS_API_AVAILABLE =
-  typeof browser !== "undefined" &&
-  typeof browser.downloads?.search === "function";
+const HISTORY_API_AVAILABLE = hasHistoryApi();
+const BOOKMARKS_API_AVAILABLE = hasBookmarksApi();
+const DOWNLOADS_API_AVAILABLE = hasDownloadsApi();
 
 export default function App() {
   const dispatch = useDispatch();
@@ -744,32 +738,28 @@ export default function App() {
                   />
                   <Label htmlFor="history-sync-enabled">History</Label>
                 </Field>
-                <Field orientation="horizontal">
-                  <Checkbox
-                    id="bookmark-sync-enabled"
-                    name="bookmark-sync-enabled"
-                    checked={bookmarkSyncEnabled}
-                    onCheckedChange={handleBookmarkSyncToggle}
-                    disabled={!BOOKMARKS_API_AVAILABLE}
-                  />
-                  <Label htmlFor="bookmark-sync-enabled">
-                    Bookmarks
-                    {!BOOKMARKS_API_AVAILABLE && " (not available in Safari)"}
-                  </Label>
-                </Field>
-                <Field orientation="horizontal">
-                  <Checkbox
-                    id="download-sync-enabled"
-                    name="download-sync-enabled"
-                    checked={downloadSyncEnabled}
-                    onCheckedChange={handleDownloadSyncToggle}
-                    disabled={!DOWNLOADS_API_AVAILABLE}
-                  />
-                  <Label htmlFor="download-sync-enabled">
-                    Downloads
-                    {!DOWNLOADS_API_AVAILABLE && " (not available in Safari)"}
-                  </Label>
-                </Field>
+                {BOOKMARKS_API_AVAILABLE && (
+                  <Field orientation="horizontal">
+                    <Checkbox
+                      id="bookmark-sync-enabled"
+                      name="bookmark-sync-enabled"
+                      checked={bookmarkSyncEnabled}
+                      onCheckedChange={handleBookmarkSyncToggle}
+                    />
+                    <Label htmlFor="bookmark-sync-enabled">Bookmarks</Label>
+                  </Field>
+                )}
+                {DOWNLOADS_API_AVAILABLE && (
+                  <Field orientation="horizontal">
+                    <Checkbox
+                      id="download-sync-enabled"
+                      name="download-sync-enabled"
+                      checked={downloadSyncEnabled}
+                      onCheckedChange={handleDownloadSyncToggle}
+                    />
+                    <Label htmlFor="download-sync-enabled">Downloads</Label>
+                  </Field>
+                )}
               </Field.Group>
 
               <Field orientation="horizontal" className="mt-2">
