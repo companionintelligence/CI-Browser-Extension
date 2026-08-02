@@ -276,7 +276,7 @@ export default function App() {
         });
         tabId = tab.id;
         if (tabId !== undefined) {
-          // Best-effort; capture also scans all tabs for the loopback URL.
+          // Best-effort; capture also scans all tabs for the callback URL.
           void browser.runtime
             .sendMessage({ action: "AUTHORIZE_TAB", tabId })
             .catch(() => undefined);

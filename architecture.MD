@@ -186,7 +186,7 @@ Two hops, two credentials (same model as Companion Capture):
 1. The user clicks **Sign in** in the popup (`AUTHORIZE`). Work runs in the background; the popup is often torn down when the auth UI takes focus. Authorize uses `prompt=select_account` so Portal shows an account picker instead of silently reusing the last SSO cookie.
 2. OIDC Authorization-Code + PKCE against the configured Portal (default `https://hub.ci.computer`, issuer `{portal}/api/auth`):
    - **Chrome / Firefox:** `browser.identity.launchWebAuthFlow` + `getRedirectURL()` (`*.chromiumapp.org` / `*.extensions.allizom.org`).
-   - **Safari:** open the authorize URL in a tab; `redirect_uri` is loopback `http://127.0.0.1:8732/oidc-callback` (Portal private-IP allowlist). The macOS container app serves that port; the extension captures `?code=` via a content script on the callback page (plus `webNavigation` / `tabs` polling), then exchanges the code.
+   - **Safari:** open the authorize URL in a tab; `redirect_uri` is Portal HTTPS `{portal}/extension/oidc-callback` (CI-Portal #451). The extension captures `?code=` via a content script on that page (plus `webNavigation` / `tabs` polling), then exchanges the code.
 3. Token exchange uses `credentials: "omit"` so Portal session cookies are not attached from the extension origin.
 4. **Memory / device:** Portal `GET /me/apps?slug=ci-memory` lists this account’s Memory instances. One → auto-set `serverURL`. Several → popup **Choose Memory** (saved as a manual URL). A Settings URL marked manual is never overwritten. Each browser profile binds to one Memory; switching accounts uses **Use another account**.
 5. All CI-Server calls send `Authorization: Bearer <id_token>`. Never send the opaque `access_token` to Memory or Hub.

@@ -19,7 +19,7 @@ import {
   shouldUseTabAuthFlow,
   resolveRedirectUri,
   launchAuthViaTab,
-  SAFARI_OIDC_REDIRECT_URI,
+  extensionOidcCallbackUri,
   prepareAuthorizeRequest,
   endpointsFromIssuer,
   type OidcConfig,
@@ -47,7 +47,7 @@ const CONFIG: OidcConfig = {
   scopes: "openid profile email offline_access",
 };
 
-const SAFARI_CALLBACK = SAFARI_OIDC_REDIRECT_URI;
+const SAFARI_CALLBACK = extensionOidcCallbackUri(CONFIG.issuer);
 
 const AUTHZ = "https://hub.ci.computer/api/auth/oauth2/authorize";
 const TOKEN = "https://hub.ci.computer/api/auth/oauth2/token";
@@ -292,10 +292,13 @@ describe("prepareAuthorizeRequest", () => {
 });
 
 describe("Safari / tab auth flow", () => {
-  it("uses the loopback redirect when identity is unavailable", () => {
+  it("uses the Portal HTTPS callback when identity is unavailable", () => {
     installSafariTabBrowser();
     expect(shouldUseTabAuthFlow()).toBe(true);
     expect(resolveRedirectUri(CONFIG)).toBe(SAFARI_CALLBACK);
+    expect(SAFARI_CALLBACK).toBe(
+      "https://hub.ci.computer/extension/oidc-callback",
+    );
   });
 
   it("uses identity redirect when launchWebAuthFlow is present", () => {

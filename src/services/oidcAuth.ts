@@ -6,14 +6,12 @@
  * extension is registered as the `ci-browser-extension` public PKCE client
  * (CI-Portal #356). Chrome/Firefox use `browser.identity.getRedirectURL()`
  * (`*.chromiumapp.org` / `*.extensions.allizom.org`). Safari has no stable
- * vendor intercept redirect, so it opens a tab and uses a loopback
- * `redirect_uri` (`SAFARI_OIDC_REDIRECT_URI`) that Portal already allows via
- * private-IPv4 rules; the extension captures the navigation (nothing listens
- * on that port). A Portal-hosted HTTPS callback is staged in CI-Portal but not
- * required once loopback capture works. The **id_token** (getIdToken) — not
- * the opaque OAuth access_token — is the Bearer the extension sends to
- * CI-Server's `/api/v1/*` bulk routes (which validate the JWKS-signed portal
- * JWT after CI-Server #1473).
+ * vendor intercept redirect, so it opens a tab and uses the Portal-hosted
+ * HTTPS `redirect_uri` (`{portal}/extension/oidc-callback`; CI-Portal #451).
+ * A content script on that page reports `?code=` for PKCE exchange.
+ * The **id_token** (getIdToken) — not the opaque OAuth access_token — is the
+ * Bearer the extension sends to CI-Server's `/api/v1/*` bulk routes (which
+ * validate the JWKS-signed portal JWT after CI-Server #1473).
  *
  * Every request here is sent with `credentials: "omit"` — see postToken; the
  * portal rejects cookie-bearing requests from the extension's origin.
@@ -24,27 +22,40 @@
 
 const STORAGE_KEY = "oidcTokens";
 
+/** Fixed path on Portal for Safari / tab-based extension OIDC. */
+export const EXTENSION_OIDC_CALLBACK_PATH = "/extension/oidc-callback";
+
 /**
- * Safari / tab-auth redirect. Portal `isAllowedRedirect` accepts all of
- * 127.0.0.0/8 today — unlike `{portal}/extension/oidc-callback`, which needs a
- * Portal deploy. The Companion Intelligence macOS app serves this port; the
- * extension also captures via a content script on the callback page.
+ * @deprecated Loopback redirect used before Portal HTTPS callback shipped.
+ * Kept for tests / emergency fallback only — prefer `extensionOidcCallbackUri`.
  */
 export const SAFARI_OIDC_REDIRECT_URI =
   "http://127.0.0.1:8732/oidc-callback";
-
-const SAFARI_OIDC_REDIRECT_BASE = SAFARI_OIDC_REDIRECT_URI.split("?")[0];
 
 /** In-flight Safari capture: content script / AUTHORIZE_TAB feed this. */
 let activeCaptureSink: ((url: string) => void) | null = null;
 let pendingAuthorizeTabId: number | undefined;
 
+/** True when `url` is a Portal (or legacy loopback) extension OIDC callback. */
+export function isOidcCallbackUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.pathname === EXTENSION_OIDC_CALLBACK_PATH) {
+      return true;
+    }
+
+    return url.startsWith(SAFARI_OIDC_REDIRECT_URI.split("?")[0]);
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Deliver a loopback callback URL into the in-flight tab auth (from the
- * oidcCallback content script). Returns true if a listener consumed it.
+ * Deliver a callback URL into the in-flight tab auth (from the oidcCallback
+ * content script). Returns true if a listener consumed it.
  */
 export function deliverOidcCallbackUrl(url: string): boolean {
-  if (!url.startsWith(SAFARI_OIDC_REDIRECT_BASE) || !activeCaptureSink) {
+  if (!isOidcCallbackUrl(url) || !activeCaptureSink) {
     return false;
   }
 
@@ -57,9 +68,6 @@ export function deliverOidcCallbackUrl(url: string): boolean {
 export function attachAuthorizeTabId(tabId: number): void {
   pendingAuthorizeTabId = tabId;
 }
-
-/** @deprecated Prefer SAFARI_OIDC_REDIRECT_URI until Portal callback is live. */
-export const EXTENSION_OIDC_CALLBACK_PATH = "/extension/oidc-callback";
 
 const TAB_AUTH_TIMEOUT_MS = 2 * 60 * 1000;
 
@@ -358,11 +366,11 @@ export function shouldUseTabAuthFlow(): boolean {
 /** Redirect URI registered on the authorize request for this browser. */
 export function resolveRedirectUri(config?: OidcConfig): string {
   if (shouldUseTabAuthFlow()) {
-    // Loopback is allowlisted on current Portal production. Switch to
-    // extensionOidcCallbackUri(config.issuer) once that Portal route ships.
-    void config;
+    if (!config?.issuer) {
+      throw new Error("OIDC issuer required for Safari tab auth redirect");
+    }
 
-    return SAFARI_OIDC_REDIRECT_URI;
+    return extensionOidcCallbackUri(config.issuer);
   }
 
   return browser.identity.getRedirectURL();
@@ -370,16 +378,14 @@ export function resolveRedirectUri(config?: OidcConfig): string {
 
 /**
  * Interactive OIDC for Safari: navigate a tab to authorize, capture the
- * loopback callback, then close the tab.
+ * Portal HTTPS callback, then close the tab.
  *
  * Prefer an existing `tabId` opened from the popup click (Safari drops the
  * user-gesture after async work, so background `tabs.create` often never
  * shows a window). Otherwise create a tab here as a fallback.
  *
- * Safari often never fires a successful `tabs.onUpdated` for connection-refused
- * loopback — the address bar still has `?code=` (as on the error page). We
- * therefore also listen to webNavigation error/commit events and **poll**
- * `tabs.get().url`.
+ * Also listen to webNavigation commit events and poll `tabs.get().url`, and
+ * accept a content-script delivery of the callback URL.
  */
 export function launchAuthViaTab(
   authorizeUrl: string,
@@ -462,8 +468,8 @@ export function launchAuthViaTab(
           return;
         }
 
-        // No tabId yet — scan every tab for the loopback callback (Safari often
-        // tears down the popup before AUTHORIZE_TAB can run).
+        // No tabId yet — scan every tab for the callback (Safari often tears
+        // down the popup before AUTHORIZE_TAB can run).
         const tabs = await browser.tabs.query({});
         for (const tab of tabs) {
           maybeCapture(tab.url, tab.id);
@@ -663,8 +669,8 @@ async function runAuthCodeFlow(
 
 /**
  * Finish a tab sign-in when the popup owns opening `prepared.authorizeUrl`.
- * `tabId` may be omitted — we poll every tab for the loopback callback (Safari
- * often destroys the popup before it can send the tab id).
+ * `tabId` may be omitted — we poll every tab for the callback (Safari often
+ * destroys the popup before it can send the tab id).
  */
 export async function completeTabSignIn(
   config: OidcConfig,

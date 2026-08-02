@@ -1,15 +1,19 @@
 /**
- * Safari OIDC loopback landing page. The container app serves HTML on
- * 127.0.0.1:8732 so the redirect loads; this script reports location.href
- * (including ?code=&state=) to the background. Relying on tabs/webNavigation
- * alone is flaky on Safari even when the page loads successfully.
+ * Safari OIDC Portal callback page (`{portal}/extension/oidc-callback`).
+ * Reports location.href (including ?code=&state=) to the background so PKCE
+ * exchange can finish even when tabs/webNavigation are flaky.
  */
 export default defineContentScript({
-  matches: ["http://127.0.0.1:8732/*"],
+  matches: [
+    "*://*.ci.computer/extension/*",
+    "*://*.companionintelligence.com/extension/*",
+    "*://*.companionintel.com/extension/*",
+    "*://*.ci.localhost/extension/*",
+  ],
   runAt: "document_start",
   main() {
     const url = window.location.href;
-    if (!url.includes("/oidc-callback")) {
+    if (!url.includes("/extension/oidc-callback")) {
       return;
     }
 

@@ -109,16 +109,17 @@ has to go through the Xcode wrapper:
 
 Sign-in on Safari does **not** use `browser.identity`. The Safari build opens
 the Portal authorize URL in a tab (`prompt=select_account` so you can pick
-which Companion account) and captures the loopback redirect
-`http://127.0.0.1:8732/oidc-callback` (already allowed by Portal). The
-**Companion Intelligence macOS app** (Xcode wrapper) must stay running — it
-listens on that port; a content script on the callback page reports `?code=`
-to the extension background. If you see Safari’s “Can’t Connect” page, the
-container app isn’t running. After tokens are stored, reopen the popup —
-it should show Connected / **Choose Memory** (when the account has more than
-one Memory). Portal/cloud switching is developer-only (⌥⇧. or 7× title
-click); Memory URL is under **Settings**. Use **Use another account** to
-clear the binding and pick a different Portal identity.
+which Companion account) and captures the Portal HTTPS redirect
+`{portal}/extension/oidc-callback` (CI-Portal #451 — must be merged/deployed
+before this branch works against production). A content script on that page
+reports `?code=` to the extension background. After tokens are stored, reopen
+the popup — it should show Connected / **Choose Memory** (when the account
+has more than one Memory). Portal/cloud switching is developer-only (⌥⇧. or
+7× title click); Memory URL is under **Settings**. Use **Use another account**
+to clear the binding and pick a different Portal identity.
+
+> Loopback (`127.0.0.1:8732`) lives on `feat/safari-oidc-loopback` if you need
+> to test before the Portal callback is deployed.
 
 ## Debugging
 
