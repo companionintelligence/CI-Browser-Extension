@@ -21,6 +21,7 @@
  */
 
 const STORAGE_KEY = "oidcTokens";
+const PENDING_AUTH_KEY = "oidcPendingAuth";
 
 /** Fixed path on Portal for Safari / tab-based extension OIDC. */
 export const EXTENSION_OIDC_CALLBACK_PATH = "/extension/oidc-callback";
@@ -34,6 +35,10 @@ export const SAFARI_OIDC_REDIRECT_URI = "http://127.0.0.1:8732/oidc-callback";
 /** In-flight Safari capture: content script / AUTHORIZE_TAB feed this. */
 let activeCaptureSink: ((url: string) => void) | null = null;
 let pendingAuthorizeTabId: number | undefined;
+/** Dedupes content-script + tab-listener + webNavigation completing the same code. */
+let inFlightExchange: Promise<OidcTokens> | null = null;
+
+const TAB_AUTH_TIMEOUT_MS = 2 * 60 * 1000;
 
 /** True when `url` is a Portal (or legacy loopback) extension OIDC callback. */
 export function isOidcCallbackUrl(url: string): boolean {
@@ -68,7 +73,79 @@ export function attachAuthorizeTabId(tabId: number): void {
   pendingAuthorizeTabId = tabId;
 }
 
-const TAB_AUTH_TIMEOUT_MS = 2 * 60 * 1000;
+export async function savePendingAuth(
+  prepared: PreparedAuthorize,
+): Promise<void> {
+  await browser.storage.local.set({
+    [PENDING_AUTH_KEY]: { prepared, startedAt: Date.now() },
+    oidcAuthInProgressAt: Date.now(),
+  });
+}
+
+export async function loadPendingAuth(): Promise<PreparedAuthorize | null> {
+  const got = await browser.storage.local.get(PENDING_AUTH_KEY);
+  const pending = (
+    got as Record<string, { prepared?: PreparedAuthorize; startedAt?: number }>
+  )[PENDING_AUTH_KEY];
+
+  if (!pending?.prepared || typeof pending.startedAt !== "number") {
+    return null;
+  }
+
+  if (Date.now() - pending.startedAt > TAB_AUTH_TIMEOUT_MS) {
+    await clearPendingAuth();
+
+    return null;
+  }
+
+  return pending.prepared;
+}
+
+export async function clearPendingAuth(): Promise<void> {
+  await browser.storage.local.remove([
+    PENDING_AUTH_KEY,
+    "oidcAuthInProgressAt",
+  ]);
+}
+
+/**
+ * Finish PKCE exchange from a callback URL. Safe to call from the content
+ * script, webNavigation, or after `launchAuthViaTab` resolves — concurrent
+ * callers share one in-flight exchange so the auth code is used once.
+ */
+export async function finishOidcCallback(
+  config: OidcConfig,
+  redirectUrl: string,
+): Promise<OidcTokens | null> {
+  if (!isOidcCallbackUrl(redirectUrl)) {
+    return null;
+  }
+
+  // Wake tab-capture waiters (if the background listener is still alive).
+  deliverOidcCallbackUrl(redirectUrl);
+
+  if (inFlightExchange) {
+    return inFlightExchange;
+  }
+
+  const prepared = await loadPendingAuth();
+  if (!prepared) {
+    // Already exchanged (pending cleared) — return whatever is stored.
+    return loadTokens();
+  }
+
+  inFlightExchange = exchangeAuthorizationCode(config, prepared, redirectUrl)
+    .then(async (tokens) => {
+      await clearPendingAuth();
+
+      return tokens;
+    })
+    .finally(() => {
+      inFlightExchange = null;
+    });
+
+  return inFlightExchange;
+}
 
 /** Portal origin from an issuer (`…/api/auth`) or a bare Portal URL. */
 export function portalOriginFromIssuer(issuerOrPortalUrl: string): string {
@@ -672,20 +749,57 @@ async function runAuthCodeFlow(
  * Finish a tab sign-in when the popup owns opening `prepared.authorizeUrl`.
  * `tabId` may be omitted — we poll every tab for the callback (Safari often
  * destroys the popup before it can send the tab id).
+ *
+ * Persists `prepared` so a content-script / webNavigation callback can still
+ * complete the exchange if the in-memory tab listener was lost (common when
+ * Safari tears down extension pages during the authorize tab).
  */
 export async function completeTabSignIn(
   config: OidcConfig,
   prepared: PreparedAuthorize,
   tabId?: number,
 ): Promise<OidcTokens> {
-  const redirectUrl = await launchAuthViaTab(
+  await savePendingAuth(prepared);
+
+  const viaTab = launchAuthViaTab(
     prepared.authorizeUrl,
     prepared.redirectUri,
     tabId,
     { alreadyNavigated: true },
-  );
+  ).then((redirectUrl) => finishOidcCallback(config, redirectUrl));
 
-  return exchangeAuthorizationCode(config, prepared, redirectUrl);
+  // Fallback: content script exchanged while no capture sink was registered.
+  const viaStorage = new Promise<OidcTokens>((resolve, reject) => {
+    const started = Date.now();
+    const timer = setInterval(() => {
+      void (async () => {
+        if (Date.now() - started > TAB_AUTH_TIMEOUT_MS) {
+          clearInterval(timer);
+          reject(new Error("Sign-in timed out"));
+
+          return;
+        }
+
+        const pending = await loadPendingAuth();
+        if (pending) {
+          return;
+        }
+
+        const tokens = await loadTokens();
+        if (tokens) {
+          clearInterval(timer);
+          resolve(tokens);
+        }
+      })();
+    }, 300);
+  });
+
+  const tokens = await Promise.race([viaTab, viaStorage]);
+  if (!tokens) {
+    throw new Error("OIDC sign-in failed");
+  }
+
+  return tokens;
 }
 
 /**

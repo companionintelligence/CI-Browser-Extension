@@ -26,8 +26,9 @@ import {
 import {
   getAccessToken,
   attachAuthorizeTabId,
-  deliverOidcCallbackUrl,
+  finishOidcCallback,
   getIdToken,
+  isOidcCallbackUrl,
   loadTokens,
   signIn,
   signInSilently,
@@ -2033,6 +2034,23 @@ export default defineBackground({
       }
     }
 
+    async function closeOidcCallbackTabs(): Promise<void> {
+      try {
+        const tabs = await browser.tabs.query({});
+        await Promise.all(
+          tabs
+            .filter(
+              (tab) => tab.id != null && tab.url && isOidcCallbackUrl(tab.url),
+            )
+            .map((tab) =>
+              browser.tabs.remove(tab.id as number).catch(() => undefined),
+            ),
+        );
+      } catch (error) {
+        console.debug("closeOidcCallbackTabs:", error);
+      }
+    }
+
     // Interactive sign-in, triggered by the popup's "Sign in with Companion
     // account" action. The OIDC Auth-Code + PKCE flow runs here in the
     // background rather than the popup, which is torn down when
@@ -2047,6 +2065,37 @@ export default defineBackground({
       await signIn(oidcConfig(), { tabId, prepared });
       await discoverMemoryServer();
       await checkAuthenticationState();
+    }
+
+    // Safari: if the content script is delayed, still catch the Portal callback
+    // from navigation events whenever a pending PKCE session exists.
+    try {
+      browser.webNavigation?.onCommitted?.addListener((details) => {
+        if (
+          details.frameId !== 0 ||
+          !details.url ||
+          !isOidcCallbackUrl(details.url)
+        ) {
+          return;
+        }
+
+        void (async () => {
+          try {
+            const tokens = await finishOidcCallback(oidcConfig(), details.url);
+            if (!tokens) {
+              return;
+            }
+
+            await discoverMemoryServer();
+            await checkAuthenticationState();
+            await closeOidcCallbackTabs();
+          } catch (error) {
+            console.error("OIDC webNavigation callback failed:", error);
+          }
+        })();
+      });
+    } catch (error) {
+      console.debug("OIDC webNavigation listener unavailable:", error);
     }
 
     // Explicit sign-out, e.g. when the user switches Portal: tokens from the
@@ -2266,10 +2315,37 @@ export default defineBackground({
 
         if (message.action === "OIDC_CALLBACK") {
           const url = typeof message.url === "string" ? message.url : "";
-          const delivered = deliverOidcCallbackUrl(url);
-          sendResponse({ success: delivered });
+          void (async () => {
+            try {
+              const tokens = await finishOidcCallback(oidcConfig(), url);
+              if (!tokens) {
+                sendResponse({ success: false });
 
-          return false;
+                return;
+              }
+
+              // When the in-memory tab waiter died, authorizeWithPortal may not
+              // run discovery — do it here. Harmless if both paths run.
+              await discoverMemoryServer();
+              await checkAuthenticationState();
+              await closeOidcCallbackTabs();
+              sendResponse({ success: true });
+            } catch (error) {
+              console.error("OIDC_CALLBACK failed:", error);
+              sendResponse({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+              });
+              browser.runtime
+                .sendMessage({
+                  action: "AUTH_FAILED",
+                  error: error instanceof Error ? error.message : String(error),
+                })
+                .catch(() => undefined);
+            }
+          })();
+
+          return true;
         }
 
         if (message.action === "AUTHORIZE") {
@@ -2287,16 +2363,14 @@ export default defineBackground({
             typeof message.prepared.tokenEndpoint === "string"
               ? (message.prepared as PreparedAuthorize)
               : undefined;
-          void browser.storage.local.set({ oidcAuthInProgressAt: Date.now() });
           sendResponse({ success: true, started: true });
           authorizeWithPortal(tabId, prepared)
             .then(() => {
-              void browser.storage.local.remove("oidcAuthInProgressAt");
+              void closeOidcCallbackTabs();
               // checkAuthenticationState already broadcasts AUTH_STATE_UPDATED.
             })
             .catch((error) => {
               console.error("Authorization failed:", error);
-              void browser.storage.local.remove("oidcAuthInProgressAt");
               if (tabId !== undefined) {
                 void browser.tabs.remove(tabId).catch(() => undefined);
               }

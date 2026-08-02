@@ -110,16 +110,22 @@ has to go through the Xcode wrapper:
 Sign-in on Safari does **not** use `browser.identity`. The Safari build opens
 the Portal authorize URL in a tab (`prompt=select_account` so you can pick
 which Companion account) and captures the Portal HTTPS redirect
-`{portal}/extension/oidc-callback` (CI-Portal #451 — must be merged/deployed
-before this branch works against production). A content script on that page
-reports `?code=` to the extension background. After tokens are stored, reopen
-the popup — it should show Connected / **Choose Memory** (when the account
-has more than one Memory). Portal/cloud switching is developer-only (⌥⇧. or
-7× title click); Memory URL is under **Settings**. Use **Use another account**
-to clear the binding and pick a different Portal identity.
+`{portal}/extension/oidc-callback` (CI-Portal #451). A content script on that
+page reports `?code=` to the extension background (with retries + a durable
+pending PKCE session). After tokens are stored, reopen the popup — it should
+show Connected / **Choose Memory** (when the account has more than one
+Memory). The Memory URL is discovered via Portal `/me/apps` (opaque
+`access_token`); CI-Server calls use the Portal `id_token` Bearer.
+
+**Safari site access:** Settings → Extensions → Companion Intelligence → allow
+the Portal host (`hub.companionintelligence.com` for Development). Without
+that, the callback page loads but the extension never sees `?code=`.
+
+Developer Portal switch: ⌥⇧. or 7× title → **Development**. Use **Use another
+account** to clear the binding and pick a different Portal identity.
 
 > Loopback (`127.0.0.1:8732`) lives on `feat/safari-oidc-loopback` if you need
-> to test before the Portal callback is deployed.
+> to test without the Portal HTTPS callback.
 
 ## Debugging
 

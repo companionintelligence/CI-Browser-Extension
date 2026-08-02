@@ -470,6 +470,14 @@ export default function App() {
           </Button>
         )}
 
+        {authorizing && (
+          <div className="mb-3 p-2 rounded text-[0.8em] text-muted-foreground bg-primary/10">
+            After Portal says sign-in is complete, reopen this popup. On Safari,
+            allow this extension for your Portal site under Settings →
+            Extensions if the popup stays on Sign in.
+          </div>
+        )}
+
         {authError && (
           <div className="mb-3 p-2 rounded text-[0.85em] text-destructive bg-destructive/10">
             {authError}
