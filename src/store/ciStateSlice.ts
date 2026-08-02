@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { hasBookmarksApi, hasDownloadsApi } from "@/lib/browserCapabilities";
 import { parseUrl, normalizeServerUrl } from "@/utils";
 import { DEFAULT_PORTAL_URL } from "@/services/portalConfig";
 
@@ -88,6 +89,22 @@ export const loadUserSettings = createAsyncThunk(
     // The curated server-environment picker is gone (portal discovery
     // replaced it).
     await browser.storage.local.remove("serverEnvironmentId");
+
+    // Safari (and any host without the APIs) must not keep bookmarks/downloads
+    // sync armed from a prior Chrome profile or a stale default — background
+    // listeners would throw on undefined namespaces.
+    const clearSync: Record<string, boolean> = {};
+    if (!hasBookmarksApi() && settings.bookmarkSyncEnabled) {
+      settings.bookmarkSyncEnabled = false;
+      clearSync.bookmarkSyncEnabled = false;
+    }
+    if (!hasDownloadsApi() && settings.downloadSyncEnabled) {
+      settings.downloadSyncEnabled = false;
+      clearSync.downloadSyncEnabled = false;
+    }
+    if (Object.keys(clearSync).length > 0) {
+      await browser.storage.local.set(clearSync);
+    }
 
     return settings;
   },

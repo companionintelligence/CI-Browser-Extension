@@ -15,6 +15,11 @@ import {
 } from "@/lib/syncedItems";
 import { drainCaptureQueue, enqueueCaptures } from "@/lib/captureQueue";
 import { dropIgnoredCaptures } from "@/lib/captureFilter";
+import {
+  hasBookmarksApi,
+  hasDownloadsApi,
+  hasHistoryApi,
+} from "@/lib/browserCapabilities";
 import { scrapeSourceId } from "@/lib/scrapeIdentity";
 import { isValidBookmarkEvent } from "@/lib/captureValidation";
 import { buildHighlightActivity } from "@/lib/highlight";
@@ -1079,7 +1084,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
   // API (https://developer.apple.com/forums/thread/711080), so a retroactive
   // sync is impossible there. Fail loudly with a persisted log — the silent
   // alternative looked like a sync that "just didn't work".
-  if (typeof browser.history?.search !== "function") {
+  if (!hasHistoryApi()) {
     const message =
       "This browser doesn't expose browsing history to extensions (Safari never does). New visits are captured live as you browse instead.";
     store.dispatch(
@@ -1622,6 +1627,14 @@ async function createDownloadEvent(
 }
 
 async function syncDownloadsToServer() {
+  if (!hasDownloadsApi()) {
+    console.log(
+      "Skipping download sync — this browser does not expose browser.downloads",
+    );
+
+    return;
+  }
+
   if (!(await resolveServerToken())) {
     return;
   }
@@ -1866,6 +1879,14 @@ async function createBookmarkEvent(
 }
 
 async function syncBookmarksToServer() {
+  if (!hasBookmarksApi()) {
+    console.log(
+      "Skipping bookmark sync — this browser does not expose browser.bookmarks",
+    );
+
+    return;
+  }
+
   const { deviceId } = store.getState().ciState;
 
   if (!(await resolveServerToken())) {
@@ -2620,6 +2641,10 @@ export default defineBackground({
 
     // Set up bookmark listeners based on settings
     const setupBookmarkListeners = () => {
+      if (!hasBookmarksApi()) {
+        return;
+      }
+
       const state = store.getState().ciState;
       // No onRemoved listener: bookmark removals are not captured. A saved
       // bookmark becomes a content row, and a deletion has nothing to say there.
@@ -2634,6 +2659,10 @@ export default defineBackground({
 
     // Set up download listeners based on settings
     const setupDownloadListeners = () => {
+      if (!hasDownloadsApi()) {
+        return;
+      }
+
       const state = store.getState().ciState;
       if (state.downloadSyncEnabled) {
         browser.downloads.onCreated.addListener(handleDownloadCreated);
