@@ -72,6 +72,27 @@ npm run prepare:store  # Full pipeline: clean, lint, compile, zip
 - WXT automatically handles manifest differences (MV2 vs MV3)
 - Uses WebExtension APIs for maximum compatibility
 - Browser-specific builds in `.output/chrome-mv3/` and `.output/firefox-mv2/`
+- Retroactive history / bookmarks / downloads sync is feature-detected
+  (`src/lib/browserCapabilities.ts`). Safari hides those controls and only
+  captures visits live via `webNavigation`.
+
+### Manual smoke checklist (Chrome / Firefox / Safari)
+
+**Chrome** (`yarn build` → load `.output/chrome-mv3`):
+- [ ] Sign in uses `identity.launchWebAuthFlow` (no Portal `/extension/oidc-callback` tab)
+- [ ] Popup shows Sync history + History / Bookmarks / Downloads toggles
+- [ ] Sync history for a time range uploads visits
+- [ ] New bookmark with Bookmarks on → appears in Memory
+- [ ] New download with Downloads on → appears in Memory
+
+**Firefox** (`yarn build:firefox` → temporary add-on from `.output/firefox-mv2`):
+- [ ] Same as Chrome (identity redirect is `*.extensions.allizom.org`)
+
+**Safari** (`yarn build:safari` → Xcode wrapper):
+- [ ] Sign in opens a Portal tab; callback shows branded page + status
+- [ ] No Bookmarks / Downloads rows in the popup
+- [ ] Safari notice instead of Sync history; History toggle still present (live capture)
+- [ ] Visits on allowed sites are captured as you browse
 
 ## Testing in Browsers
 

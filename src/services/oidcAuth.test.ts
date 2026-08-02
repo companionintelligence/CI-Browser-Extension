@@ -323,6 +323,33 @@ describe("Safari / tab auth flow", () => {
     expect(resolveRedirectUri(CONFIG)).toBe("https://abcd.chromiumapp.org/");
   });
 
+  it("keeps Chromium on identity even when the UA also contains Safari", () => {
+    // Chrome's UA includes the substring "Safari"; must not force tab auth.
+    const originalUa = navigator.userAgent;
+    Object.defineProperty(navigator, "userAgent", {
+      value:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      configurable: true,
+    });
+    try {
+      installBrowser(() => undefined);
+      expect(shouldUseTabAuthFlow()).toBe(false);
+      expect(resolveRedirectUri(CONFIG)).toBe("https://abcd.chromiumapp.org/");
+    } finally {
+      Object.defineProperty(navigator, "userAgent", {
+        value: originalUa,
+        configurable: true,
+      });
+    }
+  });
+
+  it("does not use the Portal HTTPS callback as Chrome's redirect_uri", () => {
+    installBrowser(() => undefined);
+    const redirect = resolveRedirectUri(CONFIG);
+    expect(redirect).toContain("chromiumapp.org");
+    expect(redirect).not.toContain("/extension/oidc-callback");
+  });
+
   it("captures the Portal callback from webNavigation.onBeforeNavigate", async () => {
     installSafariTabBrowser("webNavigation");
     const redirect = await launchAuthViaTab(
