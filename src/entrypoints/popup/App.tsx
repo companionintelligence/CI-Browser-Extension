@@ -178,7 +178,10 @@ export default function App() {
         return;
       }
 
-      if (changes.oidcAuthInProgressAt && !changes.oidcAuthInProgressAt.newValue) {
+      if (
+        changes.oidcAuthInProgressAt &&
+        !changes.oidcAuthInProgressAt.newValue
+      ) {
         // Auth finished while the popup was closed or open — re-check Redux.
         setAuthorizing(false);
         void browser.runtime.sendMessage({ action: "CHECK_AUTH_STATUS" });
@@ -453,7 +456,7 @@ export default function App() {
             }}
           >
             {serverURL
-              ? parseUrl(serverURL)?.host ?? "Connected"
+              ? (parseUrl(serverURL)?.host ?? "Connected")
               : "Signed in — choose Memory below"}
           </Button>
         ) : (
@@ -520,9 +523,7 @@ export default function App() {
                   onCheckedChange={handleAutoSyncToggle}
                   className="w-[18px] h-[18px] cursor-pointer accent-primary"
                 />
-                <Field.Label htmlFor="auto-sync-enabled">
-                  Auto-sync
-                </Field.Label>
+                <Field.Label htmlFor="auto-sync-enabled">Auto-sync</Field.Label>
               </Field>
             </Field>
 

@@ -128,9 +128,7 @@ async function discoverMemoryServer(): Promise<void> {
         store.dispatch(
           setState({
             memoryAppChoices: null,
-            discoveryHint: serverURL
-              ? null
-              : "No Memory on this account.",
+            discoveryHint: serverURL ? null : "No Memory on this account.",
           }),
         );
 

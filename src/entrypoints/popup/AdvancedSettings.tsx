@@ -34,10 +34,7 @@ export default function AdvancedSettings() {
       return;
     }
 
-    if (
-      accessToken &&
-      !window.confirm("Switch Portal and sign out?")
-    ) {
+    if (accessToken && !window.confirm("Switch Portal and sign out?")) {
       setSelectedPortalId(activePreset?.id ?? CUSTOM_PORTAL_ID);
 
       return;

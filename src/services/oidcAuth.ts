@@ -29,8 +29,7 @@ export const EXTENSION_OIDC_CALLBACK_PATH = "/extension/oidc-callback";
  * @deprecated Loopback redirect used before Portal HTTPS callback shipped.
  * Kept for tests / emergency fallback only — prefer `extensionOidcCallbackUri`.
  */
-export const SAFARI_OIDC_REDIRECT_URI =
-  "http://127.0.0.1:8732/oidc-callback";
+export const SAFARI_OIDC_REDIRECT_URI = "http://127.0.0.1:8732/oidc-callback";
 
 /** In-flight Safari capture: content script / AUTHORIZE_TAB feed this. */
 let activeCaptureSink: ((url: string) => void) | null = null;
@@ -399,7 +398,7 @@ export function launchAuthViaTab(
   return new Promise((resolve, reject) => {
     let tabId: number | undefined = existingTabId ?? pendingAuthorizeTabId;
     let settled = false;
-    let pollTimer: ReturnType<typeof setInterval> | undefined;
+    const pollTimers: ReturnType<typeof setInterval>[] = [];
 
     const finish = (err?: Error, url?: string) => {
       if (settled) {
@@ -410,7 +409,7 @@ export function launchAuthViaTab(
       activeCaptureSink = null;
       pendingAuthorizeTabId = undefined;
       clearTimeout(timer);
-      if (pollTimer !== undefined) {
+      for (const pollTimer of pollTimers) {
         clearInterval(pollTimer);
       }
 
@@ -536,9 +535,11 @@ export function launchAuthViaTab(
       // Fall back to tabs polling.
     }
 
-    pollTimer = setInterval(() => {
-      void pollTabUrl();
-    }, 400);
+    pollTimers.push(
+      setInterval(() => {
+        void pollTabUrl();
+      }, 400),
+    );
 
     const openOrNavigate = async () => {
       // Popup already opened (or will open) the authorize tab — only listen/poll.

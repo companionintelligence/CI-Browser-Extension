@@ -93,16 +93,16 @@ function installBrowser(launch: (url: string) => string | undefined) {
   };
 }
 
-function installSafariTabBrowser(via: "tabs" | "webNavigation" = "webNavigation") {
+function installSafariTabBrowser(
+  via: "tabs" | "webNavigation" = "webNavigation",
+) {
   type UpdatedListener = (tabId: number, changeInfo: { url?: string }) => void;
-  type RemovedListener = (tabId: number) => void;
   type BeforeNavListener = (details: {
     tabId: number;
     url: string;
     frameId: number;
   }) => void;
   let onUpdated: UpdatedListener | undefined;
-  let onRemoved: RemovedListener | undefined;
   let onBeforeNav: BeforeNavListener | undefined;
 
   (global as { browser?: unknown }).browser = {
@@ -134,9 +134,7 @@ function installSafariTabBrowser(via: "tabs" | "webNavigation" = "webNavigation"
         removeListener: jest.fn(),
       },
       onRemoved: {
-        addListener: jest.fn((fn: RemovedListener) => {
-          onRemoved = fn;
-        }),
+        addListener: jest.fn(),
         removeListener: jest.fn(),
       },
     },
@@ -275,7 +273,9 @@ describe("prepareAuthorizeRequest", () => {
     expect(prepared.authorizeUrl).toContain(
       endpointsFromIssuer(CONFIG.issuer).authorization_endpoint,
     );
-    expect(new URL(prepared.authorizeUrl).searchParams.get("prompt")).toBeNull();
+    expect(
+      new URL(prepared.authorizeUrl).searchParams.get("prompt"),
+    ).toBeNull();
     const withPicker = await prepareAuthorizeRequest(CONFIG, {
       prompt: "select_account",
     });
@@ -309,14 +309,20 @@ describe("Safari / tab auth flow", () => {
 
   it("captures the Portal callback from webNavigation.onBeforeNavigate", async () => {
     installSafariTabBrowser("webNavigation");
-    const redirect = await launchAuthViaTab(`${AUTHZ}?state=st`, SAFARI_CALLBACK);
+    const redirect = await launchAuthViaTab(
+      `${AUTHZ}?state=st`,
+      SAFARI_CALLBACK,
+    );
     expect(redirect).toContain("code=AUTHCODE");
     expect(redirect).toContain("state=st");
   });
 
   it("falls back to tabs.onUpdated when that fires first", async () => {
     installSafariTabBrowser("tabs");
-    const redirect = await launchAuthViaTab(`${AUTHZ}?state=st`, SAFARI_CALLBACK);
+    const redirect = await launchAuthViaTab(
+      `${AUTHZ}?state=st`,
+      SAFARI_CALLBACK,
+    );
     expect(redirect).toContain("code=AUTHCODE");
   });
 
@@ -327,20 +333,18 @@ describe("Safari / tab auth flow", () => {
       frameId: number;
     }) => void;
     let onBeforeNav: BeforeNavListener | undefined;
-    const update = jest.fn(
-      async (_id: number, props: { url: string }) => {
-        const state = new URL(props.url).searchParams.get("state");
-        queueMicrotask(() => {
-          onBeforeNav?.({
-            tabId: 99,
-            url: `${SAFARI_CALLBACK}?code=AUTHCODE&state=${state}`,
-            frameId: 0,
-          });
+    const update = jest.fn(async (_id: number, props: { url: string }) => {
+      const state = new URL(props.url).searchParams.get("state");
+      queueMicrotask(() => {
+        onBeforeNav?.({
+          tabId: 99,
+          url: `${SAFARI_CALLBACK}?code=AUTHCODE&state=${state}`,
+          frameId: 0,
         });
+      });
 
-        return { id: 99 };
-      },
-    );
+      return { id: 99 };
+    });
     (global as { browser?: unknown }).browser = {
       runtime: {
         getURL: jest.fn(() => "safari-web-extension://uuid-here/"),
