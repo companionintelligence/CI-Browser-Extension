@@ -4,7 +4,7 @@ import {
   toggleAutoSync,
   toggleBookmarkSync,
   toggleDownloadSync,
-  toggleSensitiveScraping,
+  // toggleSensitiveScraping, // financial accounts UI hidden for now
   toggleHistorySync,
   clearSyncHistoryLogs,
   setState,
@@ -99,7 +99,7 @@ export default function App() {
     deviceName,
     bookmarkSyncEnabled,
     downloadSyncEnabled,
-    sensitiveScrapingEnabled,
+    // sensitiveScrapingEnabled, // financial accounts UI hidden for now
     historySyncEnabled,
     syncHistoryLogs,
   } = ciState;
@@ -283,12 +283,11 @@ export default function App() {
     dispatch(toggleHistorySync());
   };
 
-  const handleSensitiveScrapingToggle = () => {
-    dispatch(toggleSensitiveScraping());
-    // Persist immediately: the content script reads this key straight from
-    // storage.local before it scrapes, so it must not wait for another save.
-    dispatch(saveUserSettings());
-  };
+  // Financial accounts checkbox hidden for now — keep handler for restore.
+  // const handleSensitiveScrapingToggle = () => {
+  //   dispatch(toggleSensitiveScraping());
+  //   dispatch(saveUserSettings());
+  // };
 
   // Kick off Portal OIDC Auth-Code + PKCE. On Safari the popup itself
   // persists the PKCE session to storage BEFORE anything else: the callback
@@ -762,6 +761,7 @@ export default function App() {
                 )}
               </Field.Group>
 
+              {/* Hidden for now — financial scrape opt-in not shipping yet.
               <Field orientation="horizontal" className="mt-2">
                 <Checkbox
                   id="sensitive-scraping-enabled"
@@ -773,6 +773,7 @@ export default function App() {
                   Financial accounts
                 </Label>
               </Field>
+              */}
             </div>
 
             <div className="mt-4 pt-4 border-t border-border">
