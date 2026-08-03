@@ -25,7 +25,10 @@ const ICONS = {
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   manifest: (env) => ({
-    name: "Companion Intelligence",
+    // Safari ships through App Store Connect, where the listing is
+    // "Companion Memory"; every other store keeps the original branding.
+    name:
+      env.browser === "safari" ? "Companion Memory" : "Companion Intelligence",
     // Origins the BACKGROUND needs to reach directly: the Portal (OIDC) and
     // whichever host runs the user's Memory server.
     //
@@ -122,6 +125,18 @@ export default defineConfig({
     // Add Android Chrome support
     minimum_chrome_version: "88",
   }),
+  hooks: {
+    // App Store validation rejects iOS Safari extensions whose MV2
+    // background declares scripts without `persistent: false` (Safari has no
+    // persistent background pages). Applied after WXT generates the
+    // background entry, since a `manifest.background` override would be
+    // clobbered by the generated one.
+    "build:manifestGenerated": (wxt, manifest) => {
+      if (wxt.config.browser === "safari" && manifest.background) {
+        manifest.background.persistent = false;
+      }
+    },
+  },
   srcDir: "src",
   // Clean store-artifact names (the package is @ci/ci-browser-extension, which
   // would otherwise produce "cici-browser-extension-*.zip")
