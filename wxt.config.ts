@@ -82,7 +82,18 @@ export default defineConfig({
                 // optional categories as a separate consent, which is exactly
                 // the shape of this setting. Omitting it entirely would
                 // under-declare what the extension can collect.
-                optional: ["financialAndPaymentInfo"],
+                //
+                // `technicalAndInteraction` covers Sentry crash reports. Also
+                // optional, and for the same reason: reporting is opt-OUT, so
+                // the user can switch it off from the popup at any time — which
+                // is precisely the distinction AMO draws between required and
+                // optional. A build with no DSN collects none of it; the
+                // declaration is written for the published build that does.
+                // See docs/operations/error-reporting.md.
+                optional: [
+                  "financialAndPaymentInfo",
+                  "technicalAndInteraction",
+                ],
               },
             } as unknown as { id: string },
           },

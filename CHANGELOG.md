@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Opt-out error reporting (Sentry)** — the background worker and the popup can
+  report their own crashes to Sentry project `ci-browser-extension`. On wherever
+  a DSN was compiled in (`WXT_SENTRY_DSN`); the user turns it off with **Send
+  error reports** in the popup, which overrides a baked-in DSN immediately in
+  every context. Content scripts do **not** report at all — the SDK is not
+  linked into them — because a content script's own URL is the page the user is
+  reading. Every web address is removed from every event (origin and path, not
+  just the query string), except Lifescope's own Portal hosts; the Firefox
+  `moz-extension://<uuid>` install identifier is collapsed out of stack frames;
+  breadcrumbs, request context, user, locale and timezone are all removed. No
+  new permissions, no manifest change, no remotely hosted code. A build without
+  a DSN tree-shakes the SDK out entirely. See
+  `docs/operations/error-reporting.md`, `PRIVACY.md` §3.1, and `.env.example`.
 - **Safari CI coverage** — `build-and-test.yml` now builds the Safari desktop
   (MV2) and iOS/mobile (MV3) bundles on every push/PR, and `release.yml`
   attaches both as release assets alongside Chrome and Firefox.

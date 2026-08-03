@@ -1,6 +1,6 @@
 # Privacy Policy — Companion Intelligence Browser Extension
 
-**Effective date:** 2026-07-29
+**Effective date:** 2026-08-02
 **Publisher:** Lifescope Inc.
 **Canonical URL:** https://ci.computer/privacy-policy
 
@@ -8,13 +8,18 @@ The Companion Intelligence ("CI") Browser Extension is a personal web-archival
 tool. It records _your own_ browsing activity and sends it to a **Companion
 Memory server that you control**. Lifescope Inc. does not operate a shared
 backend for your captured data and **never receives your browsing data**. There
-is no third-party analytics, advertising, or tracking in the extension.
+is no analytics, advertising, or user tracking in the extension: nothing counts
+what you do, builds a profile of you, or is sold or shared with anyone.
 
-**One exception, stated plainly:** signing in uses Lifescope's identity service
+**Two exceptions, stated plainly.** The first: signing in uses Lifescope's identity service
 (CI-Portal, by default `hub.ci.computer`). Signing in therefore tells that
 service who you are — your account identifier, name, and email — exactly as any
 login would. It never receives your captured browsing data. If you run your own
 Portal, you can point the extension at it instead under **Advanced**.
+
+The second: the extension reports **its own crashes** to Lifescope so they can be
+fixed. Crash reports contain no web addresses, no page contents, and nothing you
+have captured — see §3.1 — and you can switch them off in the popup.
 
 This document is the formal privacy disclosure required by the Chrome Web
 Store, Firefox Add-ons (AMO), and the Apple App Store.
@@ -32,6 +37,7 @@ When you are signed in and a data type is enabled, the extension collects:
 | **Supported-site data** | Structured items from pages you open on 13 sites — see §2 | Built-in profiles | On (except financial) |
 | **Financial-account data** | Portfolio holdings, order history, and watchlist on Robinhood | Include financial accounts | **Off** |
 | **Device descriptor** | Browser name, OS, and a generated device id used to label your data on your server | Automatic | — |
+| **Crash reports** | The extension's own error message, stack trace, and version — see §3.1 | Send error reports | **On** |
 
 The extension also keeps a local record of which items have already been synced
 (so it does not re-upload them), a bounded queue of captures that failed to
@@ -73,6 +79,36 @@ is not gated.
   turned off.
 - **No third-party transmission.** Captured data is sent only to the Memory
   server you configure.
+
+### 3.1 Crash reports
+
+The extension reports **its own crashes** to Lifescope's error-tracking service
+(Sentry) so that faults can be fixed. This is the only data Lifescope receives
+from the extension other than sign-in (§5), and it is separate from — and never
+mixed with — anything you capture.
+
+A crash report contains the error message, the stack trace inside the
+extension's own code, the extension version, and a short label naming which
+internal task failed (for example `auto-sync`). That is all.
+
+It specifically does **not** contain:
+
+- **Any web address.** Not the page you were on, not its site, not its path —
+  every address is removed before a report is sent, including from error text.
+  The only exception is Lifescope's own Portal addresses, which are the same for
+  every user and identify nobody. **The address of your own Memory server is
+  removed too.**
+- **Anything from a page you visit.** The scripts that run inside web pages
+  **do not report at all** — no crash reporting code is included in them. Only
+  the extension's background task and its popup can report.
+- **Your identity, account, tokens, cookies, bookmarks, history, downloads,
+  highlights, or anything a site profile read** — including anything from the
+  financial-accounts opt-in.
+- **Your locale, timezone, computer name, or a per-installation identifier.**
+
+**Turn it off** with **"Send error reports"** in the popup — it is there whether
+or not you are signed in, and it takes effect immediately. Builds distributed
+without error reporting compiled in do not show the switch and never report.
 
 ## 4. Where your data goes
 
@@ -116,6 +152,7 @@ previous cookie/CSRF login.
 - Leave **Include financial accounts** off — it is off unless you enable it.
 - Add sites or pages to **Ignored Pages and Sites** to exclude them from every
   form of capture.
+- Turn **Send error reports** off to stop crash reporting (§3.1).
 - Sign out to stop all capture.
 - Delete synced data from your Memory server per that server's controls.
 - Remove the extension to stop all collection and clear its local state.

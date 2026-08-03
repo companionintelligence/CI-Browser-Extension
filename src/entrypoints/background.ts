@@ -51,6 +51,12 @@ import {
 } from "@/services/portalApps";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/scrape/types";
+import {
+  captureException,
+  flushTelemetry,
+  initTelemetry,
+} from "@/lib/telemetry";
+import { BUILD_TELEMETRY_ENV } from "@/lib/telemetry/buildEnv";
 
 const SLICE_SIZE = 100;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
@@ -62,6 +68,24 @@ const AUTH_CHECK_ALARM = "ci-auth-check";
 const AUTO_SYNC_ALARM = "ci-auto-sync";
 const LAST_SEEN_ALARM = "ci-last-seen";
 const AUTO_SYNC_ALARM_TIME_RANGE = 24 * 60 * 60 * 1000; // sync the last 24h
+
+/**
+ * Report a background failure to Sentry, then push it out.
+ *
+ * `scope` is a fixed string chosen here in the source — never a URL, a page
+ * title, a hostname, a scrape profile or a captured record. An error from the
+ * scrape lane says "scrape-upload", not which site, because "this user visits
+ * robinhood.com" is exactly the kind of fact this extension must not emit.
+ *
+ * The flush is awaited because an MV3 service worker is killed ~30s after its
+ * last event and Sentry's transport is asynchronous: without holding the worker
+ * open across the in-flight request, the event that explains a shutdown-time bug
+ * is the one most likely to be lost. Bounded, and a no-op when reporting is off.
+ */
+async function reportError(error: unknown, scope: string): Promise<void> {
+  captureException(error, { scope });
+  await flushTelemetry();
+}
 
 // Device last_seen heartbeat, driven by the LAST_SEEN_ALARM
 async function runLastSeenUpdate() {
@@ -94,6 +118,7 @@ async function runAutoSync() {
     }
   } catch (error) {
     console.error("Auto-sync error:", error);
+    await reportError(error, "auto-sync");
   }
 }
 
@@ -120,6 +145,7 @@ async function retryQueuedCaptures(): Promise<void> {
     }
   } catch (error) {
     console.error("Capture retry failed:", error);
+    await reportError(error, "capture-retry");
   }
 }
 
@@ -249,6 +275,7 @@ async function discoverMemoryServer(
     }
   } catch (error) {
     console.error("Memory server discovery failed:", error);
+    await reportError(error, "memory-discovery");
   }
 }
 
@@ -1018,6 +1045,10 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
         historySyncStatus: `Sync failed: ${errorMessage}`,
       }),
     );
+
+    // Last, deliberately: reportError awaits a bounded flush, and the user's
+    // "Sync failed" status must not wait on a telemetry round trip.
+    await reportError(error, "manual-sync");
   }
 }
 
@@ -1536,6 +1567,9 @@ async function syncHistory(options: { timeRange?: number } = {}) {
       }),
     );
     store.dispatch(saveUserSettings());
+
+    // Last, deliberately — see the note in triggerManualSync.
+    await reportError(error, "history-sync");
   }
 }
 
@@ -1703,6 +1737,7 @@ async function syncDownloadsToServer() {
     });
   } catch (error) {
     console.error("Error syncing downloads:", error);
+    await reportError(error, "download-sync");
   }
 }
 
@@ -1767,6 +1802,9 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
     await postLiveCapture(activities);
   } catch (error) {
     console.error("Error uploading scraped data:", error);
+    // No profile name, domain or item counts: which site the user was on is the
+    // sensitive part, and it is not needed to fix an upload failure.
+    await reportError(error, "scrape-upload");
   }
 }
 
@@ -1802,6 +1840,7 @@ async function handleSaveHighlight(
     // Already queued for retry by postLiveCapture — a highlight the user
     // deliberately saved is the last thing that should be dropped on a blip.
     console.error("Error uploading highlight (queued for retry):", error);
+    await reportError(error, "highlight-upload");
   }
 }
 
@@ -2000,6 +2039,7 @@ async function syncBookmarksToServer() {
     });
   } catch (error) {
     console.error("Error syncing bookmarks:", error);
+    await reportError(error, "bookmark-sync");
   }
 }
 
@@ -2038,6 +2078,22 @@ async function handleBookmarkChanged(id: string) {
 
 export default defineBackground({
   main() {
+    // First thing in the worker: a crash during store setup or auth restore is
+    // exactly the class of bug this exists to catch. Deliberately not awaited —
+    // reporting must never delay or gate the extension's own startup.
+    //
+    // The `import.meta.env` guard is a BUNDLE optimisation, not the gate — the
+    // gate is resolveTelemetrySettings, which runs regardless. Read here rather
+    // than through BUILD_TELEMETRY_ENV so the expression is statically replaced
+    // at build time and a DSN-less build drops the whole SDK instead of
+    // shipping it dead.
+    if (import.meta.env.WXT_SENTRY_DSN) {
+      void initTelemetry({
+        component: "background",
+        env: BUILD_TELEMETRY_ENV,
+      });
+    }
+
     const wrapStore = createWrapStore();
     wrapStore(store);
     const storageDefaults = {
@@ -2076,6 +2132,7 @@ export default defineBackground({
         } catch (error) {
           console.error("Stashed OIDC callback exchange failed:", error);
           await recordAuthFailure(error);
+          await reportError(error, "oidc-stashed-callback");
         }
 
         // Phase 3: the CI-Server bearer is the portal **id_token** (the opaque
@@ -2140,6 +2197,7 @@ export default defineBackground({
               "Failed to setup device after authentication:",
               error,
             );
+            await reportError(error, "device-setup");
           }
         }
 
@@ -2157,6 +2215,7 @@ export default defineBackground({
           });
       } catch (error) {
         console.error("Error checking authentication state:", error);
+        await reportError(error, "auth-state");
       }
     }
 

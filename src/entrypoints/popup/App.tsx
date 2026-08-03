@@ -28,6 +28,7 @@ import {
 import BlacklistManager from "./BlacklistManager";
 import AdvancedSettings from "./AdvancedSettings";
 import MemorySettings from "./MemorySettings";
+import TelemetrySettings from "./TelemetrySettings";
 import { Button, Checkbox, Field, Label, Card, Toaster } from "@ci/shadcn";
 
 /** Hidden developer panel: ⌥⇧. (Alt+Shift+Period), or 7 clicks on the title. */
@@ -893,6 +894,10 @@ export default function App() {
         )}
 
         <div className="mt-3 flex flex-col gap-2">
+          {/* Outside the signed-in block on purpose: reporting is independent of
+              sign-in, and the one control that can stop a baked-in DSN must not
+              be reachable only when a session exists. */}
+          <TelemetrySettings />
           <Button
             variant="outline"
             onClick={() => setShowMemorySettings(true)}

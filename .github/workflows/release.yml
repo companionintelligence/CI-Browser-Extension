@@ -31,6 +31,12 @@ jobs:
       run: yarn compile
 
     - name: Create store packages
+      # WXT bakes WXT_* into the artifact at build time; an extension has no
+      # runtime environment. Unset secret => the builds carry no DSN and report
+      # nothing, which is a valid release, not a failure.
+      # See docs/operations/error-reporting.md.
+      env:
+        WXT_SENTRY_DSN: ${{ secrets.SENTRY_DSN_BROWSER_EXTENSION }}
       run: yarn prepare:store
 
     - name: Create Release

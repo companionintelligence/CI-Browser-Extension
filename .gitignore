@@ -11,6 +11,13 @@ node_modules
 .output
 .safari-xcode/
 
+# Local build-time config (WXT bakes WXT_* into the artifact). .env.example is
+# the committed template; a real .env carries the Sentry DSN.
+.env
+.env.local
+.env.*.local
+!.env.example
+
 # Yarn local state (yarn 4, nodeLinker: node-modules)
 .yarn/
 stats.html

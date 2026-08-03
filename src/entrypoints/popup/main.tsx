@@ -12,6 +12,19 @@ import "@fontsource/montserrat/600.css";
 import "@fontsource/montserrat/700.css";
 import { Provider } from "react-redux";
 import { Store } from "webext-redux";
+import { initTelemetry } from "@/lib/telemetry";
+import { BUILD_TELEMETRY_ENV } from "@/lib/telemetry/buildEnv";
+
+// Before the store connects: a popup that fails to reach the background is one
+// of the failures worth hearing about. Not awaited — reporting never gates the UI.
+//
+// The `import.meta.env` guard is a BUNDLE optimisation, not the gate — the gate
+// is resolveTelemetrySettings, which runs regardless. Read here rather than
+// through BUILD_TELEMETRY_ENV so the expression is statically replaced at build
+// time and a DSN-less build drops the whole SDK instead of shipping it dead.
+if (import.meta.env.WXT_SENTRY_DSN) {
+  void initTelemetry({ component: "popup", env: BUILD_TELEMETRY_ENV });
+}
 
 const store = new Store();
 
