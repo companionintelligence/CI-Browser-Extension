@@ -11,6 +11,11 @@ export default {
     "src/**/*.{ts,tsx}",
     "!src/**/*.d.ts",
     "!src/setupTests.ts",
+    // Contains `import.meta`, which this suite cannot parse: the transform emits
+    // CommonJS, where `import.meta` is a syntax error. Instrumenting it for
+    // coverage would load it and fail. It is five property reads with no logic;
+    // everything it feeds is tested via src/lib/telemetry/settings.test.ts.
+    "!src/lib/telemetry/buildEnv.ts",
   ],
   // A ratchet, not a target. Set below the numbers CI measures so coverage
   // cannot silently erode; raise it as suites land. The headline figure stays
