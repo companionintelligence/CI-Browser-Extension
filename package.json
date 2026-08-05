@@ -46,7 +46,8 @@
   },
   "dependencies": {
     "@ci/shadcn": "workspace:*",
-    "@fontsource/montserrat": "^5.2.8",
+    "@companionintelligence/tokens": "file:../ci-common/packages/tokens",
+    "@fontsource/manrope": "^5.2.8",
     "@reduxjs/toolkit": "^2.8.2",
     "@sentry/browser": "^10.69.0",
     "@tailwindcss/vite": "^4.1.18",

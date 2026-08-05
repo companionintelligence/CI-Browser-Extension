@@ -471,8 +471,9 @@ __metadata:
   resolution: "@ci/ci-browser-extension@workspace:."
   dependencies:
     "@ci/shadcn": "workspace:*"
+    "@companionintelligence/tokens": "file:../ci-common/packages/tokens"
     "@eslint/js": "npm:^9.27.0"
-    "@fontsource/montserrat": "npm:^5.2.8"
+    "@fontsource/manrope": "npm:^5.2.8"
     "@reduxjs/toolkit": "npm:^2.8.2"
     "@sentry/browser": "npm:^10.69.0"
     "@tailwindcss/typography": "npm:^0.5.19"
@@ -516,6 +517,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@ci/shadcn@workspace:packages/shadcn"
   dependencies:
+    "@companionintelligence/tokens": "file:../../../ci-common/packages/tokens"
     "@hookform/resolvers": "npm:^5.1.0"
     "@radix-ui/react-accordion": "npm:^1.2.11"
     "@radix-ui/react-alert-dialog": "npm:^1.1.14"
@@ -566,6 +568,20 @@ __metadata:
     zod: "npm:^3.25.56"
   languageName: unknown
   linkType: soft
+
+"@companionintelligence/tokens@file:../../../ci-common/packages/tokens::locator=%40ci%2Fshadcn%40workspace%3Apackages%2Fshadcn":
+  version: 0.3.0
+  resolution: "@companionintelligence/tokens@file:../../../ci-common/packages/tokens#../../../ci-common/packages/tokens::hash=15390f&locator=%40ci%2Fshadcn%40workspace%3Apackages%2Fshadcn"
+  checksum: 10c0/2a95b5fdc7e10e78f3f1f1ab03b884e5275fe08cbacb8c9aa629b8c83fde8a1fba775af1081d2034dc9892c954ae304c6b739a37465bc2d01aec5fa8ecd14514
+  languageName: node
+  linkType: hard
+
+"@companionintelligence/tokens@file:../ci-common/packages/tokens::locator=%40ci%2Fci-browser-extension%40workspace%3A.":
+  version: 0.3.0
+  resolution: "@companionintelligence/tokens@file:../ci-common/packages/tokens#../ci-common/packages/tokens::hash=15390f&locator=%40ci%2Fci-browser-extension%40workspace%3A."
+  checksum: 10c0/2a95b5fdc7e10e78f3f1f1ab03b884e5275fe08cbacb8c9aa629b8c83fde8a1fba775af1081d2034dc9892c954ae304c6b739a37465bc2d01aec5fa8ecd14514
+  languageName: node
+  linkType: hard
 
 "@csstools/color-helpers@npm:^5.1.0":
   version: 5.1.0
@@ -987,10 +1003,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@fontsource/montserrat@npm:^5.2.8":
-  version: 5.2.8
-  resolution: "@fontsource/montserrat@npm:5.2.8"
-  checksum: 10c0/a38ebdebbc4c14f9b48deb15609323b7125da76214e765c83fac879ffcc577abf4ce06a47d5a712d42b3116658a395e18beb6d360e7d73417ec197e21194870e
+"@fontsource/manrope@npm:^5.2.8":
+  version: 5.3.0
+  resolution: "@fontsource/manrope@npm:5.3.0"
+  checksum: 10c0/e0e16f37b953ae5cb164d7dbea3c8a3ae30d0ede291c9f774ad5b3266abeb4b9b5efec11148afe90b6a9cd8e3d141f2e02d70a813dfb524f1d7577ab393f3528
   languageName: node
   linkType: hard
 
