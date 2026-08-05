@@ -17,6 +17,9 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
 
     steps:
     - name: Checkout code
@@ -26,12 +29,16 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 22.x
+        registry-url: "https://npm.pkg.github.com"
+        scope: "@companionintelligence"
 
     - name: Enable Corepack (yarn 4)
       run: corepack enable
 
     - name: Install dependencies
       run: yarn install --immutable
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Run linting
       run: yarn lint
