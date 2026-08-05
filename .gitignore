@@ -38,3 +38,10 @@ web-ext.config.ts
 
 # Jest coverage output (now produced on every CI test run)
 coverage/
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
