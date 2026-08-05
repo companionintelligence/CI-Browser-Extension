@@ -471,7 +471,7 @@ __metadata:
   resolution: "@ci/ci-browser-extension@workspace:."
   dependencies:
     "@ci/shadcn": "workspace:*"
-    "@companionintelligence/tokens": "file:../ci-common/packages/tokens"
+    "@companionintelligence/tokens": "npm:^0.3.0"
     "@eslint/js": "npm:^9.27.0"
     "@fontsource/manrope": "npm:^5.2.8"
     "@reduxjs/toolkit": "npm:^2.8.2"
@@ -517,7 +517,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@ci/shadcn@workspace:packages/shadcn"
   dependencies:
-    "@companionintelligence/tokens": "file:../../../ci-common/packages/tokens"
+    "@companionintelligence/tokens": "npm:^0.3.0"
     "@hookform/resolvers": "npm:^5.1.0"
     "@radix-ui/react-accordion": "npm:^1.2.11"
     "@radix-ui/react-alert-dialog": "npm:^1.1.14"
@@ -569,17 +569,10 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@companionintelligence/tokens@file:../../../ci-common/packages/tokens::locator=%40ci%2Fshadcn%40workspace%3Apackages%2Fshadcn":
+"@companionintelligence/tokens@npm:^0.3.0":
   version: 0.3.0
-  resolution: "@companionintelligence/tokens@file:../../../ci-common/packages/tokens#../../../ci-common/packages/tokens::hash=15390f&locator=%40ci%2Fshadcn%40workspace%3Apackages%2Fshadcn"
-  checksum: 10c0/2a95b5fdc7e10e78f3f1f1ab03b884e5275fe08cbacb8c9aa629b8c83fde8a1fba775af1081d2034dc9892c954ae304c6b739a37465bc2d01aec5fa8ecd14514
-  languageName: node
-  linkType: hard
-
-"@companionintelligence/tokens@file:../ci-common/packages/tokens::locator=%40ci%2Fci-browser-extension%40workspace%3A.":
-  version: 0.3.0
-  resolution: "@companionintelligence/tokens@file:../ci-common/packages/tokens#../ci-common/packages/tokens::hash=15390f&locator=%40ci%2Fci-browser-extension%40workspace%3A."
-  checksum: 10c0/2a95b5fdc7e10e78f3f1f1ab03b884e5275fe08cbacb8c9aa629b8c83fde8a1fba775af1081d2034dc9892c954ae304c6b739a37465bc2d01aec5fa8ecd14514
+  resolution: "@companionintelligence/tokens@npm:0.3.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40companionintelligence%2Ftokens%2F0.3.0%2Fd541c1a9a0655a010e562954b7c66c09e82baa87"
+  checksum: 10c0/77e90b15ca88c724a292f1c14d438e818c3112aa5aacf8410ad5f4d5ec2fef731d75927fa39976c80ce6211fe5fce49a00d6d712188aeb49aac39b92a8a94a6b
   languageName: node
   linkType: hard
 
