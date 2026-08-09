@@ -30,6 +30,25 @@
      See [`PUBLISHING.md`](PUBLISHING.md#apple-app-store-safari) for the full
      flow used for actual releases.
 
+### Deno (experimental, build tooling only)
+
+The build/lint/typecheck/test tasks also run under Deno via its npm compat
+layer, as part of an org-wide Node-to-Deno migration initiative. This is for
+the *build pipeline* only — the shipped extension itself runs inside the
+browser sandbox and never executes under Node or Deno at runtime.
+
+```bash
+yarn install             # still required — deno.json uses nodeModulesDir: "manual"
+deno task build           # equivalent to `npm run build`
+deno task test:coverage   # equivalent to `npm run test:coverage`
+deno task lint             # equivalent to `npm run lint`
+```
+
+See `deno.json` for the full task list (mirrors `package.json` scripts) and
+`jest.config.deno.mjs` for why the test task uses a separate Jest config.
+This path has not yet had a human review pass — see the
+`deno-migration/ci-browser-extension` PR for details and known gaps.
+
 ## Development Workflow
 
 ### Code Quality

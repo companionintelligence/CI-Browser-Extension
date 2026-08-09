@@ -1,0 +1,97 @@
+name: Build and Test (Deno)
+
+# Part of an org-wide Node-to-Deno build-tooling migration. Parallel to, and
+# does not replace, build-and-test.yml — manual dispatch only until this path
+# has had a human review pass. Package installation still runs through Yarn
+# (node-modules linker); deno.json is configured with `nodeModulesDir:
+# "manual"` so the `wxt`/`eslint`/`tsc`/`jest` tasks below run against that
+# same node_modules directory via Deno's npm compat, instead of Node.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test-deno:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js (for Yarn install only — build/test/lint run under Deno)
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+        registry-url: "https://npm.pkg.github.com"
+        scope: "@companionintelligence"
+
+    - name: Enable Corepack (yarn 4)
+      run: corepack enable
+
+    - name: Install dependencies
+      run: yarn install --immutable
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Deno
+      uses: denoland/setup-deno@v2
+      with:
+        deno-version: "2.9.5"
+
+    - name: Run linting
+      run: deno task lint
+
+    - name: Run type checking
+      run: deno task compile
+
+    # --coverage so jest.config.deno.mjs's coverageThreshold is actually
+    # enforced. NOTE: the reported global % is not directly comparable to
+    # build-and-test.yml's Node run — see jest.config.deno.mjs for why.
+    - name: Run tests
+      run: deno task test:coverage
+
+    - name: Build Chrome extension
+      run: deno task build
+
+    - name: Build Firefox extension
+      run: deno task build:firefox
+
+    - name: Build Safari extension
+      run: deno task build:safari
+
+    - name: Build Safari Mobile extension
+      run: deno task build:safari-mobile
+
+    - name: Upload Chrome build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: chrome-extension-deno
+        path: .output/chrome-mv3
+        retention-days: 7
+
+    - name: Upload Firefox build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: firefox-extension-deno
+        path: .output/firefox-mv2
+        retention-days: 7
+
+    - name: Upload Safari build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: safari-extension-deno
+        path: .output/safari-mv2
+        retention-days: 7
+
+    - name: Upload Safari Mobile build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: safari-mobile-extension-deno
+        path: .output/safari-mv3
+        retention-days: 7

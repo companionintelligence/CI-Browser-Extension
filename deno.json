@@ -1,0 +1,53 @@
+{
+  "$schema": "https://raw.githubusercontent.com/denoland/deno/main/cli/schemas/config-file.v1.json",
+  "nodeModulesDir": "manual",
+  "workspace": ["packages/shadcn"],
+  "tasks": {
+    "dev": "deno run -A npm:wxt",
+    "dev:firefox": "deno run -A npm:wxt -b firefox",
+    "dev:edge": "deno run -A npm:wxt -b edge",
+    "dev:safari": "deno run -A npm:wxt -b safari",
+    "dev:opera": "deno run -A npm:wxt -b opera",
+    "dev:brave": "deno run -A npm:wxt -b brave",
+    "dev:duckduckgo": "deno run -A npm:wxt -b duckduckgo",
+    "build": "deno run -A npm:wxt build",
+    "build:dev": "deno run -A npm:wxt build --mode development",
+    "build:firefox": "deno run -A npm:wxt build -b firefox",
+    "build:safari": "deno run -A npm:wxt build -b safari",
+    "build:safari-mobile": "deno run -A npm:wxt build -b safari --mv3",
+    "build:edge": "deno run -A npm:wxt build -b edge",
+    "build:opera": "deno run -A npm:wxt build -b opera",
+    "build:brave": "deno run -A npm:wxt build -b brave",
+    "build:duckduckgo": "deno run -A npm:wxt build -b duckduckgo",
+    "build:all": "deno task build && deno task build:firefox && deno task build:edge && deno task build:safari && deno task build:safari-mobile",
+    "zip": "deno run -A npm:wxt zip",
+    "zip:firefox": "deno run -A npm:wxt zip -b firefox",
+    "zip:edge": "deno run -A npm:wxt zip -b edge",
+    "zip:safari": "deno run -A npm:wxt zip -b safari",
+    // Original (package.json) shells out to `node -p "require('../package.json').version"`
+    // for the zip filename. Rewritten with `deno eval` so this doesn't
+    // silently depend on a real `node` binary being on PATH.
+    "zip:safari-mobile": "deno run -A npm:wxt build -b safari --mv3 && cd .output && zip -r \"ci-browser-extension-$(deno eval 'console.log(JSON.parse(Deno.readTextFileSync(\"../package.json\")).version)')-safari-mobile.zip\" safari-mv3",
+    "zip:opera": "deno run -A npm:wxt zip -b opera",
+    "zip:brave": "deno run -A npm:wxt zip -b brave",
+    "zip:duckduckgo": "deno run -A npm:wxt zip -b duckduckgo",
+    "zip:all": "deno task zip && deno task zip:firefox && deno task zip:edge && deno task zip:safari && deno task zip:safari-mobile",
+    "clean": "rm -rf .output",
+    "postinstall": "deno run -A npm:wxt prepare",
+    "scrape:check": "deno run -A npm:jest --config ./jest.config.deno.mjs src/scrape/fixtures.test.ts --verbose -t",
+    "prepare:store": "deno task clean && deno task zip:all",
+    "lint": "deno run -A npm:eslint",
+    "lint:fix": "deno run -A npm:eslint --fix",
+    // ts-jest under Deno cannot use the Node config's `default-esm` preset:
+    // Jest's ESM runner uses `vm.SourceTextModule`, and Deno's node:vm
+    // compat shim doesn't inject Jest's globals into that module context
+    // (every suite fails with `ReferenceError: jest is not defined`). See
+    // jest.config.deno.mjs for the full writeup and the working alternative
+    // used here.
+    "test": "deno run -A npm:jest --config ./jest.config.deno.mjs",
+    "test:watch": "deno run -A npm:jest --config ./jest.config.deno.mjs --watch",
+    "test:coverage": "deno run -A npm:jest --config ./jest.config.deno.mjs --coverage",
+    "compile": "deno run -A npm:typescript/tsc --noEmit",
+    "check:types": "deno run -A npm:typescript/tsc --noEmit --skipLibCheck"
+  }
+}
