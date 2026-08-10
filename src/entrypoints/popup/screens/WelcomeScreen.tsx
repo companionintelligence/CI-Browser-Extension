@@ -1,5 +1,11 @@
-import { Button } from "@ci/shadcn";
-import { Bookmark, Clock3, LogIn, ShieldCheck } from "@ci/shadcn/icons";
+import { Button, Tooltip } from "@ci/shadcn";
+import {
+  Bookmark,
+  Clock3,
+  LogIn,
+  Settings,
+  ShieldCheck,
+} from "@ci/shadcn/icons";
 import logo from "@/assets/logo.png";
 import { shouldUseTabAuthFlow } from "@/services/oidcAuth";
 import { hasBookmarksApi, hasDownloadsApi } from "@/lib/browserCapabilities";
@@ -32,20 +38,23 @@ export function WelcomeScreen({
     <PopupShell
       title={copy.app.title}
       status={authError ? "err" : authorizing ? "busy" : undefined}
-      footer={
-        <div className="flex items-center justify-between">
-          <Button
-            variant="link"
-            size="sm"
-            className="h-auto p-0 text-xs"
-            onClick={() => push("settings")}
-          >
-            {copy.welcome.privacyLink}
-          </Button>
-          <span className="text-xxs text-muted-foreground">
-            v{browser.runtime.getManifest().version}
-          </span>
-        </div>
+      // Onboarding carries no footer chrome: the version belongs in Settings
+      // (which prints it at the bottom), and Settings is reached by the same
+      // header gear Home uses rather than a footer link.
+      headerRight={
+        <Tooltip>
+          <Tooltip.Trigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={copy.welcome.privacyLink}
+              onClick={() => push("settings")}
+            >
+              <Settings className="size-4" strokeWidth={1.75} />
+            </Button>
+          </Tooltip.Trigger>
+          <Tooltip.Content>{copy.welcome.privacyLink}</Tooltip.Content>
+        </Tooltip>
       }
       bodyClassName="flex min-h-[360px] flex-col items-center justify-center gap-3 px-4 text-center"
     >

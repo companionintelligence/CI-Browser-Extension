@@ -1,4 +1,12 @@
-import { Badge, Button, Progress, Select, Spinner, Tooltip } from "@ci/shadcn";
+import {
+  Badge,
+  Button,
+  Progress,
+  Select,
+  Spinner,
+  Tooltip,
+  cn,
+} from "@ci/shadcn";
 import { CloudUpload, Pause, Play, RefreshCw } from "@ci/shadcn/icons";
 import { hasHistoryApi } from "@/lib/browserCapabilities";
 import { copy } from "../copy";
@@ -146,16 +154,22 @@ export function SyncNowCard({ queued }: { queued: number }) {
         {!inProgress && (
           <Tooltip>
             <Tooltip.Trigger asChild>
+              {/* Design's small-button metrics (28px tall, 11px label, 13px
+                  glyph) — the stock sm size is a form control, too heavy for
+                  a secondary action sitting next to a link. */}
               <Button
                 variant={paused ? "outline" : "ghost"}
                 size="sm"
-                className={paused ? undefined : "text-muted-foreground"}
+                className={cn(
+                  "h-7 gap-1.5 px-2.5 text-xs",
+                  !paused && "text-muted-foreground",
+                )}
                 onClick={togglePause}
               >
                 {paused ? (
-                  <Play className="size-4" strokeWidth={1.75} />
+                  <Play className="size-3.5" strokeWidth={1.75} />
                 ) : (
-                  <Pause className="size-4" strokeWidth={1.75} />
+                  <Pause className="size-3.5" strokeWidth={1.75} />
                 )}
                 {paused ? copy.sync.resume : copy.sync.pause}
               </Button>

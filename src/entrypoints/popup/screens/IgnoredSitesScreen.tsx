@@ -20,6 +20,7 @@ import {
 } from "../lib/formatters";
 import { useCiState } from "../hooks/useCiState";
 import { PopupShell } from "../components/PopupShell";
+import { SectionRule } from "../components/SectionRule";
 
 function EmptyState({ title, sub }: { title: string; sub: string }) {
   return (
@@ -252,15 +253,7 @@ export function IgnoredSitesScreen() {
         )}
       </Field>
 
-      <div className="sticky top-0 z-10 flex items-center gap-2 bg-background/85 py-1.5 backdrop-blur-sm">
-        <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          {copy.ignored.title}
-        </h2>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {entries.length}
-        </span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
+      <SectionRule label={copy.ignored.title} count={entries.length} />
 
       {entries.length === 0 ? (
         tab === "sites" ? (

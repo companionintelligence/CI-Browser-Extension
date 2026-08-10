@@ -19,7 +19,7 @@ export function SectionCard({
     >
       {kicker && (
         <header className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          <h2 className="text-xxs font-bold tracking-[0.11em] text-muted-foreground uppercase">
             {kicker}
           </h2>
           {kickerRight}

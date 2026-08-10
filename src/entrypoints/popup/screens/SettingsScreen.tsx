@@ -48,6 +48,7 @@ import { useCiState } from "../hooks/useCiState";
 import { useDiscovery } from "../hooks/useDiscovery";
 import type { useAuth } from "../hooks/useAuth";
 import { PopupShell } from "../components/PopupShell";
+import { SectionRule } from "../components/SectionRule";
 import { SettingRow } from "../components/SettingRow";
 import { RowLink } from "../components/RowLink";
 import { Banner } from "../components/Banner";
@@ -63,22 +64,6 @@ const TELEMETRY_COMPILED_IN = resolveTelemetrySettings(BUILD_TELEMETRY_ENV, {
   component: "popup",
   userEnabled: true,
 }).enabled;
-
-function SectionHeader({ label, count }: { label: string; count?: number }) {
-  return (
-    <div className="sticky top-0 z-10 flex items-center gap-2 bg-background/85 py-1.5 backdrop-blur-sm">
-      <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {label}
-      </h2>
-      {count !== undefined && (
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {count}
-        </span>
-      )}
-      <div className="h-px flex-1 bg-border" />
-    </div>
-  );
-}
 
 function syncedDescription(base: string, rel: string | null): string {
   return `${base} · ${rel ? copy.settings.lastSynced(rel) : copy.settings.neverSynced}`;
@@ -140,7 +125,7 @@ function ThemeSection() {
 
   return (
     <>
-      <SectionHeader label={copy.settings.kickerAppearance} />
+      <SectionRule label={copy.settings.kickerAppearance} />
       <ToggleGroup
         type="single"
         value={theme ?? "system"}
@@ -233,7 +218,7 @@ function MemorySection({ signedIn }: { signedIn: boolean }) {
 
   return (
     <>
-      <SectionHeader label={copy.settings.kickerMemory} />
+      <SectionRule label={copy.settings.kickerMemory} />
       {discoveryHint && discoveryHint !== NO_MEMORY_HINT && (
         <Banner tone="warning">{discoveryHint}</Banner>
       )}
@@ -385,7 +370,7 @@ export function SettingsScreen({
   if (signedIn) {
     body = (
       <>
-        <SectionHeader label={copy.settings.kickerSaved} />
+        <SectionRule label={copy.settings.kickerSaved} />
         {HISTORY_API && (
           <SettingRow
             id="history-sync-enabled"
@@ -423,7 +408,7 @@ export function SettingsScreen({
           />
         )}
 
-        <SectionHeader label={copy.settings.kickerSync} />
+        <SectionRule label={copy.settings.kickerSync} />
         {HISTORY_API ? (
           <SettingRow
             id="auto-sync-enabled"
@@ -438,7 +423,7 @@ export function SettingsScreen({
           </p>
         )}
 
-        <SectionHeader label={copy.settings.kickerPrivacy} />
+        <SectionRule label={copy.settings.kickerPrivacy} />
         <RowLink
           icon={EyeOff}
           title={copy.settings.ignoredRow}
@@ -454,7 +439,7 @@ export function SettingsScreen({
 
         <MemorySection signedIn />
 
-        <SectionHeader label={copy.settings.kickerAccount} />
+        <SectionRule label={copy.settings.kickerAccount} />
         <p className="text-xs text-muted-foreground">
           {copy.settings.signedInVia(hostFromUrl(portalUrl) ?? portalUrl)}
         </p>
@@ -492,7 +477,7 @@ export function SettingsScreen({
       <>
         {TELEMETRY_COMPILED_IN && (
           <>
-            <SectionHeader label={copy.settings.kickerPrivacy} />
+            <SectionRule label={copy.settings.kickerPrivacy} />
             <TelemetryRow />
           </>
         )}

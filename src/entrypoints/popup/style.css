@@ -15,6 +15,22 @@
  * both paint it); `background-attachment: fixed` is deliberately absent — it
  * repaints badly inside popup panels.
  */
+/*
+ * The tokens package sets a 17px root for full-page web apps (Hub, Memory).
+ * A 350px browser-action panel is not that surface: at 17px every rem-derived
+ * size — type, icon boxes (size-4), control heights (h-9/h-10), spacing —
+ * renders 13-30% larger than the popup was designed at, which is what made
+ * controls look oversized against the mockups.
+ *
+ * 15px reproduces the design's metrics almost exactly: size-4 → 15px icons,
+ * h-9 → 34px buttons, h-10 → 38px, text-sm → 13.1px body, text-xs → 11.3px,
+ * text-xxs → 9.4px kickers. Scoped to the popup document, so no other surface
+ * is affected.
+ */
+html {
+  font-size: 15px;
+}
+
 html,
 body {
   margin: 0;

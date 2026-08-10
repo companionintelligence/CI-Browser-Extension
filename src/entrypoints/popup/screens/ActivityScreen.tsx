@@ -15,6 +15,7 @@ import { friendlyError } from "../lib/friendlyErrors";
 import { useCiState, type SyncHistoryLog } from "../hooks/useCiState";
 import { ACTIVITY_SEEN_KEY } from "./HomeScreen";
 import { PopupShell } from "../components/PopupShell";
+import { SectionRule } from "../components/SectionRule";
 import { StatusDot, type DotTone } from "../components/StatusDot";
 
 const STATUS_TONE: Record<string, DotTone> = {
@@ -271,12 +272,7 @@ export function ActivityScreen({ queued }: { queued: number }) {
       ) : (
         groups.map(([label, logs]) => (
           <section key={label}>
-            <div className="sticky top-0 z-10 flex items-center gap-2 bg-background/85 py-1.5 backdrop-blur-sm">
-              <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                {label}
-              </h2>
-              <div className="h-px flex-1 bg-border" />
-            </div>
+            <SectionRule label={label} />
             {logs.map((log) => (
               <LogRow key={log.id} log={log} />
             ))}
