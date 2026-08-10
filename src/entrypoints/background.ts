@@ -742,7 +742,21 @@ async function createDeviceOnServer(): Promise<string> {
     const deviceData = Array.isArray(response.data)
       ? response.data[0]
       : response.data;
-    const deviceId = deviceData.device_id;
+    const deviceId = deviceData?.device_id;
+
+    // A 2xx that carries no device_id is not success. An auth proxy in front of
+    // the Memory answers an unauthenticated API call with its login PAGE — a
+    // 200 full of HTML — and storing `undefined` from it left the popup
+    // registering forever with nothing thrown and nothing logged.
+    if (typeof deviceId !== "string" || !deviceId) {
+      const shape =
+        typeof response.data === "string"
+          ? "an HTML/text page (an auth proxy or login redirect, most likely)"
+          : `no device_id (${JSON.stringify(response.data).slice(0, 120)})`;
+
+      throw new Error(`registration returned ${shape}`);
+    }
+
     const deviceName = deviceData.device_name;
     const deviceType = deviceData.device_type;
     const devicePlatform = deviceData.platform;
