@@ -116,7 +116,7 @@ function AppInner() {
   }
 
   if (memoryAppChoices && memoryAppChoices.length > 0) {
-    return <PickMemoryScreen />;
+    return <PickMemoryScreen auth={auth} />;
   }
 
   // Above the serverURL gate: the ignore list and activity are usable (and

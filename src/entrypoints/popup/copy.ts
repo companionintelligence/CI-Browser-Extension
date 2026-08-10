@@ -55,6 +55,7 @@ export const copy = {
     body: "Your account has more than one Memory. Pick where this browser saves activity.",
     current: "Current",
     keep: (host: string) => `Keep current (${host})`,
+    signOut: "Not you? Sign out",
     failed: "Couldn't switch Memory. Try again.",
     connected: (host: string) => `Connected to ${host}`,
   },

@@ -5,6 +5,7 @@ import { ChevronRight, Database } from "@ci/shadcn/icons";
 import { setState, saveUserSettings } from "@/store/ciStateSlice";
 import { parseUrl } from "@/utils";
 import { copy } from "../copy";
+import type { useAuth } from "../hooks/useAuth";
 import { useCiState } from "../hooks/useCiState";
 import { PopupShell } from "../components/PopupShell";
 import { StepDots } from "../components/StepDots";
@@ -27,7 +28,11 @@ const choiceTitle = (choice: Choice) =>
  * on top of the dashboard. Single-choice rediscovery renders the same screen
  * with one row.
  */
-export function PickMemoryScreen() {
+export function PickMemoryScreen({
+  auth,
+}: {
+  auth: Pick<ReturnType<typeof useAuth>, "signOut">;
+}) {
   const dispatch = useDispatch();
   const { toast } = useToast();
   const { memoryAppChoices, serverURL } = useCiState();
@@ -90,7 +95,20 @@ export function PickMemoryScreen() {
           >
             <span className="truncate">{copy.pick.keep(currentHost)}</span>
           </Button>
-        ) : undefined
+        ) : (
+          // First-run has no Memory to fall back to, so the way out is the
+          // account itself — SIGN_OUT clears memoryAppChoices in the
+          // background, dropping the resolver to Welcome.
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-muted-foreground"
+            disabled={savingUrl !== null}
+            onClick={() => void auth.signOut()}
+          >
+            {copy.pick.signOut}
+          </Button>
+        )
       }
       bodyClassName="min-h-[360px]"
     >
