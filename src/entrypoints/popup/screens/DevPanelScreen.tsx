@@ -62,7 +62,20 @@ export function DevPanelScreen({ queued }: { queued: number }) {
       }
     }
 
-    dispatch(setState({ portalUrl: normalized, discoveryHint: null }));
+    // The Memory address came from the OLD Portal's app discovery, so it means
+    // nothing under the new one — and a "manual" source (any explicit pick on
+    // the Choose-your-Memory screen) is never overwritten by later discovery,
+    // which would silently pin the new session to the old Portal's server.
+    // Same reset switchAccount performs.
+    dispatch(
+      setState({
+        portalUrl: normalized,
+        discoveryHint: null,
+        serverURL: "",
+        serverURLSource: null,
+        memoryAppChoices: null,
+      }),
+    );
     dispatch(saveUserSettings());
   };
 
