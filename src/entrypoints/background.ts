@@ -13,7 +13,12 @@ import {
   addSyncedItems,
   getSyncedItems,
 } from "@/lib/syncedItems";
-import { drainCaptureQueue, enqueueCaptures } from "@/lib/captureQueue";
+import {
+  drainCaptureQueue,
+  enqueueCaptures,
+  getQueuedCaptures,
+} from "@/lib/captureQueue";
+import { updateActionBadge } from "@/services/badge";
 import { dropIgnoredCaptures } from "@/lib/captureFilter";
 import {
   hasBookmarksApi,
@@ -993,6 +998,7 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
     setState({
       historySyncInProgress: true,
       historySyncStatus: "Starting sync...",
+      historySyncProgress: { phase: "starting" },
     }),
   );
 
@@ -1050,6 +1056,9 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
     // "Sync failed" status must not wait on a telemetry round trip.
     await reportError(error, "manual-sync");
   }
+
+  // Every sync run drains the retry queue — reflect the new depth immediately.
+  void updateActionBadge();
 }
 
 // Individual sync functions
@@ -1167,6 +1176,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     store.dispatch(
       setState({
         historySyncStatus: "Searching browser history...",
+        historySyncProgress: { phase: "searching" },
       }),
     );
 
@@ -1219,6 +1229,10 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     store.dispatch(
       setState({
         historySyncStatus: `Processing ${allHistoryResults.length} history entries...`,
+        historySyncProgress: {
+          phase: "processing",
+          total: allHistoryResults.length,
+        },
       }),
     );
 
@@ -1290,6 +1304,12 @@ async function syncHistory(options: { timeRange?: number } = {}) {
           store.dispatch(
             setState({
               historySyncStatus: statusMessage,
+              historySyncProgress: {
+                phase: "processing",
+                current: processed,
+                total: allHistoryResults.length,
+                ignored: blacklistedCount,
+              },
             }),
           );
         }
@@ -1477,6 +1497,12 @@ async function syncHistory(options: { timeRange?: number } = {}) {
         store.dispatch(
           setState({
             historySyncStatus: `Uploaded ${uploaded}/${unsyncedResults.length} visits...`,
+            historySyncProgress: {
+              phase: "uploading",
+              current: uploaded,
+              total: unsyncedResults.length,
+              ignored: blacklistedCount,
+            },
           }),
         );
       } catch (err: any) {
@@ -1577,6 +1603,7 @@ async function syncBookmarks() {
   store.dispatch(
     setState({
       historySyncStatus: "Syncing bookmarks...",
+      historySyncProgress: { phase: "bookmarks" },
     }),
   );
 
@@ -1593,6 +1620,7 @@ async function syncDownloads() {
   store.dispatch(
     setState({
       historySyncStatus: "Syncing downloads...",
+      historySyncProgress: { phase: "downloads" },
     }),
   );
 
@@ -2213,6 +2241,10 @@ export default defineBackground({
           .catch(() => {
             console.log("No receiver for AUTH_STATE_UPDATED (popup closed)");
           });
+
+        // Runs on the 1-minute auth alarm too, so the badge tracks auth and
+        // queue transitions without dedicated hooks at every call site.
+        void updateActionBadge();
       } catch (error) {
         console.error("Error checking authentication state:", error);
         await reportError(error, "auth-state");
@@ -2523,6 +2555,23 @@ export default defineBackground({
           return true;
         }
 
+        // Popup queue pill / Connect footer / Activity summary: read-only
+        // retry-queue depth.
+        if (message.action === "GET_QUEUE_STATUS") {
+          getQueuedCaptures()
+            .then((queued) => {
+              sendResponse({ success: true, queued: queued.length });
+            })
+            .catch((error) => {
+              sendResponse({
+                success: false,
+                error: error?.message || String(error),
+              });
+            });
+
+          return true;
+        }
+
         // Popup "Check again" / Settings "Find my Memory": re-ask the Portal
         // which Memories this account has and surface them as choices. The
         // response reports what was found so the caller can give feedback.
@@ -2551,6 +2600,7 @@ export default defineBackground({
         if (message.action === "SIGN_OUT") {
           signOutOfPortal()
             .then(() => {
+              void updateActionBadge();
               sendResponse({ success: true });
             })
             .catch((error) => {

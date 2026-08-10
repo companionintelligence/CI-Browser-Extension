@@ -40,6 +40,7 @@ describe("ciStateSlice", () => {
         lastUrl: null,
         historySyncInProgress: false,
         historySyncStatus: null,
+        historySyncProgress: null,
         lastHistorySync: null,
         syncHistoryLogs: [],
         refreshing: false,
