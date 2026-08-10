@@ -133,7 +133,13 @@ export default defineConfig({
     // clobbered by the generated one.
     "build:manifestGenerated": (wxt, manifest) => {
       if (wxt.config.browser === "safari" && manifest.background) {
-        manifest.background.persistent = false;
+        // `manifest.background` is typed as the MV3 service-worker shape OR the
+        // MV2 scripts/page shape, and only the MV2 half declares `persistent`,
+        // so the bare assignment does not type-check. Assert rather than narrow
+        // on `"scripts" in background`: narrowing would stop writing the key on
+        // the MV3 (safari-mobile) build and that is a manifest-output change,
+        // not a typing fix. Keep behaviour identical; see PR discussion.
+        (manifest.background as { persistent?: boolean }).persistent = false;
       }
     },
   },
