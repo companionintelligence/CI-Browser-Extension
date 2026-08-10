@@ -46,27 +46,26 @@ export function PickMemoryScreen() {
   });
 
   // An explicit user choice is saved as "manual" so later discoveries never
-  // silently switch it.
+  // silently switch it. The proxy-store dispatch resolves asynchronously and
+  // never throws here — success shows as this screen unmounting when the
+  // background clears memoryAppChoices. The timeout covers a dead background
+  // so the rows can't stay disabled behind a spinner forever.
   const choose = (choice: Choice) => {
     setSavingUrl(choice.url);
-    try {
-      dispatch(
-        setState({
-          serverURL: choice.url,
-          serverURLSource: "manual",
-          memoryAppChoices: null,
-          discoveryHint: null,
-        }),
-      );
-      dispatch(saveUserSettings());
-      browser.runtime
-        .sendMessage({ action: "CHECK_AUTH_STATUS" })
-        .catch(console.error);
-      toast(copy.pick.connected(parseUrl(choice.url)?.host ?? choice.url));
-    } catch {
-      setSavingUrl(null);
-      toast.error(copy.pick.failed);
-    }
+    dispatch(
+      setState({
+        serverURL: choice.url,
+        serverURLSource: "manual",
+        memoryAppChoices: null,
+        discoveryHint: null,
+      }),
+    );
+    dispatch(saveUserSettings());
+    browser.runtime
+      .sendMessage({ action: "CHECK_AUTH_STATUS" })
+      .catch(console.error);
+    toast(copy.pick.connected(parseUrl(choice.url)?.host ?? choice.url));
+    setTimeout(() => setSavingUrl(null), 5000);
   };
 
   const keepCurrent = () => {

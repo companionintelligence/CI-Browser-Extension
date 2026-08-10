@@ -183,6 +183,7 @@ export const copy = {
     already: "Already ignored",
     cantIgnore: "This page can't be ignored",
     placeholder: "example.com or pattern",
+    pagePlaceholder: "https://example.com/page",
     patternHelp:
       "Entries match as patterns — e.g. news\\..* covers every news site.",
     invalid: "This pattern isn't valid.",

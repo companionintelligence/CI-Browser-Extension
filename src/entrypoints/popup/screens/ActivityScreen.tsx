@@ -8,6 +8,7 @@ import {
   History,
 } from "@ci/shadcn/icons";
 import { clearSyncHistoryLogs, saveUserSettings } from "@/store/ciStateSlice";
+import { hasHistoryApi } from "@/lib/browserCapabilities";
 import { copy } from "../copy";
 import { durationSeconds, relativeTime } from "../lib/formatters";
 import { friendlyError } from "../lib/friendlyErrors";
@@ -22,9 +23,16 @@ const STATUS_TONE: Record<string, DotTone> = {
   failed: "err",
 };
 
+const HISTORY_API_AVAILABLE = hasHistoryApi();
+
 function rangeLabel(timeRange: number | undefined): string | null {
   if (typeof timeRange !== "number") {
     return null;
+  }
+
+  // Sub-day ranges floor to 0 in the log entry (the auto-sync 24h window).
+  if (timeRange === 0) {
+    return copy.sync.periods["1"];
   }
 
   return copy.sync.periods[String(timeRange)] ?? `Last ${timeRange} days`;
@@ -238,9 +246,11 @@ export function ActivityScreen({ queued }: { queued: number }) {
           <p className="text-xs text-muted-foreground">
             {queued > 0
               ? copy.activity.queueWaitingSub
-              : autoSyncEnabled
-                ? copy.activity.queueOkSubOn
-                : copy.activity.queueOkSubOff}
+              : !HISTORY_API_AVAILABLE
+                ? copy.settings.autoSyncSafari
+                : autoSyncEnabled
+                  ? copy.activity.queueOkSubOn
+                  : copy.activity.queueOkSubOff}
           </p>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
 import { Button, Field, Input, Spinner, Tooltip, useToast } from "@ci/shadcn";
 import { CloudUpload, ExternalLink, SearchX, Settings } from "@ci/shadcn/icons";
@@ -28,6 +28,21 @@ export function ConnectScreen({
   const [manualOpen, setManualOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [invalid, setInvalid] = useState(false);
+  const [searchTimedOut, setSearchTimedOut] = useState(false);
+
+  // Discovery can return silently with no hint (e.g. a dead refresh token) —
+  // never leave the user on an actionless spinner forever.
+  useEffect(() => {
+    if (variant !== "searching") {
+      setSearchTimedOut(false);
+
+      return;
+    }
+
+    const timer = setTimeout(() => setSearchTimedOut(true), 10_000);
+
+    return () => clearTimeout(timer);
+  }, [variant]);
 
   const connectManual = () => {
     const normalized = normalizeServerUrl(draft);
@@ -53,7 +68,12 @@ export function ConnectScreen({
     toast(copy.pick.connected(parseUrl(normalized)?.host ?? normalized));
   };
 
-  const busy = variant === "searching" || discovering;
+  const busy = (variant === "searching" && !searchTimedOut) || discovering;
+  // A timed-out search renders the actions block with an explanatory banner,
+  // exactly like a discovery error.
+  const showErrorBanner =
+    (variant === "error" && !!discoveryHint) ||
+    (variant === "searching" && searchTimedOut);
 
   return (
     <PopupShell
@@ -105,12 +125,14 @@ export function ConnectScreen({
             {copy.connect.noneBody}
           </p>
 
-          {variant === "error" && discoveryHint && (
+          {showErrorBanner && (
             <Banner tone="warning" className="w-full">
               <p>{copy.connect.errorTitle}</p>
-              <p className="mt-0.5 text-xxs text-muted-foreground">
-                {discoveryHint}
-              </p>
+              {discoveryHint && (
+                <p className="mt-0.5 text-xxs text-muted-foreground">
+                  {discoveryHint}
+                </p>
+              )}
             </Banner>
           )}
 

@@ -12,8 +12,10 @@ import {
 import { parseUrl, siteRegex } from "@/utils";
 import { copy } from "../copy";
 import {
+  compilesAsPageEntry,
   escapeRegex,
   isCapturableUrl,
+  isSafeSitePattern,
   urlWithoutHash,
 } from "../lib/formatters";
 import { useCiState } from "../hooks/useCiState";
@@ -96,14 +98,22 @@ export function IgnoredSitesScreen() {
 
   const persist = () => dispatch(saveUserSettings());
 
-  // Quick-adds escape what they insert; hand-typed input is stored verbatim
-  // (entries match as patterns — see isUrlBlacklisted).
+  // Site quick-adds escape what they insert; hand-typed input is stored
+  // verbatim (entries match as patterns — see isUrlBlacklisted). Page entries
+  // stay raw for back-compat but must COMPILE: one throwing page entry
+  // silently disables every entry after it (fail-open in isUrlBlacklisted).
   const addCurrent = () => {
     if (tab === "sites" && currentHostname) {
       dispatch(addSiteBlacklist(escapeRegex(currentHostname)));
       persist();
       toast(copy.site.ignoredToast(currentHostname));
     } else if (tab === "pages" && currentPage) {
+      if (!compilesAsPageEntry(currentPage)) {
+        toast.error(copy.ignored.cantIgnore);
+
+        return;
+      }
+
       dispatch(addPageBlacklist(currentPage));
       persist();
       toast(copy.site.ignoredToast(currentPage));
@@ -116,16 +126,18 @@ export function IgnoredSitesScreen() {
       return;
     }
 
-    if (entries.includes(value)) {
+    // A quick-added site is stored escaped (github\.com), so check both forms
+    // or the typed literal slips in as a functionally identical twin.
+    if (entries.includes(value) || entries.includes(escapeRegex(value))) {
       setError(copy.ignored.duplicate);
 
       return;
     }
 
     if (tab === "sites") {
-      try {
-        new RegExp(value);
-      } catch {
+      // Safe pattern subset only — an unrestricted regex here can wedge every
+      // navigation via catastrophic backtracking (see isSafeSitePattern).
+      if (!isSafeSitePattern(value)) {
         setError(copy.ignored.invalid);
 
         return;
@@ -133,7 +145,7 @@ export function IgnoredSitesScreen() {
 
       dispatch(addSiteBlacklist(value));
     } else {
-      if (!siteRegex.test(value)) {
+      if (!siteRegex.test(value) || !compilesAsPageEntry(value)) {
         setError(copy.ignored.invalid);
 
         return;
@@ -214,7 +226,7 @@ export function IgnoredSitesScreen() {
             placeholder={
               tab === "sites"
                 ? copy.ignored.placeholder
-                : copy.manual.placeholder
+                : copy.ignored.pagePlaceholder
             }
             aria-label={copy.common.add}
             aria-invalid={!!error || undefined}

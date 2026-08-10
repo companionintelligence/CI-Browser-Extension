@@ -68,6 +68,46 @@ export function isExactHostEntry(entry: string, hostname: string): boolean {
   return entry === hostname || entry === escapeRegex(hostname);
 }
 
+/**
+ * Typed site patterns are restricted to literals plus `\.` and `.*` — no
+ * groups, classes, alternation, or explicit quantifiers. isUrlBlacklisted
+ * compiles entries on EVERY navigation (and per history row during sync), so
+ * a catastrophic-backtracking pattern like `(a+)+$` would wedge the
+ * background and the popup with no UI path to recovery. Exponential blowup
+ * needs nested groups; this charset makes that structurally impossible.
+ */
+const SAFE_SITE_PATTERN = /^[a-zA-Z0-9.*\\_-]+$/;
+
+export function isSafeSitePattern(value: string): boolean {
+  if (value.length > 200 || !SAFE_SITE_PATTERN.test(value)) {
+    return false;
+  }
+
+  try {
+    new RegExp(value);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a page entry will compile inside isUrlBlacklisted (which escapes
+ * the first `?` itself). Entries are stored raw for back-compat, and one
+ * throwing entry silently disables every entry after it — fail-open — so
+ * anything that can't compile must be rejected before it is stored.
+ */
+export function compilesAsPageEntry(value: string): boolean {
+  try {
+    new RegExp(value.replace("?", "\\?"));
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** URL with its hash stripped, matching the page-ignore storage format. */
 export function urlWithoutHash(url: string): string | null {
   const parsed = parseUrl(url);

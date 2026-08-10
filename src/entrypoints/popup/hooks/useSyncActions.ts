@@ -59,11 +59,21 @@ export function useSyncActions() {
     dispatch(saveUserSettings());
   }, [dispatch]);
 
-  // Completion toast on the in-progress falling edge, judged by the newest log.
+  // Completion toast on the in-progress falling edge. Only history runs write
+  // logs (bookmarks/downloads-only runs don't), so a failure is only reported
+  // when THIS run produced a new log entry — otherwise yesterday's failed log
+  // would misreport a successful bookmarks-only sync.
   const wasInProgress = useRef(historySyncInProgress);
+  const logIdAtStart = useRef<string | undefined>(undefined);
   useEffect(() => {
+    if (!wasInProgress.current && historySyncInProgress) {
+      logIdAtStart.current = syncHistoryLogs[0]?.id;
+    }
+
     if (wasInProgress.current && !historySyncInProgress) {
-      if (syncHistoryLogs[0]?.status === "failed") {
+      const newest = syncHistoryLogs[0];
+      const isNewLog = newest && newest.id !== logIdAtStart.current;
+      if (isNewLog && newest.status === "failed") {
         toast.error(copy.sync.failToast);
       } else {
         toast.success(copy.sync.doneToast);

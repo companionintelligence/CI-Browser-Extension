@@ -13,6 +13,7 @@ import { profileForDomain } from "@/scrape/profiles";
 import { copy } from "../copy";
 import { useRouter } from "../routes";
 import {
+  compilesAsPageEntry,
   escapeRegex,
   isCapturableUrl,
   isExactHostEntry,
@@ -110,7 +111,12 @@ export function CurrentTabCard() {
     }
 
     const stripped = urlWithoutHash(tabUrl);
-    if (!stripped) {
+    // Page entries are stored raw and compiled by isUrlBlacklisted; one
+    // throwing entry silently disables every entry after it, so anything
+    // that can't compile must be refused here.
+    if (!stripped || !compilesAsPageEntry(stripped)) {
+      toast.error(copy.ignored.cantIgnore);
+
       return;
     }
 

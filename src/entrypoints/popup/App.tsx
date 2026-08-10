@@ -55,22 +55,33 @@ function AppInner() {
   // Escape pops one level (an empty stack lets the browser close the popup);
   // Alt+Shift+Period opens the hidden dev panel from anywhere.
   useEffect(() => {
+    // Radix overlays (Select, DropdownMenu, AlertDialog) close themselves on
+    // Escape — the same keypress must not ALSO navigate a screen back.
+    const overlayOpen = () =>
+      !!document.querySelector(
+        '[data-state="open"][role="dialog"], [data-state="open"][role="alertdialog"], [data-state="open"][role="menu"], [data-state="open"] [role="listbox"]',
+      );
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !e.defaultPrevented && !overlayOpen()) {
         pop();
       }
 
       if (e.altKey && e.shiftKey && (e.key === "." || e.code === "Period")) {
         e.preventDefault();
-        toast(copy.dev.unlocked);
-        push("dev");
+        if (top === "dev") {
+          pop();
+        } else {
+          toast(copy.dev.unlocked);
+          push("dev");
+        }
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
 
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [pop, push, toast]);
+  }, [pop, push, toast, top]);
 
   // Signing out clears stale pushed screens — except Settings and Dev, which
   // have signed-out variants and must survive in place.
@@ -108,6 +119,17 @@ function AppInner() {
     return <PickMemoryScreen />;
   }
 
+  // Above the serverURL gate: the ignore list and activity are usable (and
+  // were reachable in the old popup) before a Memory is connected — Settings
+  // links to them from the Connect screen.
+  if (top === "ignored") {
+    return <IgnoredSitesScreen />;
+  }
+
+  if (top === "activity") {
+    return <ActivityScreen queued={queued} />;
+  }
+
   if (!serverURL) {
     if (discoveryHint === NO_MEMORY_HINT) {
       return <ConnectScreen variant="none" queued={queued} />;
@@ -118,14 +140,6 @@ function AppInner() {
     }
 
     return <ConnectScreen variant="searching" queued={queued} />;
-  }
-
-  if (top === "ignored") {
-    return <IgnoredSitesScreen />;
-  }
-
-  if (top === "activity") {
-    return <ActivityScreen queued={queued} />;
   }
 
   return <HomeScreen queued={queued} authError={auth.authError} />;

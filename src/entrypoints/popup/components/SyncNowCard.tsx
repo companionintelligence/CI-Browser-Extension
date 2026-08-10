@@ -121,22 +121,28 @@ export function SyncNowCard({ queued }: { queued: number }) {
         ))}
 
       <div className="mt-2 flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => push("settings")}
-          className="flex min-w-0 cursor-pointer items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          {autoSyncEnabled ? (
-            <>
-              <StatusDot tone="ok" className="size-1.5" />
-              <span className="truncate">{copy.sync.autoOn}</span>
-            </>
-          ) : (
-            <span className="truncate underline underline-offset-2">
-              {copy.sync.autoOff}
-            </span>
-          )}
-        </button>
+        {/* Safari hides this: the toggle it links to doesn't exist there (the
+            info banner above already explains the 10-minute auto-upload). */}
+        {HISTORY_API_AVAILABLE ? (
+          <button
+            type="button"
+            onClick={() => push("settings")}
+            className="flex min-w-0 cursor-pointer items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            {autoSyncEnabled ? (
+              <>
+                <StatusDot tone="ok" className="size-1.5" />
+                <span className="truncate">{copy.sync.autoOn}</span>
+              </>
+            ) : (
+              <span className="truncate underline underline-offset-2">
+                {copy.sync.autoOff}
+              </span>
+            )}
+          </button>
+        ) : (
+          <span />
+        )}
         {!inProgress && (
           <Tooltip>
             <Tooltip.Trigger asChild>

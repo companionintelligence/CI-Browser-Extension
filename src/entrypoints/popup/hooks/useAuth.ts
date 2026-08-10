@@ -162,12 +162,18 @@ export function useAuth() {
     }
   }, [portalUrl]);
 
-  /** Back out of a stuck tab-auth without waiting out the 10-minute window. */
+  /**
+   * Back out of a stuck tab-auth without waiting out the 10-minute window.
+   * Clears the Safari callback stash too — a leftover one makes the next
+   * background wake record a spurious "sign-in expired" failure (and light
+   * the toolbar's error badge).
+   */
   const cancelAuthorize = useCallback(() => {
     setAuthorizing(false);
     void browser.storage.local.remove([
       "oidcAuthInProgressAt",
       "oidcPendingAuth",
+      "oidcPendingCallbackUrl",
     ]);
   }, []);
 
