@@ -119,6 +119,25 @@ interface CiState {
   lastUrl: string | null;
   historySyncInProgress: boolean;
   historySyncStatus: string | null;
+  /**
+   * Structured mirror of the historySyncStatus display strings, for the
+   * popup's progress bar. Written at the same call sites; the strings stay
+   * for back-compat. Transient — never persisted.
+   */
+  historySyncProgress: {
+    phase:
+      | "starting"
+      | "searching"
+      | "processing"
+      | "uploading"
+      | "bookmarks"
+      | "downloads"
+      | "queue"
+      | "finishing";
+    current?: number;
+    total?: number;
+    ignored?: number;
+  } | null;
   lastHistorySync: string | null;
   syncHistoryLogs: { status: string; timestamp: string }[];
   refreshing: boolean;
@@ -147,6 +166,13 @@ interface CiState {
   deviceName: string | null;
   deviceType: string | null;
   devicePlatform: string | null;
+  /**
+   * Why the last device registration failed, for the popup to show instead of
+   * an endless "Registering this browser…". Registration is retried by the
+   * auth-check alarm, so this is the most recent attempt's reason, cleared the
+   * moment one succeeds. Transient — never persisted.
+   */
+  deviceSetupError: string | null;
   bookmarkSyncEnabled: boolean;
   downloadSyncEnabled: boolean;
   historySyncEnabled: boolean;
@@ -166,6 +192,7 @@ export const ciStateSlice = createSlice({
     lastUrl: null,
     historySyncInProgress: false,
     historySyncStatus: null,
+    historySyncProgress: null,
     lastHistorySync: null,
     syncHistoryLogs: [],
     refreshing: false,
@@ -183,6 +210,7 @@ export const ciStateSlice = createSlice({
     deviceName: null,
     deviceType: null,
     devicePlatform: null,
+    deviceSetupError: null,
     bookmarkSyncEnabled: false,
     downloadSyncEnabled: false,
     historySyncEnabled: true, // Default to enabled since history is the main feature
@@ -191,6 +219,16 @@ export const ciStateSlice = createSlice({
   reducers: {
     setState: (state, action) => {
       const payload = action.payload as Partial<CiState>;
+
+      // A sync ending always clears the structured progress unless the caller
+      // set it explicitly — every historySyncInProgress:false site gets the
+      // cleanup for free.
+      if (
+        payload.historySyncInProgress === false &&
+        !("historySyncProgress" in payload)
+      ) {
+        return { ...state, ...payload, historySyncProgress: null };
+      }
 
       return { ...state, ...payload };
     },

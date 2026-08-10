@@ -13,7 +13,12 @@ import {
   addSyncedItems,
   getSyncedItems,
 } from "@/lib/syncedItems";
-import { drainCaptureQueue, enqueueCaptures } from "@/lib/captureQueue";
+import {
+  drainCaptureQueue,
+  enqueueCaptures,
+  getQueuedCaptures,
+} from "@/lib/captureQueue";
+import { updateActionBadge } from "@/services/badge";
 import { dropIgnoredCaptures } from "@/lib/captureFilter";
 import {
   hasBookmarksApi,
@@ -578,6 +583,15 @@ async function resolveNavigatedUrl(e: any): Promise<string | null> {
   return tabInfo[0]?.url ?? null;
 }
 
+/**
+ * Device routes built the URL by raw concatenation while the capture lane
+ * normalizes (see services/browserActivity) — and portal-discovered URLs are
+ * stored unnormalized, so a discovered `https://host/` yielded `//api/devices`.
+ */
+function deviceEndpoint(serverURL: string, path = ""): string {
+  return `${serverURL.replace(/\/+$/, "")}/api/devices${path}`;
+}
+
 async function getDeviceId(): Promise<string> {
   const storage = await browser.storage.local.get("deviceId");
   if (storage.deviceId) {
@@ -600,7 +614,7 @@ async function updateDeviceLastSeen(deviceId: string): Promise<void> {
     }
 
     await axios.patch(
-      `${serverURL}/api/devices/${deviceId}/last-seen`,
+      deviceEndpoint(serverURL, `/${deviceId}/last-seen`),
       {},
       {
         headers: {
@@ -627,7 +641,7 @@ async function fetchDeviceFromServer(): Promise<string | null> {
       return null;
     }
 
-    const response = await axios.get(`${serverURL}/api/devices`, {
+    const response = await axios.get(deviceEndpoint(serverURL), {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -716,7 +730,7 @@ async function createDeviceOnServer(): Promise<string> {
   const deviceInfo = getDeviceInfo();
 
   try {
-    const response = await axios.post(`${serverURL}/api/devices`, deviceInfo, {
+    const response = await axios.post(deviceEndpoint(serverURL), deviceInfo, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -728,7 +742,21 @@ async function createDeviceOnServer(): Promise<string> {
     const deviceData = Array.isArray(response.data)
       ? response.data[0]
       : response.data;
-    const deviceId = deviceData.device_id;
+    const deviceId = deviceData?.device_id;
+
+    // A 2xx that carries no device_id is not success. An auth proxy in front of
+    // the Memory answers an unauthenticated API call with its login PAGE — a
+    // 200 full of HTML — and storing `undefined` from it left the popup
+    // registering forever with nothing thrown and nothing logged.
+    if (typeof deviceId !== "string" || !deviceId) {
+      const shape =
+        typeof response.data === "string"
+          ? "an HTML/text page (an auth proxy or login redirect, most likely)"
+          : `no device_id (${JSON.stringify(response.data).slice(0, 120)})`;
+
+      throw new Error(`registration returned ${shape}`);
+    }
+
     const deviceName = deviceData.device_name;
     const deviceType = deviceData.device_type;
     const devicePlatform = deviceData.platform;
@@ -755,8 +783,16 @@ async function createDeviceOnServer(): Promise<string> {
       error?.response?.data?.error ||
       error?.message ||
       "Unknown error occurred";
+    // Keep the status: registration failures are diagnosed by it (401 is a
+    // rejected portal token — a server that predates portal auth, or an
+    // issuer/JWKS mismatch — while a network error is an unreachable Memory).
+    const status = error?.response?.status;
 
-    throw new Error(`Failed to create device: ${errorMessage}`);
+    throw new Error(
+      status
+        ? `Failed to create device (HTTP ${status}): ${errorMessage}`
+        : `Failed to create device: ${errorMessage}`,
+    );
   }
 }
 
@@ -993,6 +1029,7 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
     setState({
       historySyncInProgress: true,
       historySyncStatus: "Starting sync...",
+      historySyncProgress: { phase: "starting" },
     }),
   );
 
@@ -1050,6 +1087,9 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
     // "Sync failed" status must not wait on a telemetry round trip.
     await reportError(error, "manual-sync");
   }
+
+  // Every sync run drains the retry queue — reflect the new depth immediately.
+  void updateActionBadge();
 }
 
 // Individual sync functions
@@ -1167,6 +1207,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     store.dispatch(
       setState({
         historySyncStatus: "Searching browser history...",
+        historySyncProgress: { phase: "searching" },
       }),
     );
 
@@ -1219,6 +1260,10 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     store.dispatch(
       setState({
         historySyncStatus: `Processing ${allHistoryResults.length} history entries...`,
+        historySyncProgress: {
+          phase: "processing",
+          total: allHistoryResults.length,
+        },
       }),
     );
 
@@ -1290,6 +1335,12 @@ async function syncHistory(options: { timeRange?: number } = {}) {
           store.dispatch(
             setState({
               historySyncStatus: statusMessage,
+              historySyncProgress: {
+                phase: "processing",
+                current: processed,
+                total: allHistoryResults.length,
+                ignored: blacklistedCount,
+              },
             }),
           );
         }
@@ -1477,6 +1528,12 @@ async function syncHistory(options: { timeRange?: number } = {}) {
         store.dispatch(
           setState({
             historySyncStatus: `Uploaded ${uploaded}/${unsyncedResults.length} visits...`,
+            historySyncProgress: {
+              phase: "uploading",
+              current: uploaded,
+              total: unsyncedResults.length,
+              ignored: blacklistedCount,
+            },
           }),
         );
       } catch (err: any) {
@@ -1577,6 +1634,7 @@ async function syncBookmarks() {
   store.dispatch(
     setState({
       historySyncStatus: "Syncing bookmarks...",
+      historySyncProgress: { phase: "bookmarks" },
     }),
   );
 
@@ -1593,6 +1651,7 @@ async function syncDownloads() {
   store.dispatch(
     setState({
       historySyncStatus: "Syncing downloads...",
+      historySyncProgress: { phase: "downloads" },
     }),
   );
 
@@ -2191,11 +2250,21 @@ export default defineBackground({
           try {
             await setupDevice();
             deviceId = store.getState().ciState.deviceId;
+            store.dispatch(setState({ deviceSetupError: null }));
             store.dispatch(saveUserSettings());
           } catch (error) {
             console.error(
               "Failed to setup device after authentication:",
               error,
+            );
+            // Surface it: registration is the gate on every capture path
+            // (getDeviceId throws without it), and with no state to read the
+            // popup could only spin on "Registering this browser…" forever.
+            store.dispatch(
+              setState({
+                deviceSetupError:
+                  error instanceof Error ? error.message : String(error),
+              }),
             );
             await reportError(error, "device-setup");
           }
@@ -2213,6 +2282,10 @@ export default defineBackground({
           .catch(() => {
             console.log("No receiver for AUTH_STATE_UPDATED (popup closed)");
           });
+
+        // Runs on the 1-minute auth alarm too, so the badge tracks auth and
+        // queue transitions without dedicated hooks at every call site.
+        void updateActionBadge();
       } catch (error) {
         console.error("Error checking authentication state:", error);
         await reportError(error, "auth-state");
@@ -2336,6 +2409,7 @@ export default defineBackground({
           deviceId: null,
           discoveryHint: null,
           memoryAppChoices: null,
+          deviceSetupError: null,
         }),
       );
       store.dispatch(saveUserSettings());
@@ -2456,12 +2530,14 @@ export default defineBackground({
           // rejection.
           setupDevice()
             .then(() => {
+              store.dispatch(setState({ deviceSetupError: null }));
               sendResponse({ success: true });
             })
             .catch((error: any) => {
               const errorMessage =
                 error?.message || error?.toString() || "Unknown error occurred";
               console.error("Device setup failed:", error);
+              store.dispatch(setState({ deviceSetupError: errorMessage }));
               sendResponse({ success: false, error: errorMessage });
             });
 
@@ -2523,6 +2599,23 @@ export default defineBackground({
           return true;
         }
 
+        // Popup queue pill / Connect footer / Activity summary: read-only
+        // retry-queue depth.
+        if (message.action === "GET_QUEUE_STATUS") {
+          getQueuedCaptures()
+            .then((queued) => {
+              sendResponse({ success: true, queued: queued.length });
+            })
+            .catch((error) => {
+              sendResponse({
+                success: false,
+                error: error?.message || String(error),
+              });
+            });
+
+          return true;
+        }
+
         // Popup "Check again" / Settings "Find my Memory": re-ask the Portal
         // which Memories this account has and surface them as choices. The
         // response reports what was found so the caller can give feedback.
@@ -2551,6 +2644,7 @@ export default defineBackground({
         if (message.action === "SIGN_OUT") {
           signOutOfPortal()
             .then(() => {
+              void updateActionBadge();
               sendResponse({ success: true });
             })
             .catch((error) => {

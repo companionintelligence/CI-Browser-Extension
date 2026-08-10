@@ -2,7 +2,10 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { ThemeProvider } from "next-themes";
 import App from "./App.tsx";
+import { LoadingScreen } from "./screens/LoadingScreen";
+import { initPlatform } from "./lib/platform";
 import "./style.css";
+import "@/theme.css";
 // Self-hosted Manrope (bundled by Vite → MV3 CSP-safe, no CDN/Google Fonts).
 // Weights match the CI canonical stack: 400 / 500 / 600 / 700.
 import "@fontsource/manrope/400.css";
@@ -25,10 +28,28 @@ if (import.meta.env.WXT_SENTRY_DSN) {
   void initTelemetry({ component: "popup", env: BUILD_TELEMETRY_ENV });
 }
 
+initPlatform();
+
+const root = ReactDOM.createRoot(document.getElementById("root")!);
+
+// The skeleton renders BEFORE the proxy store connects — the popup is never a
+// blank panel. App keeps it up until settings hydrate (no signed-out flash).
+root.render(
+  <React.StrictMode>
+    <ThemeProvider
+      attribute="class"
+      storageKey="vite-ui-theme"
+      defaultTheme="system"
+    >
+      <LoadingScreen />
+    </ThemeProvider>
+  </React.StrictMode>,
+);
+
 const store = new Store();
 
 store.ready().then(() => {
-  return ReactDOM.createRoot(document.getElementById("root")!).render(
+  root.render(
     <React.StrictMode>
       <ThemeProvider
         attribute="class"

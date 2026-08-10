@@ -3,26 +3,61 @@
  *
  * A browser-action popup panel sizes itself to the document, so the popup grows
  * with its content and stops growing here. Capping `#root` (rather than giving
- * the popup a fixed height) keeps short states — signed out, Advanced collapsed
- * — from padding themselves out with empty space, while tall states scroll
- * instead of running off the end of the panel.
+ * the popup a fixed height) keeps short states — signed out, onboarding — from
+ * padding themselves out with empty space, while tall states scroll inside the
+ * shell body.
  *
  * The document itself must not scroll: fixed-position overlays (anything Radix
  * portals to `document.body` — Select, Popover, Dialog) position against the
  * viewport, and a scrolling document slides the panel out from under them.
- * Keeping `overflow: hidden` here and the scrolling inside `#root` keeps the
- * viewport and the visible panel the same rectangle.
  *
- * Width stays in sync with the app container's `w-[350px]` (popup/App.tsx).
+ * The aurora wash is the platform's signature body treatment (Hub and Memory
+ * both paint it); `background-attachment: fixed` is deliberately absent — it
+ * repaints badly inside popup panels.
  */
+/*
+ * The tokens package sets a 17px root for full-page web apps (Hub, Memory).
+ * A 350px browser-action panel is not that surface: at 17px every rem-derived
+ * size — type, icon boxes (size-4), control heights (h-9/h-10), spacing —
+ * renders 13-30% larger than the popup was designed at, which is what made
+ * controls look oversized against the mockups.
+ *
+ * 15px reproduces the design's metrics almost exactly: size-4 → 15px icons,
+ * h-9 → 34px buttons, h-10 → 38px, text-sm → 13.1px body, text-xs → 11.3px,
+ * text-xxs → 9.4px kickers. Scoped to the popup document, so no other surface
+ * is affected.
+ */
+html {
+  font-size: 15px;
+}
+
 html,
 body {
-  width: 350px;
   margin: 0;
   overflow: hidden;
 }
 
+body {
+  width: 350px;
+  background-color: var(--background);
+  background-image: var(--gradient-aurora);
+  background-repeat: no-repeat;
+}
+
 #root {
   max-height: 600px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: contain;
+}
+
+/* Mobile Safari renders the popup as a full-width sheet; lib/platform.ts sets
+   this class once before first render. */
+html.popup-mobile body {
+  width: 100%;
+}
+
+html.popup-mobile #root {
+  max-height: none;
+  padding-bottom: env(safe-area-inset-bottom);
 }
