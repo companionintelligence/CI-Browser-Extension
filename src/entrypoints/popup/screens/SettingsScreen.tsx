@@ -369,6 +369,9 @@ export function SettingsScreen({
 
   const signOut = async () => {
     await auth.signOut();
+    // Land on Welcome rather than the signed-out Settings variant — that
+    // variant exists for Welcome's gear, not as a post-sign-out destination.
+    reset();
     toast(copy.settings.signedOut);
   };
 
