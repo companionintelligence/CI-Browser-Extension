@@ -166,6 +166,13 @@ interface CiState {
   deviceName: string | null;
   deviceType: string | null;
   devicePlatform: string | null;
+  /**
+   * Why the last device registration failed, for the popup to show instead of
+   * an endless "Registering this browser…". Registration is retried by the
+   * auth-check alarm, so this is the most recent attempt's reason, cleared the
+   * moment one succeeds. Transient — never persisted.
+   */
+  deviceSetupError: string | null;
   bookmarkSyncEnabled: boolean;
   downloadSyncEnabled: boolean;
   historySyncEnabled: boolean;
@@ -203,6 +210,7 @@ export const ciStateSlice = createSlice({
     deviceName: null,
     deviceType: null,
     devicePlatform: null,
+    deviceSetupError: null,
     bookmarkSyncEnabled: false,
     downloadSyncEnabled: false,
     historySyncEnabled: true, // Default to enabled since history is the main feature

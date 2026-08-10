@@ -58,6 +58,7 @@ describe("ciStateSlice", () => {
         deviceName: null,
         deviceType: null,
         devicePlatform: null,
+        deviceSetupError: null,
         bookmarkSyncEnabled: false,
         downloadSyncEnabled: false,
         historySyncEnabled: true,

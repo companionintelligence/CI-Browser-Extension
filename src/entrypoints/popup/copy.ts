@@ -67,6 +67,7 @@ export const copy = {
     syncing: "Syncing…",
     provisioning: "Finishing setup",
     provisioningDetail: "Registering this browser…",
+    registerFailedDetail: "Setup didn't finish",
     queue: "Waiting to upload",
     queueDetail: (n: number) =>
       `${n} item${n === 1 ? "" : "s"} retry automatically`,
@@ -84,6 +85,10 @@ export const copy = {
     openMemory: "Open your Memory",
     thisBrowser: (name: string) => `This browser: ${name}`,
     registering: "Registering this browser…",
+    registerFailed: "Couldn't register this browser",
+    registerFailedHelp:
+      "Nothing can sync until this succeeds. Check that your Memory is running and up to date.",
+    registerRetry: "Try again",
     activityLabel: "Sync activity",
     settingsLabel: "Settings",
   },

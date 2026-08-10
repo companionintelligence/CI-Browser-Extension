@@ -30,6 +30,7 @@ export function usePopupStatus({
     historySyncProgress,
     historySyncEnabled,
     deviceId,
+    deviceSetupError,
     lastHistorySync,
     syncHistoryLogs,
     serverURL,
@@ -59,6 +60,16 @@ export function usePopupStatus({
   }
 
   if (accessToken && serverURL && !deviceId) {
+    if (deviceSetupError) {
+      return {
+        tone: "err",
+        pulse: false,
+        headline: copy.home.registerFailed,
+        detail: copy.verdict.registerFailedDetail,
+        detailTitle: deviceSetupError,
+      };
+    }
+
     return {
       tone: "warn",
       pulse: true,

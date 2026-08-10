@@ -50,6 +50,7 @@ export interface CiStateView {
   pageBlacklist: string[];
   deviceId: string | null;
   deviceName: string | null;
+  deviceSetupError: string | null;
   bookmarkSyncEnabled: boolean;
   downloadSyncEnabled: boolean;
   sensitiveScrapingEnabled: boolean;

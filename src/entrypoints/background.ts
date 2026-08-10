@@ -583,6 +583,15 @@ async function resolveNavigatedUrl(e: any): Promise<string | null> {
   return tabInfo[0]?.url ?? null;
 }
 
+/**
+ * Device routes built the URL by raw concatenation while the capture lane
+ * normalizes (see services/browserActivity) — and portal-discovered URLs are
+ * stored unnormalized, so a discovered `https://host/` yielded `//api/devices`.
+ */
+function deviceEndpoint(serverURL: string, path = ""): string {
+  return `${serverURL.replace(/\/+$/, "")}/api/devices${path}`;
+}
+
 async function getDeviceId(): Promise<string> {
   const storage = await browser.storage.local.get("deviceId");
   if (storage.deviceId) {
@@ -605,7 +614,7 @@ async function updateDeviceLastSeen(deviceId: string): Promise<void> {
     }
 
     await axios.patch(
-      `${serverURL}/api/devices/${deviceId}/last-seen`,
+      deviceEndpoint(serverURL, `/${deviceId}/last-seen`),
       {},
       {
         headers: {
@@ -632,7 +641,7 @@ async function fetchDeviceFromServer(): Promise<string | null> {
       return null;
     }
 
-    const response = await axios.get(`${serverURL}/api/devices`, {
+    const response = await axios.get(deviceEndpoint(serverURL), {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -721,7 +730,7 @@ async function createDeviceOnServer(): Promise<string> {
   const deviceInfo = getDeviceInfo();
 
   try {
-    const response = await axios.post(`${serverURL}/api/devices`, deviceInfo, {
+    const response = await axios.post(deviceEndpoint(serverURL), deviceInfo, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -760,8 +769,16 @@ async function createDeviceOnServer(): Promise<string> {
       error?.response?.data?.error ||
       error?.message ||
       "Unknown error occurred";
+    // Keep the status: registration failures are diagnosed by it (401 is a
+    // rejected portal token — a server that predates portal auth, or an
+    // issuer/JWKS mismatch — while a network error is an unreachable Memory).
+    const status = error?.response?.status;
 
-    throw new Error(`Failed to create device: ${errorMessage}`);
+    throw new Error(
+      status
+        ? `Failed to create device (HTTP ${status}): ${errorMessage}`
+        : `Failed to create device: ${errorMessage}`,
+    );
   }
 }
 
@@ -2219,11 +2236,21 @@ export default defineBackground({
           try {
             await setupDevice();
             deviceId = store.getState().ciState.deviceId;
+            store.dispatch(setState({ deviceSetupError: null }));
             store.dispatch(saveUserSettings());
           } catch (error) {
             console.error(
               "Failed to setup device after authentication:",
               error,
+            );
+            // Surface it: registration is the gate on every capture path
+            // (getDeviceId throws without it), and with no state to read the
+            // popup could only spin on "Registering this browser…" forever.
+            store.dispatch(
+              setState({
+                deviceSetupError:
+                  error instanceof Error ? error.message : String(error),
+              }),
             );
             await reportError(error, "device-setup");
           }
@@ -2368,6 +2395,7 @@ export default defineBackground({
           deviceId: null,
           discoveryHint: null,
           memoryAppChoices: null,
+          deviceSetupError: null,
         }),
       );
       store.dispatch(saveUserSettings());
@@ -2488,12 +2516,14 @@ export default defineBackground({
           // rejection.
           setupDevice()
             .then(() => {
+              store.dispatch(setState({ deviceSetupError: null }));
               sendResponse({ success: true });
             })
             .catch((error: any) => {
               const errorMessage =
                 error?.message || error?.toString() || "Unknown error occurred";
               console.error("Device setup failed:", error);
+              store.dispatch(setState({ deviceSetupError: errorMessage }));
               sendResponse({ success: false, error: errorMessage });
             });
 
