@@ -244,12 +244,35 @@ committing signing secrets, so this is deliberately out of CI for now.
 
 ## CI/CD Auto-Publish Setup
 
-`release.yml` has one publish step per auto-publishable store. Each step
-checks its own secrets first (`if: env.<SOMETHING> != ''`) and is skipped
-entirely if they're absent — so this is safe to merge before any secrets
-exist; releases just keep attaching zips for manual upload like before. **A
-store's first submission has to happen manually** (as described earlier in
-this doc) before its API credentials exist to automate updates.
+`release.yml` has one publish step per auto-publishable store, and a
+**Require store publishing credentials** preflight that runs before the build.
+A release **fails** if any store is missing credentials, rather than skipping
+the store and still reporting green. **A store's first submission has to happen
+manually** (as described earlier in this doc) before its API credentials exist
+to automate updates.
+
+To release before a store is automatable, waive it explicitly: add its key to
+the `STORE_PUBLISH_OPTIONAL` repository variable (comma-separated, from
+`firefox`, `chrome`, `edge`).
+
+```bash
+# Ship now, upload to Chrome and Edge by hand this time.
+gh variable set STORE_PUBLISH_OPTIONAL --repo companionintelligence/CI-Browser-Extension --body 'chrome,edge'
+```
+
+A waived store still gets its zip attached to the release for manual upload,
+and the run summary records it as `waived — manual upload required`. A store
+that is only *partially* configured always fails, waived or not — half a
+credential set is a mistake, never a deliberate opt-out.
+
+> **Why the preflight exists.** These gates were originally written as
+> `if: env.CHROME_CLIENT_ID != ''` reading the step's *own* `env:` block. A
+> step's `if:` is evaluated before its `env:` is applied, so that expression
+> read an undefined value and was **always false**. Every store publish step
+> skipped on every release — including Firefox, whose AMO credentials had been
+> present for weeks — and the workflow still went green. The gates now live in
+> the job-level `env:` block, which is the same pattern CI-Hub and CI-Capture
+> use for their signing gates.
 
 Add secrets with `gh secret set NAME --repo companionintelligence/CI-Browser-Extension`
 (it prompts for the value — nothing gets typed on the command line or pasted
