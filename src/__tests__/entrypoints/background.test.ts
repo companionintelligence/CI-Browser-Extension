@@ -3,126 +3,54 @@
  *
  * The background entrypoint (defineBackground) wires browser APIs and can't be
  * imported directly under jest, so these tests cover the contracts the
- * background now depends on: the unified CaptureEvent transport (Phase 3,
- * replacing the legacy axios `POST /api/browser-activity`) and the portal OIDC
- * issuer derivation, plus the pure blacklist / slicing logic.
+ * background depends on: the portal OIDC issuer derivation, plus the pure
+ * blacklist / slicing logic. The typed bulk transport the background posts
+ * through is covered in services/browserActivity.test.ts.
  */
 
 import { isUrlBlacklisted } from "@/utils";
 import {
-  sendCaptureEvents,
-  toCaptureEvent,
-  SOURCE_SYSTEM,
-  type BrowserActivity,
-} from "@/services/captureEvents";
-import {
-  deriveIssuer,
+  issuerFromPortalUrl,
   resolvePortalIssuer,
   portalOidcConfig,
   DEFAULT_PORTAL_ISSUER,
   OIDC_CLIENT_ID,
 } from "@/services/portalConfig";
 
-function activity(over: Partial<BrowserActivity> = {}): BrowserActivity {
-  return {
-    time: "2023-01-01T00:00:00.000Z",
-    device_id: "dev-1",
-    url: "https://example.com",
-    action_type: "visit",
-    ...over,
-  };
-}
-
 describe("Background Script", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe("CaptureEvent transport (Phase 3)", () => {
-    afterEach(() => jest.restoreAllMocks());
-
-    it("maps a browser visit to a browser.visit CaptureEvent", () => {
-      const event = toCaptureEvent(
-        activity({ title: "Example", action_type: "visit" }),
-      );
-
-      expect(event).toMatchObject({
-        source_system: SOURCE_SYSTEM,
-        kind: "browser.visit",
-        occurred_at: "2023-01-01T00:00:00.000Z",
-        title: "Example",
-      });
-      expect(event.payload).toMatchObject({
-        url: "https://example.com",
-        device_id: "dev-1",
-        action_type: "visit",
-      });
-    });
-
-    it("POSTs activities as {events} to /v1/events with the Bearer token", async () => {
-      const fetchMock = jest.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ ingested: 1, duplicate: 0, rejected: [] }),
-      });
-      (global as { fetch?: unknown }).fetch = fetchMock;
-
-      const result = await sendCaptureEvents(
-        "dev.companionintelligence.com",
-        "portal-jwt",
-        [activity()],
-      );
-
-      expect(result).toEqual({ ingested: 1, duplicate: 0, rejected: [] });
-
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe("https://dev.companionintelligence.com/v1/events");
-      expect((init.headers as Record<string, string>).Authorization).toBe(
-        "Bearer portal-jwt",
-      );
-      const body = JSON.parse(init.body as string);
-      expect(body.events[0].source_system).toBe(SOURCE_SYSTEM);
-      expect(body.events[0].kind).toBe("browser.visit");
-    });
-
-    it("throws on a non-2xx so the caller keeps its retry/logging", async () => {
-      (global as { fetch?: unknown }).fetch = jest
-        .fn()
-        .mockResolvedValue({ ok: false, status: 401 });
-
-      await expect(
-        sendCaptureEvents("dev.companionintelligence.com", "t", [activity()]),
-      ).rejects.toThrow(/HTTP 401/);
-    });
-  });
-
   describe("Portal OIDC issuer derivation (Phase 3)", () => {
-    it("derives the issuer from a server domain (bare host or URL)", () => {
-      expect(deriveIssuer("hub.ci.computer")).toBe(
+    it("derives the issuer from a portal URL (with or without trailing slash)", () => {
+      expect(issuerFromPortalUrl("https://hub.ci.computer")).toBe(
         "https://hub.ci.computer/api/auth",
       );
-      expect(deriveIssuer("https://hub.ci.computer/")).toBe(
+      expect(issuerFromPortalUrl("https://hub.ci.computer/")).toBe(
         "https://hub.ci.computer/api/auth",
       );
     });
 
-    it("prefers an explicit portalIssuer override, then derives, then prod", () => {
+    it("prefers a legacy portalIssuer override, then derives, then prod", () => {
       expect(
         resolvePortalIssuer({
-          serverDomain: "hub.ci.computer",
+          portalUrl: "https://hub.ci.computer",
           portalIssuer: "https://portal.example.com/api/auth",
         }),
       ).toBe("https://portal.example.com/api/auth");
 
-      expect(resolvePortalIssuer({ serverDomain: "dev.ci.computer" })).toBe(
-        "https://dev.ci.computer/api/auth",
-      );
+      expect(
+        resolvePortalIssuer({ portalUrl: "https://dev.ci.computer" }),
+      ).toBe("https://dev.ci.computer/api/auth");
 
       expect(resolvePortalIssuer({})).toBe(DEFAULT_PORTAL_ISSUER);
     });
 
     it("builds the full OIDC client config for the extension", () => {
-      expect(portalOidcConfig({ serverDomain: "hub.ci.computer" })).toEqual({
+      expect(
+        portalOidcConfig({ portalUrl: "https://hub.ci.computer" }),
+      ).toEqual({
         issuer: "https://hub.ci.computer/api/auth",
         clientId: OIDC_CLIENT_ID,
         scopes: "openid profile email offline_access",

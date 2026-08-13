@@ -8,20 +8,60 @@ import {
   addSyncHistoryLog,
 } from "@/store/ciStateSlice";
 import { siteRegex, parseUrl, isUrlBlacklisted } from "@/utils.ts";
-import { addSyncedItem, addSyncedItems, isItemSynced } from "@/lib/syncedItems";
+import {
+  addSyncedItem,
+  addSyncedItems,
+  getSyncedItems,
+} from "@/lib/syncedItems";
+import {
+  drainCaptureQueue,
+  enqueueCaptures,
+  getQueuedCaptures,
+} from "@/lib/captureQueue";
+import { updateActionBadge } from "@/services/badge";
+import { dropIgnoredCaptures } from "@/lib/captureFilter";
+import {
+  hasBookmarksApi,
+  hasDownloadsApi,
+  hasHistoryApi,
+} from "@/lib/browserCapabilities";
+import { scrapeSourceId } from "@/lib/scrapeIdentity";
+import { isValidBookmarkEvent } from "@/lib/captureValidation";
 import { buildHighlightActivity } from "@/lib/highlight";
 import {
-  sendCaptureEvents,
+  finishIngest,
+  sendBrowserCaptures,
   type BrowserActivity,
-} from "@/services/captureEvents";
-import { getIdToken, signIn } from "@/services/oidcAuth";
+} from "@/services/browserActivity";
+import {
+  getAccessToken,
+  attachAuthorizeTabId,
+  CALLBACK_PAGE_OWNERSHIP_MS,
+  finishOidcCallback,
+  finishStoredCallback,
+  getIdToken,
+  isOidcCallbackUrl,
+  loadTokens,
+  recordAuthFailure,
+  signIn,
+  signInSilently,
+  signOut,
+  type PreparedAuthorize,
+} from "@/services/oidcAuth";
 import { portalOidcConfig } from "@/services/portalConfig";
+import {
+  fetchPortalApps,
+  memoryAppsFrom,
+  NO_MEMORY_HINT,
+} from "@/services/portalApps";
 import bowser from "bowser";
-import type { ScrapeResult } from "@/domainScraper";
-import { database } from "@/indexeddb";
-import { initExtensionSentry } from "@/lib/sentry";
-
-initExtensionSentry("background");
+import type { ScrapeResult } from "@/scrape/types";
+import {
+  captureException,
+  flushTelemetry,
+  initTelemetry,
+} from "@/lib/telemetry";
+import { BUILD_TELEMETRY_ENV } from "@/lib/telemetry/buildEnv";
 
 const SLICE_SIZE = 100;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
@@ -34,6 +74,24 @@ const AUTO_SYNC_ALARM = "ci-auto-sync";
 const LAST_SEEN_ALARM = "ci-last-seen";
 const AUTO_SYNC_ALARM_TIME_RANGE = 24 * 60 * 60 * 1000; // sync the last 24h
 
+/**
+ * Report a background failure to Sentry, then push it out.
+ *
+ * `scope` is a fixed string chosen here in the source — never a URL, a page
+ * title, a hostname, a scrape profile or a captured record. An error from the
+ * scrape lane says "scrape-upload", not which site, because "this user visits
+ * robinhood.com" is exactly the kind of fact this extension must not emit.
+ *
+ * The flush is awaited because an MV3 service worker is killed ~30s after its
+ * last event and Sentry's transport is asynchronous: without holding the worker
+ * open across the in-flight request, the event that explains a shutdown-time bug
+ * is the one most likely to be lost. Bounded, and a no-op when reporting is off.
+ */
+async function reportError(error: unknown, scope: string): Promise<void> {
+  captureException(error, { scope });
+  await flushTelemetry();
+}
+
 // Device last_seen heartbeat, driven by the LAST_SEEN_ALARM
 async function runLastSeenUpdate() {
   const { deviceId } = store.getState().ciState;
@@ -45,12 +103,19 @@ async function runLastSeenUpdate() {
 // Periodic auto-sync, driven by the AUTO_SYNC_ALARM
 async function runAutoSync() {
   try {
+    // Deliver queued live captures even with auto-sync off. On Safari there is
+    // no manual "Sync history" button (no history API), so without this the
+    // alarm-independent queue — including visits recorded before a Memory
+    // server was chosen — never drained. No-op when the queue is empty.
+    await retryQueuedCaptures();
+
     const state = store.getState().ciState;
 
     if (state.autoSyncEnabled && !state.historySyncInProgress) {
       const token = await resolveServerToken();
 
       if (token) {
+        // triggerManualSync drains the retry queue itself before syncing.
         await triggerManualSync({
           timeRange: AUTO_SYNC_ALARM_TIME_RANGE,
         });
@@ -58,21 +123,169 @@ async function runAutoSync() {
     }
   } catch (error) {
     console.error("Auto-sync error:", error);
+    await reportError(error, "auto-sync");
+  }
+}
+
+// Re-send live captures whose upload failed. Bounded and self-trimming; see
+// @/lib/captureQueue for the retention policy.
+async function retryQueuedCaptures(): Promise<void> {
+  // Without a serverURL, postBrowserCaptures resolves without sending, which
+  // the drain would read as "delivered" and delete the queue. Hold the queue
+  // until a Memory server is actually configured.
+  if (!store.getState().ciState.serverURL) {
+    return;
+  }
+
+  try {
+    const result = await drainCaptureQueue((activities) =>
+      postBrowserCaptures(activities),
+    );
+
+    if (result.sent > 0) {
+      console.log(`Re-sent ${result.sent} queued capture(s)`);
+      // Drained captures need the same index sweep as any live capture —
+      // with auto-sync off nothing else asks CI-Server to index them.
+      requestIngestFinish();
+    }
+  } catch (error) {
+    console.error("Capture retry failed:", error);
+    await reportError(error, "capture-retry");
   }
 }
 
 // ---- Unified identity + capture transport (Phase 3) ----
 
-// The portal OIDC client config, derived from the configured server domain (or
-// an explicit portalIssuer override). See services/portalConfig.
+// The portal OIDC client config, derived from the configured Portal URL (or
+// a legacy explicit portalIssuer override). See services/portalConfig.
 function oidcConfig() {
-  const { serverDomain, portalIssuer } = store.getState().ciState;
+  const { portalUrl, portalIssuer } = store.getState().ciState;
 
-  return portalOidcConfig({ serverDomain, portalIssuer });
+  return portalOidcConfig({ portalUrl, portalIssuer });
+}
+
+// Ask the Portal where the user's Memory (ci-memory) app runs and auto-set
+// serverURL from it. Never throws and never fails a sign-in: on any miss it
+// leaves serverURL alone and, when none is configured, surfaces a hint in the
+// popup instead. A manually-set serverURL (serverURLSource "manual") is never
+// overwritten. When Memory runs on several devices and there is no valid
+// choice yet, the candidates go to memoryAppChoices and the popup asks the
+// user which to use.
+//
+// `force` (popup "Check again" / Settings "Find my Memory") re-asks the Portal
+// on the user's behalf: every candidate goes to memoryAppChoices — even a
+// single one, and even when a serverURL is already configured — so the user
+// can confirm or switch. serverURL itself is still only changed by an explicit
+// pick (chooseMemory saves it as manual).
+async function discoverMemoryServer(
+  options: { force?: boolean } = {},
+): Promise<void> {
+  const { force = false } = options;
+
+  try {
+    const accessToken = await getAccessToken(oidcConfig());
+    if (!accessToken) {
+      return;
+    }
+
+    const { portalUrl, serverURL, serverURLSource } = store.getState().ciState;
+    const result = await fetchPortalApps(portalUrl, accessToken);
+
+    if (result.status === "ok") {
+      const memoryApps = memoryAppsFrom(result.apps);
+
+      if (memoryApps.length === 0) {
+        store.dispatch(
+          setState({
+            memoryAppChoices: null,
+            // Forced checks always report back; the passive path stays quiet
+            // when a server is already configured.
+            discoveryHint: serverURL && !force ? null : NO_MEMORY_HINT,
+          }),
+        );
+
+        return;
+      }
+
+      if (force) {
+        console.log(
+          "[CI] Forced Memory re-discovery; offering choices:",
+          memoryApps.map((app) => app.url),
+        );
+        store.dispatch(
+          setState({ memoryAppChoices: memoryApps, discoveryHint: null }),
+        );
+
+        return;
+      }
+
+      // A deliberate manual choice is never touched or second-guessed.
+      if (serverURL && serverURLSource === "manual") {
+        store.dispatch(setState({ memoryAppChoices: null }));
+
+        return;
+      }
+
+      // The auto-configured server is still one of the user's Memory apps.
+      if (serverURL && memoryApps.some((app) => app.url === serverURL)) {
+        store.dispatch(
+          setState({ memoryAppChoices: null, discoveryHint: null }),
+        );
+
+        return;
+      }
+
+      if (memoryApps.length === 1) {
+        console.log(
+          "[CI] Memory server discovered via portal:",
+          memoryApps[0].url,
+        );
+        store.dispatch(
+          setState({
+            serverURL: memoryApps[0].url,
+            serverURLSource: "auto",
+            memoryAppChoices: null,
+            discoveryHint: null,
+          }),
+        );
+        store.dispatch(saveUserSettings());
+
+        return;
+      }
+
+      // Several devices run Memory and none is configured (or the old auto
+      // choice vanished) — let the user pick in the popup.
+      console.log(
+        "[CI] Multiple Memory apps found; asking the user:",
+        memoryApps.map((app) => `${app.url} (${app.deviceName ?? "unknown"})`),
+      );
+      store.dispatch(
+        setState({ memoryAppChoices: memoryApps, discoveryHint: null }),
+      );
+
+      return;
+    }
+
+    // unsupported / unauthorized / error: keep whatever is configured; hint
+    // when nothing is, or when the user explicitly asked for a re-check.
+    if (!serverURL || force) {
+      store.dispatch(
+        setState({
+          discoveryHint:
+            result.status === "unsupported"
+              ? "Portal can't discover Memory."
+              : "Couldn't find Memory.",
+        }),
+      );
+    }
+  } catch (error) {
+    console.error("Memory server discovery failed:", error);
+    await reportError(error, "memory-discovery");
+  }
 }
 
 // Resolve the Bearer for CI-Server: prefer the portal OIDC **id_token** — the
-// JWKS-signed JWT CI-Server's `/v1/events` validates. The opaque OAuth
+// JWKS-signed JWT CI-Server's `/api/v1/*` routes validate. The opaque OAuth
 // access_token is NOT usable here (CI-Server's jwtVerify rejects it; this was the
 // Phase 3 blocker fixed by getIdToken in #51). Falls back to a legacy CI-Server
 // token still mirrored in Redux during the migration. Returns null when there is
@@ -86,17 +299,31 @@ async function resolveServerToken(): Promise<string | null> {
   return store.getState().ciState.accessToken ?? null;
 }
 
-// Central capture transport: every browser-activity write goes through here as
-// CaptureEvents on CI-Server's unified `/v1/events` path (replacing the legacy
-// `POST /api/browser-activity`). No-ops without a server domain or batch;
-// throws on a missing token or non-2xx so callers keep their retry/logging.
-async function postCaptureEvents(activities: BrowserActivity[]): Promise<void> {
+// Central capture transport: every browser-activity write goes through here to
+// CI-Server's TYPED bulk routes — `/api/v1/browser-activity`, and
+// `/api/v1/contents` for saved bookmarks (see @/services/browserActivity for the
+// kind→destination table this follows and why the unified `/api/v1/events` path
+// could not produce browser_activity rows). No-ops without a server URL or
+// batch; throws on a missing token or non-2xx so callers keep their
+// retry/logging.
+// Historical sync passes observedAt=now so import time is recorded separately
+// from the Chrome visit / bookmark / download time. The browser-activity table
+// has no observed_at column, so it rides in `properties` rather than being lost.
+async function postBrowserCaptures(
+  activities: BrowserActivity[],
+  opts?: { observedAt?: string },
+): Promise<void> {
   if (activities.length === 0) {
     return;
   }
 
-  const { serverDomain } = store.getState().ciState;
-  if (!serverDomain) {
+  const { serverURL } = store.getState().ciState;
+  if (!serverURL) {
+    return;
+  }
+
+  const allowed = applyIgnoreList(activities);
+  if (allowed.length === 0) {
     return;
   }
 
@@ -105,27 +332,116 @@ async function postCaptureEvents(activities: BrowserActivity[]): Promise<void> {
     throw new Error("No access token available for capture upload");
   }
 
-  await sendCaptureEvents(serverDomain, token, activities);
+  const observedAt = opts?.observedAt;
+  const batch = observedAt
+    ? allowed.map((a) =>
+        a.observed_at ? a : { ...a, observed_at: observedAt },
+      )
+    : allowed;
+
+  await sendBrowserCaptures(serverURL, token, batch);
 }
 
-// Helper function to ensure proper ISO time format with milliseconds
-function ensureISOTimeFormat(
-  timestamp: number | string | undefined,
-  fallbackTo1970 = false,
-): string {
-  let time: number;
+// Apply the ignore list to an outgoing batch. See @/lib/captureFilter for why
+// this is enforced at the transport rather than in each capture path.
+function applyIgnoreList(activities: BrowserActivity[]): BrowserActivity[] {
+  const { siteBlacklist = [], pageBlacklist = [] } = store.getState().ciState;
+  const allowed = dropIgnoredCaptures(activities, siteBlacklist, pageBlacklist);
 
-  if (timestamp === undefined || timestamp === null) {
-    time = fallbackTo1970 ? 0 : Date.now(); // 1970-01-01T00:00:00.000Z or current time
-  } else if (typeof timestamp === "string") {
-    time = new Date(timestamp).getTime();
-  } else {
-    time = timestamp;
+  if (allowed.length !== activities.length) {
+    console.log(
+      `[CI] Skipped ${activities.length - allowed.length} capture(s) on ignored sites/pages`,
+    );
   }
 
-  // Ensure we have a valid time
-  if (isNaN(time)) {
-    time = fallbackTo1970 ? 0 : Date.now();
+  return allowed;
+}
+
+/**
+ * Upload a live capture, queueing it for retry if the upload fails.
+ *
+ * Live captures — a recorded visit, a saved highlight, a scrape, a bookmark or
+ * download as it happens — are one-shot: unlike the sync engines, nothing
+ * re-derives them later, so a dropped POST is lost data. Every live capture
+ * path goes through here rather than calling postBrowserCaptures directly.
+ */
+async function postLiveCapture(activities: BrowserActivity[]): Promise<void> {
+  // postBrowserCaptures silently no-ops without a serverURL, which turned
+  // "signed in but Memory not chosen yet" into permanent data loss — every
+  // visit between sign-in and picking a Memory vanished. Queue those instead;
+  // the retry drain delivers them once a server is configured. The ignore
+  // list still applies at delivery time (postBrowserCaptures enforces it).
+  if (!store.getState().ciState.serverURL) {
+    await enqueueCaptures(activities);
+
+    return;
+  }
+
+  try {
+    await postBrowserCaptures(activities);
+    requestIngestFinish();
+  } catch (error) {
+    await enqueueCaptures(activities);
+    throw error;
+  }
+}
+
+/**
+ * Ask CI-Server to index what was just uploaded (see finishIngest for why this
+ * is required at all), debounced so a burst of live captures triggers one sweep
+ * rather than one per record.
+ *
+ * A pending debounce is lost if MV3 suspends the worker first; that only delays
+ * indexing to the next auto-sync tick, which finishes unconditionally.
+ */
+let ingestFinishTimer: ReturnType<typeof setTimeout> | null = null;
+const INGEST_FINISH_DEBOUNCE_MS = 30_000;
+
+function requestIngestFinish(): void {
+  if (ingestFinishTimer) {
+    return;
+  }
+
+  ingestFinishTimer = setTimeout(() => {
+    ingestFinishTimer = null;
+    flushIngestFinish();
+  }, INGEST_FINISH_DEBOUNCE_MS);
+}
+
+// Index immediately — used at the end of a sync run, where the batch is already
+// complete and there is nothing to debounce against.
+async function flushIngestFinish(): Promise<void> {
+  const { serverURL } = store.getState().ciState;
+  if (!serverURL) {
+    return;
+  }
+
+  const token = await resolveServerToken();
+  if (!token) {
+    return;
+  }
+
+  await finishIngest(serverURL, token);
+}
+
+/**
+ * Chrome/Firefox history, bookmark, and download times → ISO instant.
+ * Returns null when the browser did not provide a usable timestamp so callers
+ * can skip the item instead of inventing "now" (which made historical sync
+ * land on the sync day in Memory).
+ */
+function chromeTimeToISO(
+  timestamp: number | string | undefined | null,
+): string | null {
+  if (timestamp === undefined || timestamp === null) {
+    return null;
+  }
+
+  const time =
+    typeof timestamp === "string" ? new Date(timestamp).getTime() : timestamp;
+
+  if (!Number.isFinite(time) || time <= 0 || Number.isNaN(time)) {
+    return null;
   }
 
   return new Date(time).toISOString();
@@ -181,55 +497,100 @@ const recordHit = async function (e: any) {
   // previously recorded page
   const state = store.getState().ciState;
 
-  const tabInfo = await browser.tabs.query({
-    active: true,
-    currentWindow: true,
-  });
-  const active = tabInfo[0];
-
-  if (!active?.url) {
+  // The History switch governs live capture too, not just the backfill. It
+  // previously gated only syncHistory, so turning History off left this
+  // listener recording every page the user visited — the opposite of what the
+  // popup and the docs say the switch does.
+  if (!state.historySyncEnabled) {
     return;
   }
 
-  const parsed = parseUrl(active.url);
+  // Read the tab the navigation actually happened in. Querying for the *active*
+  // tab instead attributed a background-tab navigation to whatever the user
+  // happened to be looking at, recording the wrong URL under the wrong page.
+  const navigatedUrl = await resolveNavigatedUrl(e);
+
+  if (!navigatedUrl) {
+    return;
+  }
+
+  const parsed = parseUrl(navigatedUrl);
   if (!parsed) {
     return;
   }
 
-  store.dispatch(setState({ domain: parsed.hostname, url: active.url }));
+  store.dispatch(setState({ domain: parsed.hostname, url: navigatedUrl }));
 
-  // Check the URL being recorded (active.url) against the blacklist —
-  // `state` was snapshotted before the dispatch above, so state.url still
-  // holds the previous page and must not be used here
+  // Check the URL being recorded against the blacklist — `state` was
+  // snapshotted before the dispatch above, so state.url still holds the
+  // previous page and must not be used here
   const isBlacklisted = isUrlBlacklisted(
-    active.url,
+    navigatedUrl,
     state.siteBlacklist,
     state.pageBlacklist,
   );
 
-  if (!isBlacklisted && state.lastUrl !== active.url) {
-    store.dispatch(setState({ lastUrl: active.url }));
+  if (!isBlacklisted && state.lastUrl !== navigatedUrl) {
+    store.dispatch(setState({ lastUrl: navigatedUrl }));
 
     store.dispatch(saveUserSettings());
 
     const deviceId = await getDeviceId();
     const date = new Date().getTime();
     const newActivity = await convertToBrowserActivity(
-      active.url,
+      navigatedUrl,
       date,
       deviceId,
     );
 
     try {
-      await postCaptureEvents([newActivity]);
+      await postLiveCapture([newActivity]);
 
-      const historyId = `${active.url}_${date}`;
+      const historyId = `${navigatedUrl}_${date}`;
       await addSyncedItem(SYNCED_HISTORY_KEY, historyId);
     } catch (err) {
       console.error("Error posting event:", err);
     }
   }
 };
+
+/**
+ * The URL of the tab a webNavigation event fired in. Prefers the event's own
+ * url/tabId; falls back to the active tab only when the event carries neither,
+ * which is the pre-existing behaviour for synthetic callers.
+ */
+async function resolveNavigatedUrl(e: any): Promise<string | null> {
+  if (typeof e?.url === "string" && e.url) {
+    return e.url;
+  }
+
+  try {
+    if (typeof e?.tabId === "number" && e.tabId >= 0) {
+      const tab = await browser.tabs.get(e.tabId);
+
+      return tab?.url ?? null;
+    }
+  } catch {
+    // Tab closed between the navigation and this read — nothing to record.
+    return null;
+  }
+
+  const tabInfo = await browser.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+
+  return tabInfo[0]?.url ?? null;
+}
+
+/**
+ * Device routes built the URL by raw concatenation while the capture lane
+ * normalizes (see services/browserActivity) — and portal-discovered URLs are
+ * stored unnormalized, so a discovered `https://host/` yielded `//api/devices`.
+ */
+function deviceEndpoint(serverURL: string, path = ""): string {
+  return `${serverURL.replace(/\/+$/, "")}/api/devices${path}`;
+}
 
 async function getDeviceId(): Promise<string> {
   const storage = await browser.storage.local.get("deviceId");
@@ -245,15 +606,15 @@ async function getDeviceId(): Promise<string> {
 // Heartbeat so CI-Server can show device freshness; failures are non-critical
 async function updateDeviceLastSeen(deviceId: string): Promise<void> {
   try {
-    const { serverDomain } = store.getState().ciState;
+    const { serverURL } = store.getState().ciState;
     const token = await resolveServerToken();
 
-    if (!token || !serverDomain) {
+    if (!token || !serverURL) {
       return;
     }
 
     await axios.patch(
-      `https://${serverDomain}/api/devices/${deviceId}/last-seen`,
+      deviceEndpoint(serverURL, `/${deviceId}/last-seen`),
       {},
       {
         headers: {
@@ -273,14 +634,14 @@ async function updateDeviceLastSeen(deviceId: string): Promise<void> {
 
 async function fetchDeviceFromServer(): Promise<string | null> {
   try {
-    const { serverDomain } = store.getState().ciState;
+    const { serverURL } = store.getState().ciState;
     const token = await resolveServerToken();
 
     if (!token) {
       return null;
     }
 
-    const response = await axios.get(`https://${serverDomain}/api/devices`, {
+    const response = await axios.get(deviceEndpoint(serverURL), {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -359,7 +720,7 @@ async function fetchDeviceFromServer(): Promise<string | null> {
 }
 
 async function createDeviceOnServer(): Promise<string> {
-  const { serverDomain } = store.getState().ciState;
+  const { serverURL } = store.getState().ciState;
   const token = await resolveServerToken();
 
   if (!token) {
@@ -369,23 +730,33 @@ async function createDeviceOnServer(): Promise<string> {
   const deviceInfo = getDeviceInfo();
 
   try {
-    const response = await axios.post(
-      `https://${serverDomain}/api/devices`,
-      deviceInfo,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 10000, // 10 second timeout
+    const response = await axios.post(deviceEndpoint(serverURL), deviceInfo, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    );
+      timeout: 10000, // 10 second timeout
+    });
 
     // Handle both single device and array response (server supports both)
     const deviceData = Array.isArray(response.data)
       ? response.data[0]
       : response.data;
-    const deviceId = deviceData.device_id;
+    const deviceId = deviceData?.device_id;
+
+    // A 2xx that carries no device_id is not success. An auth proxy in front of
+    // the Memory answers an unauthenticated API call with its login PAGE — a
+    // 200 full of HTML — and storing `undefined` from it left the popup
+    // registering forever with nothing thrown and nothing logged.
+    if (typeof deviceId !== "string" || !deviceId) {
+      const shape =
+        typeof response.data === "string"
+          ? "an HTML/text page (an auth proxy or login redirect, most likely)"
+          : `no device_id (${JSON.stringify(response.data).slice(0, 120)})`;
+
+      throw new Error(`registration returned ${shape}`);
+    }
+
     const deviceName = deviceData.device_name;
     const deviceType = deviceData.device_type;
     const devicePlatform = deviceData.platform;
@@ -405,8 +776,6 @@ async function createDeviceOnServer(): Promise<string> {
       }),
     );
 
-    deviceSetupInProgress = false;
-
     return deviceId;
   } catch (error: any) {
     const errorMessage =
@@ -414,8 +783,16 @@ async function createDeviceOnServer(): Promise<string> {
       error?.response?.data?.error ||
       error?.message ||
       "Unknown error occurred";
+    // Keep the status: registration failures are diagnosed by it (401 is a
+    // rejected portal token — a server that predates portal auth, or an
+    // issuer/JWKS mismatch — while a network error is an unreachable Memory).
+    const status = error?.response?.status;
 
-    throw new Error(`Failed to create device: ${errorMessage}`);
+    throw new Error(
+      status
+        ? `Failed to create device (HTTP ${status}): ${errorMessage}`
+        : `Failed to create device: ${errorMessage}`,
+    );
   }
 }
 
@@ -426,6 +803,10 @@ async function setupDevice(): Promise<string> {
 
   deviceSetupInProgress = true;
 
+  // The latch MUST clear on every exit. When it only cleared on the create and
+  // error paths, finding an existing device left it stuck true for the life of
+  // the service worker, and every later setupDevice() — the SETUP_DEVICE
+  // message, the auth-check provisioning — threw "already in progress".
   try {
     const token = await resolveServerToken();
 
@@ -443,8 +824,9 @@ async function setupDevice(): Promise<string> {
   } catch (error: any) {
     const errorMessage =
       error?.message || error?.toString() || "Unknown error occurred";
-    deviceSetupInProgress = false;
     throw new Error(errorMessage);
+  } finally {
+    deviceSetupInProgress = false;
   }
 }
 
@@ -491,24 +873,7 @@ async function convertToBrowserActivity(
   url: string,
   visitTime: number,
   deviceId: string,
-): Promise<{
-  time: string;
-  device_id: string;
-  url: string;
-  title?: string;
-  action_type:
-    | "visit"
-    | "reload"
-    | "bookmark"
-    | "search"
-    | "download"
-    | "form_submit";
-  properties?: Record<string, any>;
-  duration_seconds?: number;
-  scroll_depth_percent?: number;
-  is_incognito?: boolean;
-  contains_sensitive?: boolean;
-}> {
+): Promise<BrowserActivity> {
   // Skip invalid URLs
   if (!isValidUrl(url)) {
     throw new Error(`Invalid URL: ${url}`);
@@ -599,8 +964,13 @@ async function convertToBrowserActivity(
     // Continue without description or scroll depth
   }
 
+  const time = chromeTimeToISO(visitTime);
+  if (!time) {
+    throw new Error(`Missing visit timestamp for URL: ${url}`);
+  }
+
   return {
-    time: ensureISOTimeFormat(visitTime),
+    time,
     device_id: deviceId,
     url: url,
     title: title,
@@ -633,6 +1003,14 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
     return;
   }
 
+  // Flush anything a live capture failed to deliver, BEFORE the sync-type
+  // checks below. Highlights and scrapes queue independently of the History /
+  // Bookmarks / Downloads switches, so a user with all three off can still have
+  // a backlog — draining only after that early return would strand it forever.
+  // (This also has to run outside the auto-sync path: auto-sync is off by
+  // default, so draining only there meant most users never retried anything.)
+  await retryQueuedCaptures();
+
   // Check if any sync is enabled
   if (!historySyncEnabled && !bookmarkSyncEnabled && !downloadSyncEnabled) {
     store.dispatch(
@@ -651,11 +1029,11 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
     setState({
       historySyncInProgress: true,
       historySyncStatus: "Starting sync...",
+      historySyncProgress: { phase: "starting" },
     }),
   );
 
   const successMessage = "Sync completed successfully";
-  const hasErrors = false;
 
   try {
     // Sync history if enabled
@@ -679,13 +1057,16 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
       await syncDownloads();
     }
 
+    // Everything written above went to the bulk lanes, which do not index as
+    // they write — without this the sync is invisible to search. See
+    // finishIngest.
+    await flushIngestFinish();
+
     // Final success message
     store.dispatch(
       setState({
         historySyncInProgress: false,
-        historySyncStatus: hasErrors
-          ? `${successMessage} (with some errors)`
-          : successMessage,
+        historySyncStatus: successMessage,
         lastHistorySync: new Date().toISOString(),
       }),
     );
@@ -701,7 +1082,14 @@ async function triggerManualSync(options: { timeRange?: number } = {}) {
         historySyncStatus: `Sync failed: ${errorMessage}`,
       }),
     );
+
+    // Last, deliberately: reportError awaits a bounded flush, and the user's
+    // "Sync failed" status must not wait on a telemetry round trip.
+    await reportError(error, "manual-sync");
   }
+
+  // Every sync run drains the retry queue — reflect the new depth immediately.
+  void updateActionBadge();
 }
 
 // Individual sync functions
@@ -763,6 +1151,36 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     currentDate: new Date().toISOString(),
   });
 
+  // Safari accepts the `history` manifest permission but never implements the
+  // API (https://developer.apple.com/forums/thread/711080), so a retroactive
+  // sync is impossible there. Fail loudly with a persisted log — the silent
+  // alternative looked like a sync that "just didn't work".
+  if (!hasHistoryApi()) {
+    const message =
+      "This browser doesn't expose browsing history to extensions (Safari never does). New visits are captured live as you browse instead.";
+    store.dispatch(
+      setState({
+        historySyncInProgress: false,
+        historySyncStatus: message,
+      }),
+    );
+    store.dispatch(
+      addSyncHistoryLog({
+        timestamp: new Date().toISOString(),
+        timeRange: Math.floor(timeRange / (24 * 60 * 60 * 1000)),
+        totalEntries: 0,
+        processedEntries: 0,
+        uploadedEntries: 0,
+        status: "failed",
+        error: message,
+        duration: Date.now() - startTime,
+      }),
+    );
+    store.dispatch(saveUserSettings());
+
+    return;
+  }
+
   try {
     // Check if history sync is enabled
     if (!state.historySyncEnabled) {
@@ -789,6 +1207,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     store.dispatch(
       setState({
         historySyncStatus: "Searching browser history...",
+        historySyncProgress: { phase: "searching" },
       }),
     );
 
@@ -841,10 +1260,15 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     store.dispatch(
       setState({
         historySyncStatus: `Processing ${allHistoryResults.length} history entries...`,
+        historySyncProgress: {
+          phase: "processing",
+          total: allHistoryResults.length,
+        },
       }),
     );
 
-    // Process history entries directly (no need for getVisits - it's deprecated)
+    // Expand each URL into per-visit rows via history.getVisits so Memory gets
+    // the original visitTime, not lastVisitTime-only and never Date.now().
     const hydratedResults: Array<{ visitTime: number; url: string }> = [];
     let processed = 0;
     let blacklistedCount = 0;
@@ -852,7 +1276,6 @@ async function syncHistory(options: { timeRange?: number } = {}) {
 
     for (const item of allHistoryResults) {
       try {
-        // Check if this URL is blacklisted
         if (
           item.url &&
           isUrlBlacklisted(item.url, siteBlacklist, pageBlacklist)
@@ -867,23 +1290,40 @@ async function syncHistory(options: { timeRange?: number } = {}) {
           continue;
         }
 
-        // Use the lastVisitTime from the search result directly, or fallback to current time
-        const visitTime = item.lastVisitTime || Date.now();
+        let addedForUrl = 0;
+        try {
+          const visits = await browser.history.getVisits({ url: item.url });
+          for (const visit of visits) {
+            if (
+              typeof visit.visitTime === "number" &&
+              visit.visitTime >= searchStartTime
+            ) {
+              hydratedResults.push({
+                visitTime: visit.visitTime,
+                url: item.url,
+              });
+              addedForUrl++;
+            }
+          }
+        } catch (err) {
+          console.log("getVisits failed, falling back to lastVisitTime:", err);
+        }
 
-        console.log("Processing item:", {
-          url: item.url,
-          lastVisitTime: item.lastVisitTime,
-          hasLastVisitTime: !!item.lastVisitTime,
-          usingVisitTime: visitTime,
-          visitTimeInRange: visitTime >= searchStartTime,
-          searchStartTime: searchStartTime,
-        });
-
-        if (visitTime >= searchStartTime) {
+        // Fallback only when getVisits is unavailable — still never invent "now".
+        if (
+          addedForUrl === 0 &&
+          typeof item.lastVisitTime === "number" &&
+          item.lastVisitTime >= searchStartTime
+        ) {
           hydratedResults.push({
-            visitTime: visitTime,
+            visitTime: item.lastVisitTime,
             url: item.url,
           });
+          addedForUrl++;
+        }
+
+        if (addedForUrl === 0) {
+          console.log("No in-range visit times for history URL:", item.url);
         }
 
         processed++;
@@ -895,6 +1335,12 @@ async function syncHistory(options: { timeRange?: number } = {}) {
           store.dispatch(
             setState({
               historySyncStatus: statusMessage,
+              historySyncProgress: {
+                phase: "processing",
+                current: processed,
+                total: allHistoryResults.length,
+                ignored: blacklistedCount,
+              },
             }),
           );
         }
@@ -942,7 +1388,11 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     );
     const historySyncReEnabledAt = syncReEnabledData.historySyncReEnabledAt;
 
-    // Filter out already synced history entries and invalid URLs
+    // Filter out already synced history entries and invalid URLs.
+    // The synced-ID set is read ONCE here: it holds up to 20k ids, and the
+    // previous per-item isItemSynced re-read and re-Set-ified the whole array
+    // for every visit — thousands of full storage reads on a large sync.
+    const syncedHistoryIds = await getSyncedItems(SYNCED_HISTORY_KEY);
     const unsyncedResults = [];
     for (const result of hydratedResults) {
       // Skip invalid URLs
@@ -956,11 +1406,7 @@ async function syncHistory(options: { timeRange?: number } = {}) {
       } else {
         // Normal sync - check cache
         const historyId = `${result.url}_${result.visitTime}`;
-        const isAlreadySynced = await isItemSynced(
-          SYNCED_HISTORY_KEY,
-          historyId,
-        );
-        if (!isAlreadySynced) {
+        if (!syncedHistoryIds.has(historyId)) {
           unsyncedResults.push(result);
         }
       }
@@ -1022,6 +1468,8 @@ async function syncHistory(options: { timeRange?: number } = {}) {
 
     // Get device ID for browser activity
     const deviceId = await getDeviceId();
+    // Import/observe time only — Memory orders by occurred_at (Chrome visitTime).
+    const syncObservedAt = new Date().toISOString();
 
     // Process and upload in batches
     let uploaded = 0;
@@ -1032,32 +1480,34 @@ async function syncHistory(options: { timeRange?: number } = {}) {
       const slice = unsyncedResults.slice(i, i + SLICE_SIZE);
 
       try {
-        // Convert to BrowserActivity format
-        const browserActivities = await Promise.all(
-          slice.map(async (result) => {
-            return convertToBrowserActivity(
-              result.url,
-              result.visitTime,
-              deviceId,
+        const browserActivities: BrowserActivity[] = [];
+        const syncedIds: string[] = [];
+        for (const result of slice) {
+          try {
+            browserActivities.push(
+              await convertToBrowserActivity(
+                result.url,
+                result.visitTime,
+                deviceId,
+              ),
             );
-          }),
-        );
+            syncedIds.push(`${result.url}_${result.visitTime}`);
+          } catch (err) {
+            console.log("Skipping history row without usable timestamp:", err);
+          }
+        }
+
+        if (browserActivities.length === 0) {
+          continue;
+        }
 
         try {
-          // Log the data being sent for debugging
-          // console.log(
-          //   "Sending history activity:",
-          //   JSON.stringify(browserActivities, null, 2),
-          // );
-
-          await postCaptureEvents(browserActivities);
+          await postBrowserCaptures(browserActivities, {
+            observedAt: syncObservedAt,
+          });
           uploaded = uploaded + browserActivities.length;
 
-          // Mark the whole slice as synced only after successful upload
-          await addSyncedItems(
-            SYNCED_HISTORY_KEY,
-            slice.map((result) => `${result.url}_${result.visitTime}`),
-          );
+          await addSyncedItems(SYNCED_HISTORY_KEY, syncedIds);
         } catch (error: any) {
           console.error("Error uploading history entry:", error);
           console.error("Failed activities:", browserActivities);
@@ -1078,6 +1528,12 @@ async function syncHistory(options: { timeRange?: number } = {}) {
         store.dispatch(
           setState({
             historySyncStatus: `Uploaded ${uploaded}/${unsyncedResults.length} visits...`,
+            historySyncProgress: {
+              phase: "uploading",
+              current: uploaded,
+              total: unsyncedResults.length,
+              ignored: blacklistedCount,
+            },
           }),
         );
       } catch (err: any) {
@@ -1168,6 +1624,9 @@ async function syncHistory(options: { timeRange?: number } = {}) {
       }),
     );
     store.dispatch(saveUserSettings());
+
+    // Last, deliberately — see the note in triggerManualSync.
+    await reportError(error, "history-sync");
   }
 }
 
@@ -1175,6 +1634,7 @@ async function syncBookmarks() {
   store.dispatch(
     setState({
       historySyncStatus: "Syncing bookmarks...",
+      historySyncProgress: { phase: "bookmarks" },
     }),
   );
 
@@ -1191,6 +1651,7 @@ async function syncDownloads() {
   store.dispatch(
     setState({
       historySyncStatus: "Syncing downloads...",
+      historySyncProgress: { phase: "downloads" },
     }),
   );
 
@@ -1220,24 +1681,7 @@ async function triggerBackgroundSync() {
 async function createDownloadEvent(
   download: any,
   eventType: "create" | "update" | "sync" = "sync",
-): Promise<{
-  time: string;
-  device_id: string;
-  url: string;
-  title?: string;
-  action_type:
-    | "visit"
-    | "reload"
-    | "bookmark"
-    | "search"
-    | "download"
-    | "form_submit";
-  properties?: Record<string, any>;
-  duration_seconds?: number;
-  scroll_depth_percent?: number;
-  is_incognito?: boolean;
-  contains_sensitive?: boolean;
-}> {
+): Promise<BrowserActivity> {
   const state = store.getState().ciState;
   const { deviceId } = state;
 
@@ -1250,8 +1694,15 @@ async function createDownloadEvent(
     throw new Error("Download URL is required");
   }
 
+  const time = chromeTimeToISO(download.startTime);
+  if (!time) {
+    throw new Error(
+      `Missing download startTime for id ${download.id}: ${download.url}`,
+    );
+  }
+
   return {
-    time: ensureISOTimeFormat(download.startTime),
+    time,
     device_id: deviceId || "",
     url: download.url,
     title: download.filename || "Unknown Download",
@@ -1269,6 +1720,14 @@ async function createDownloadEvent(
 }
 
 async function syncDownloadsToServer() {
+  if (!hasDownloadsApi()) {
+    console.log(
+      "Skipping download sync — this browser does not expose browser.downloads",
+    );
+
+    return;
+  }
+
   if (!(await resolveServerToken())) {
     return;
   }
@@ -1276,7 +1735,9 @@ async function syncDownloadsToServer() {
   try {
     const downloads = await browser.downloads.search({});
 
-    // Filter out already synced downloads and invalid URLs
+    // Filter out already synced downloads and invalid URLs (one storage read
+    // for the whole run — see the note in syncHistory)
+    const syncedDownloadKeys = await getSyncedItems(SYNCED_DOWNLOADS_KEY);
     const unsyncedDownloads = [];
     for (const download of downloads) {
       // Skip downloads with invalid URLs
@@ -1284,11 +1745,7 @@ async function syncDownloadsToServer() {
         continue;
       }
 
-      const isAlreadySynced = await isItemSynced(
-        SYNCED_DOWNLOADS_KEY,
-        download.id.toString(),
-      );
-      if (!isAlreadySynced) {
+      if (!syncedDownloadKeys.has(download.id.toString())) {
         unsyncedDownloads.push(download);
       }
     }
@@ -1300,51 +1757,37 @@ async function syncDownloadsToServer() {
     }
 
     console.log(`Syncing ${unsyncedDownloads.length} new downloads`);
+    const syncObservedAt = new Date().toISOString();
 
-    // Process unsynced downloads in batches
+    // Process unsynced downloads in batches. The whole slice goes up in ONE
+    // request — the bulk lane takes up to 10k records, and posting one at a
+    // time made a 300-download backfill 300 round trips.
     for (let i = 0; i < unsyncedDownloads.length; i += SLICE_SIZE) {
       const slice = unsyncedDownloads.slice(i, i + SLICE_SIZE);
-      const downloadEvents = await Promise.all(
-        slice.map((download) => createDownloadEvent(download, "sync")),
-      );
-
-      // Send each download event individually (server expects single object, not array)
+      const events: BrowserActivity[] = [];
       const syncedDownloadIds: string[] = [];
-      for (let j = 0; j < downloadEvents.length; j++) {
-        const event = downloadEvents[j];
-        const download = slice[j];
 
+      for (const download of slice) {
         try {
-          // Log the data being sent for debugging
-          console.log(
-            "Sending download event:",
-            JSON.stringify(event, null, 2),
-          );
-
-          await postCaptureEvents([event]);
-          console.log("Successfully sent download event:", event.url);
-
-          // Mark this specific download as synced only after successful upload
+          events.push(await createDownloadEvent(download, "sync"));
           syncedDownloadIds.push(download.id.toString());
-        } catch (eventError: any) {
-          console.error("Error sending individual download event:", eventError);
-          console.error("Failed event:", event);
-          console.error("Server response:", eventError.response?.data);
-
-          // Log detailed validation errors if available
-          if (eventError.response?.data?.errors) {
-            console.error(
-              "Server validation errors:",
-              JSON.stringify(eventError.response.data.errors, null, 2),
-            );
-          }
-
-          // Continue with other events even if one fails
-          // Don't mark as synced if upload failed
+        } catch (eventError: unknown) {
+          console.error("Error building download event:", eventError, download);
+          // Skip missing timestamps; do not invent sync-time.
         }
       }
 
-      await addSyncedItems(SYNCED_DOWNLOADS_KEY, syncedDownloadIds);
+      if (events.length === 0) {
+        continue;
+      }
+
+      try {
+        await postBrowserCaptures(events, { observedAt: syncObservedAt });
+        // Mark synced only after the batch lands, so a failure retries next run
+        await addSyncedItems(SYNCED_DOWNLOADS_KEY, syncedDownloadIds);
+      } catch (uploadError: unknown) {
+        console.error("Error uploading download batch:", uploadError);
+      }
     }
 
     // Update last sync time
@@ -1353,6 +1796,7 @@ async function syncDownloadsToServer() {
     });
   } catch (error) {
     console.error("Error syncing downloads:", error);
+    await reportError(error, "download-sync");
   }
 }
 
@@ -1365,7 +1809,7 @@ async function handleDownloadCreated(download: any) {
 
   try {
     const downloadEvent = await createDownloadEvent(download, "create");
-    await postCaptureEvents([downloadEvent]);
+    await postLiveCapture([downloadEvent]);
   } catch (error) {
     console.error("Error syncing created download:", error);
   }
@@ -1379,43 +1823,47 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
     return;
   }
 
-  // Map each scraped item to a CaptureEvent-ready activity (kind browser.scrape).
-  // A per-item source_id keeps distinct items on the same page/timestamp from
-  // deduping into a single event server-side.
-  const activities: BrowserActivity[] = [];
-
-  for (const [dataType, items] of Object.entries(scrapeResult.data)) {
-    if (!Array.isArray(items)) {
-      continue;
-    }
-
-    items.forEach((item, index) => {
-      const itemData = item as Record<string, any>;
-      activities.push({
-        time: scrapeResult.timestamp,
-        device_id: deviceId || "",
-        url: scrapeResult.url,
-        title: itemData.title || `${scrapeResult.profileName} Data`,
-        action_type: "scrape",
-        properties: {
-          source_id: `${scrapeResult.profileName}:${dataType}:${index}`,
-          scrape_profile: scrapeResult.profileName,
-          domain: scrapeResult.domain,
-          data_type: dataType,
-          data: itemData,
-        },
-      });
-    });
-  }
+  // Each item carries its own personalDataType, which becomes the `type` of the
+  // content row it lands in — so a watched title files as
+  // entertainment_preferences rather than as an anonymous page view. The
+  // per-item source_id keeps distinct items on one page/timestamp from
+  // deduping into a single row server-side. It is derived from the item's
+  // CONTENT, not its position — see @/lib/scrapeIdentity for why a positional
+  // key silently drops the newest item on any list that re-orders.
+  const activities: BrowserActivity[] = scrapeResult.items.map((item) => ({
+    time: scrapeResult.timestamp,
+    device_id: deviceId || "",
+    url: scrapeResult.url,
+    title:
+      typeof item.fields.title === "string" && item.fields.title.trim()
+        ? item.fields.title.trim()
+        : `${scrapeResult.profileName} — ${item.selector}`,
+    action_type: "scrape",
+    properties: {
+      source_id: scrapeSourceId(
+        scrapeResult.domain,
+        item.selector,
+        item.fields,
+      ),
+      personal_data_type: item.personalDataType,
+      scrape_profile: scrapeResult.profileName,
+      domain: scrapeResult.domain,
+      data_type: item.selector,
+      data: item.fields,
+    },
+  }));
 
   if (activities.length === 0) {
     return;
   }
 
   try {
-    await postCaptureEvents(activities);
+    await postLiveCapture(activities);
   } catch (error) {
     console.error("Error uploading scraped data:", error);
+    // No profile name, domain or item counts: which site the user was on is the
+    // sensitive part, and it is not needed to fix an upload failure.
+    await reportError(error, "scrape-upload");
   }
 }
 
@@ -1430,9 +1878,9 @@ async function handleSaveHighlight(
   },
   tab?: { url?: string; title?: string },
 ) {
-  const { serverDomain, deviceId } = store.getState().ciState;
+  const { serverURL, deviceId } = store.getState().ciState;
 
-  if (!serverDomain || !info.selectionText || !(await resolveServerToken())) {
+  if (!serverURL || !info.selectionText || !(await resolveServerToken())) {
     return;
   }
 
@@ -1445,10 +1893,13 @@ async function handleSaveHighlight(
   );
 
   try {
-    await postCaptureEvents([activity]);
+    await postLiveCapture([activity]);
     console.log("Saved highlight from", url);
   } catch (error) {
-    console.error("Error uploading highlight:", error);
+    // Already queued for retry by postLiveCapture — a highlight the user
+    // deliberately saved is the last thing that should be dropped on a blip.
+    console.error("Error uploading highlight (queued for retry):", error);
+    await reportError(error, "highlight-upload");
   }
 }
 
@@ -1482,24 +1933,7 @@ async function getAllBookmarks(): Promise<any[]> {
 async function createBookmarkEvent(
   bookmark: any,
   eventType: "create" | "update" | "sync" = "sync",
-): Promise<{
-  time: string;
-  device_id: string;
-  url: string;
-  title?: string;
-  action_type:
-    | "visit"
-    | "reload"
-    | "bookmark"
-    | "search"
-    | "download"
-    | "form_submit";
-  properties?: Record<string, any>;
-  duration_seconds?: number;
-  scroll_depth_percent?: number;
-  is_incognito?: boolean;
-  contains_sensitive?: boolean;
-}> {
+): Promise<BrowserActivity> {
   const state = store.getState().ciState;
   const { deviceId } = state;
 
@@ -1520,8 +1954,15 @@ async function createBookmarkEvent(
     throw new Error("Device ID is required for bookmark sync");
   }
 
+  const time = chromeTimeToISO(bookmark.dateAdded);
+  if (!time) {
+    throw new Error(
+      `Missing bookmark dateAdded for id ${bookmark.id}: ${bookmark.url}`,
+    );
+  }
+
   return {
-    time: ensureISOTimeFormat(bookmark.dateAdded),
+    time,
     device_id: deviceId || "",
     url: bookmark.url,
     title: bookmark.title || "Untitled Bookmark",
@@ -1536,6 +1977,14 @@ async function createBookmarkEvent(
 }
 
 async function syncBookmarksToServer() {
+  if (!hasBookmarksApi()) {
+    console.log(
+      "Skipping bookmark sync — this browser does not expose browser.bookmarks",
+    );
+
+    return;
+  }
+
   const { deviceId } = store.getState().ciState;
 
   if (!(await resolveServerToken())) {
@@ -1553,7 +2002,9 @@ async function syncBookmarksToServer() {
   try {
     const allBookmarks = await getAllBookmarks();
 
-    // Filter out already synced bookmarks and invalid URLs
+    // Filter out already synced bookmarks and invalid URLs (one storage read
+    // for the whole run — see the note in syncHistory)
+    const syncedBookmarkKeys = await getSyncedItems(SYNCED_BOOKMARKS_KEY);
     const unsyncedBookmarks = [];
     for (const bookmark of allBookmarks) {
       // Skip bookmarks with invalid URLs
@@ -1561,11 +2012,7 @@ async function syncBookmarksToServer() {
         continue;
       }
 
-      const isAlreadySynced = await isItemSynced(
-        SYNCED_BOOKMARKS_KEY,
-        bookmark.id,
-      );
-      if (!isAlreadySynced) {
+      if (!syncedBookmarkKeys.has(bookmark.id)) {
         unsyncedBookmarks.push(bookmark);
       }
     }
@@ -1577,17 +2024,34 @@ async function syncBookmarksToServer() {
     }
 
     console.log(`Syncing ${unsyncedBookmarks.length} new bookmarks`);
+    const syncObservedAt = new Date().toISOString();
 
     // Process unsynced bookmarks in batches
     for (let i = 0; i < unsyncedBookmarks.length; i += SLICE_SIZE) {
       const slice = unsyncedBookmarks.slice(i, i + SLICE_SIZE);
 
-      // Create bookmark events with error handling
-      const bookmarkEvents = [];
+      // Build the batch, keeping each event paired with the id to mark synced.
+      // Pairing here is what fixes the old index bug: the previous code walked
+      // the filtered event list with `slice[j]`, but `slice` still contained
+      // the bookmarks that had been skipped, so the two lists drifted apart and
+      // a failed upload could mark an unrelated bookmark as synced.
+      const batch: Array<{ event: BrowserActivity; bookmarkId: string }> = [];
       for (const bookmark of slice) {
         try {
           const event = await createBookmarkEvent(bookmark, "sync");
-          bookmarkEvents.push(event);
+
+          if (!isValidBookmarkEvent(event)) {
+            continue;
+          }
+
+          const bookmarkId =
+            typeof event.properties?.bookmark_id === "string"
+              ? event.properties.bookmark_id
+              : bookmark?.id;
+
+          if (bookmarkId) {
+            batch.push({ event, bookmarkId });
+          }
         } catch (error) {
           console.error("Error creating bookmark event:", error);
           console.error("Problematic bookmark:", bookmark);
@@ -1596,108 +2060,34 @@ async function syncBookmarksToServer() {
         }
       }
 
-      if (bookmarkEvents.length === 0) {
+      if (batch.length === 0) {
         console.log("No valid bookmark events to send for this batch");
         continue;
       }
 
-      // Additional validation: ensure all events have required fields
-      const validEvents = bookmarkEvents.filter((event) => {
-        const isValid =
-          event.time && event.device_id && event.url && event.action_type;
-        if (!isValid) {
-          console.warn("Filtering out invalid bookmark event:", event);
-        }
-
-        return isValid;
-      });
-
-      if (validEvents.length === 0) {
-        console.log("No valid bookmark events after filtering");
-        continue;
-      }
-
       try {
-        console.log(
-          "Sending bookmark events:",
-          JSON.stringify(validEvents, null, 2),
+        await postBrowserCaptures(
+          batch.map((entry) => entry.event),
+          { observedAt: syncObservedAt },
         );
 
-        // Additional validation: ensure all required fields are present
-        for (const event of validEvents) {
-          if (
-            !event.time ||
-            !event.device_id ||
-            !event.url ||
-            !event.action_type
-          ) {
-            console.error("Invalid event missing required fields:", event);
-            throw new Error("Invalid event data");
-          }
+        // Mark synced only after the batch lands, so a failure retries next run
+        await addSyncedItems(
+          SYNCED_BOOKMARKS_KEY,
+          batch.map((entry) => entry.bookmarkId),
+        );
+      } catch (batchError: any) {
+        console.error("Error uploading bookmark batch:", batchError);
+        console.error("Server response:", batchError?.response?.data);
 
-          // Ensure time is in ISO format
-          if (!event.time.includes("T") || !event.time.includes("Z")) {
-            console.error("Invalid time format:", event.time);
-            throw new Error("Invalid time format");
-          }
-
-          // Ensure device_id is a valid UUID format
-          const uuidRegex =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-          if (!uuidRegex.test(event.device_id)) {
-            console.error("Invalid device_id format:", event.device_id);
-            throw new Error("Invalid device_id format");
-          }
+        // Log detailed validation errors if available
+        if (batchError?.response?.data?.errors) {
+          console.error(
+            "Server validation errors:",
+            JSON.stringify(batchError.response.data.errors, null, 2),
+          );
         }
 
-        // Validate that we have valid bookmark events
-        if (validEvents.length === 0) {
-          console.log("No bookmark events to send");
-          continue;
-        }
-
-        // Send each event individually (server expects single object, not array)
-        const syncedBookmarkIds: string[] = [];
-        for (let j = 0; j < validEvents.length; j++) {
-          const event = validEvents[j];
-          const bookmark = slice[j];
-
-          try {
-            // Log the data being sent for debugging
-            console.log(
-              "Sending bookmark event:",
-              JSON.stringify(event, null, 2),
-            );
-
-            await postCaptureEvents([event]);
-            console.log("Successfully sent bookmark event:", event.url);
-
-            // Mark this specific bookmark as synced only after successful upload
-            syncedBookmarkIds.push(bookmark.id);
-          } catch (eventError: any) {
-            console.error(
-              "Error sending individual bookmark event:",
-              eventError,
-            );
-            console.error("Failed event:", event);
-            console.error("Server response:", eventError.response?.data);
-
-            // Log detailed validation errors if available
-            if (eventError.response?.data?.errors) {
-              console.error(
-                "Server validation errors:",
-                JSON.stringify(eventError.response.data.errors, null, 2),
-              );
-            }
-
-            // Continue with other events even if one fails
-            // Don't mark as synced if upload failed
-          }
-        }
-
-        await addSyncedItems(SYNCED_BOOKMARKS_KEY, syncedBookmarkIds);
-      } catch (batchError) {
-        console.error("Error processing bookmark batch:", batchError);
         // Continue with next batch even if this one fails
       }
     }
@@ -1708,6 +2098,7 @@ async function syncBookmarksToServer() {
     });
   } catch (error) {
     console.error("Error syncing bookmarks:", error);
+    await reportError(error, "bookmark-sync");
   }
 }
 
@@ -1718,7 +2109,7 @@ async function handleBookmarkCreated(id: string, bookmark: any) {
 
   try {
     const bookmarkEvent = await createBookmarkEvent(bookmark, "create");
-    await postCaptureEvents([bookmarkEvent]);
+    await postLiveCapture([bookmarkEvent]);
   } catch (error) {
     console.error("Error syncing created bookmark:", error);
   }
@@ -1738,52 +2129,29 @@ async function handleBookmarkChanged(id: string) {
     }
 
     const bookmarkEvent = await createBookmarkEvent(bookmark, "update");
-    await postCaptureEvents([bookmarkEvent]);
+    await postLiveCapture([bookmarkEvent]);
   } catch (error) {
     console.error("Error syncing updated bookmark:", error);
   }
 }
 
-async function handleBookmarkRemoved(id: string, removeInfo: any) {
-  const { deviceId } = store.getState().ciState;
-
-  if (!removeInfo.node?.url || !(await resolveServerToken())) {
-    return; // Skip folders or if not authenticated
-  }
-
-  try {
-    // A bookmark removal is a bookmark activity with event_type "remove",
-    // mirroring createBookmarkEvent so it rides the same browser.bookmark kind.
-    const removalActivity: BrowserActivity = {
-      time: new Date().toISOString(),
-      device_id: deviceId || "",
-      url: removeInfo.node.url,
-      title: removeInfo.node.title,
-      action_type: "bookmark",
-      properties: {
-        bookmark_id: id,
-        event_type: "remove",
-      },
-    };
-
-    await postCaptureEvents([removalActivity]);
-  } catch (error) {
-    console.error("Error syncing removed bookmark:", error);
-  }
-}
-
 export default defineBackground({
   main() {
-    const initServices = async () => {
-      try {
-        await database.init();
-        // Location tracking is now handled by content script
-      } catch (error) {
-        console.error("Failed to initialize services:", error);
-      }
-    };
-
-    initServices();
+    // First thing in the worker: a crash during store setup or auth restore is
+    // exactly the class of bug this exists to catch. Deliberately not awaited —
+    // reporting must never delay or gate the extension's own startup.
+    //
+    // The `import.meta.env` guard is a BUNDLE optimisation, not the gate — the
+    // gate is resolveTelemetrySettings, which runs regardless. Read here rather
+    // than through BUILD_TELEMETRY_ENV so the expression is statically replaced
+    // at build time and a DSN-less build drops the whole SDK instead of
+    // shipping it dead.
+    if (import.meta.env.WXT_SENTRY_DSN) {
+      void initTelemetry({
+        component: "background",
+        env: BUILD_TELEMETRY_ENV,
+      });
+    }
 
     const wrapStore = createWrapStore();
     wrapStore(store);
@@ -1798,7 +2166,7 @@ export default defineBackground({
       domain: null,
       lastUrl: null,
       accessToken: null,
-      serverDomain: "",
+      serverURL: "",
     };
 
     // Reflect the current portal session into Redux + the popup, and provision
@@ -1808,42 +2176,97 @@ export default defineBackground({
     // migration. Runs on the auth-check alarm, on load, and on popup demand.
     async function checkAuthenticationState() {
       try {
-        const { serverDomain } = store.getState().ciState;
+        // Safari may not wake this page for the callback content script's
+        // runtime messages; the callback page stashes its URL in storage
+        // instead. Finish that exchange on any wake — popup CHECK_AUTH_STATUS,
+        // the 1-minute auth alarm, or startup.
+        try {
+          const finished = await finishStoredCallback(oidcConfig());
 
-        // Nothing to check until the user has configured a server domain
-        if (!serverDomain) {
-          return;
+          if (finished) {
+            console.log("[CI] Completed sign-in from a stashed callback URL");
+            await discoverMemoryServer();
+            await closeOidcCallbackTabs();
+          }
+        } catch (error) {
+          console.error("Stashed OIDC callback exchange failed:", error);
+          await recordAuthFailure(error);
+          await reportError(error, "oidc-stashed-callback");
         }
 
         // Phase 3: the CI-Server bearer is the portal **id_token** (the opaque
         // OAuth access_token is rejected by CI-Server's JWKS verify). getIdToken
         // returns null when there is no usable session or once the id_token has
         // expired (the refresh grant does not reissue one — the user re-signs in).
-        const idToken = await getIdToken(oidcConfig());
+        let idToken = await getIdToken(oidcConfig());
+
+        // An expired id_token does not necessarily mean the user must sign in
+        // again: the refresh grant just doesn't reissue one. If the portal
+        // session is still good, a non-interactive auth-code round trip mints a
+        // fresh id_token silently. Only when that fails is re-auth genuinely
+        // required, and the popup drops to the sign-in view.
+        if (!idToken && (await loadTokens())) {
+          const renewed = await signInSilently(oidcConfig());
+
+          if (renewed?.id_token) {
+            console.log("[CI] Renewed the portal session silently");
+            idToken = renewed.id_token;
+          }
+        }
 
         // Mirror a portal id_token into Redux so the capture guards + popup
-        // reflect the session. Don't overwrite a legacy CI-Server token (loaded
-        // from storage during migration) with null — resolveServerToken still
-        // falls back to it until it expires.
+        // reflect the session. For a portal-era user (stored oidcTokens exist)
+        // the mirror follows getIdToken exactly — including null on expiry, so
+        // the popup drops to the sign-in view as the re-auth CTA. A legacy
+        // CI-Server token (no stored oidcTokens) is left for resolveServerToken
+        // to fall back to until it expires.
         if (idToken && idToken !== store.getState().ciState.accessToken) {
           store.dispatch(setState({ accessToken: idToken }));
+        } else if (!idToken && store.getState().ciState.accessToken) {
+          const storedTokens = await loadTokens();
+
+          if (storedTokens) {
+            store.dispatch(setState({ accessToken: null }));
+          }
         }
 
         const token = idToken ?? store.getState().ciState.accessToken;
+
+        // A signed-in user without a configured server may have gained a
+        // Memory app (or a portal upgrade) since sign-in. Re-runs discovery
+        // after Safari sign-in when the popup was closed (choices live in Redux
+        // only until the user picks one).
+        if (token && !store.getState().ciState.serverURL) {
+          await discoverMemoryServer();
+        }
+
+        const { serverURL } = store.getState().ciState;
         let { deviceId } = store.getState().ciState;
 
-        // Provision the device once we have a valid session
-        if (token && !deviceId) {
+        // Provision the device once we have a valid session and know where
+        // the server is (setupDevice posts to `${serverURL}/api/devices`)
+        if (token && serverURL && !deviceId) {
           console.log("Authenticated but no device ID, setting up device...");
           try {
             await setupDevice();
             deviceId = store.getState().ciState.deviceId;
+            store.dispatch(setState({ deviceSetupError: null }));
             store.dispatch(saveUserSettings());
           } catch (error) {
             console.error(
               "Failed to setup device after authentication:",
               error,
             );
+            // Surface it: registration is the gate on every capture path
+            // (getDeviceId throws without it), and with no state to read the
+            // popup could only spin on "Registering this browser…" forever.
+            store.dispatch(
+              setState({
+                deviceSetupError:
+                  error instanceof Error ? error.message : String(error),
+              }),
+            );
+            await reportError(error, "device-setup");
           }
         }
 
@@ -1859,19 +2282,145 @@ export default defineBackground({
           .catch(() => {
             console.log("No receiver for AUTH_STATE_UPDATED (popup closed)");
           });
+
+        // Runs on the 1-minute auth alarm too, so the badge tracks auth and
+        // queue transitions without dedicated hooks at every call site.
+        void updateActionBadge();
       } catch (error) {
         console.error("Error checking authentication state:", error);
+        await reportError(error, "auth-state");
       }
     }
 
-    // Interactive sign-in, triggered by the popup's "Authorize with Companion"
-    // action. The OIDC Auth-Code + PKCE flow runs here in the background rather
-    // than the popup, which is torn down when launchWebAuthFlow takes focus.
-    // signIn persists the tokens; checkAuthenticationState then mirrors the
-    // id_token into Redux and provisions the device via the shared auth path.
-    async function authorizeWithPortal(): Promise<void> {
-      await signIn(oidcConfig());
+    async function closeOidcCallbackTabs(): Promise<void> {
+      try {
+        const tabs = await browser.tabs.query({});
+        await Promise.all(
+          tabs
+            .filter(
+              (tab) => tab.id != null && tab.url && isOidcCallbackUrl(tab.url),
+            )
+            .map((tab) =>
+              browser.tabs.remove(tab.id as number).catch(() => undefined),
+            ),
+        );
+      } catch (error) {
+        console.debug("closeOidcCallbackTabs:", error);
+      }
+    }
+
+    // Interactive sign-in, triggered by the popup's "Sign in with Companion
+    // account" action. The OIDC Auth-Code + PKCE flow runs here in the
+    // background rather than the popup, which is torn down when
+    // launchWebAuthFlow takes focus. signIn persists the tokens; the Portal is
+    // then asked where the user's Memory app runs (auto-setting serverURL);
+    // checkAuthenticationState mirrors the id_token into Redux and provisions
+    // the device via the shared auth path.
+    async function authorizeWithPortal(
+      tabId?: number,
+      prepared?: PreparedAuthorize,
+    ): Promise<void> {
+      await signIn(oidcConfig(), { tabId, prepared });
+      await discoverMemoryServer();
       await checkAuthenticationState();
+    }
+
+    // Safari: when this page IS alive, react to the callback stash. The
+    // callback page itself owns the exchange for a fresh stash (it POSTs the
+    // code directly), so wait out its ownership window first — this listener
+    // is the rescue for a callback page that died before finishing.
+    browser.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes.oidcPendingCallbackUrl?.newValue) {
+        return;
+      }
+
+      setTimeout(() => {
+        void (async () => {
+          try {
+            // Null when the callback page already finished (stash cleared)
+            // or the stash is somehow fresh again — nothing to rescue.
+            const tokens = await finishStoredCallback(oidcConfig());
+
+            if (!tokens) {
+              return;
+            }
+
+            await discoverMemoryServer();
+            await checkAuthenticationState();
+            await closeOidcCallbackTabs();
+          } catch (error) {
+            console.error("OIDC storage-stash callback failed:", error);
+            await recordAuthFailure(error);
+          }
+        })();
+      }, CALLBACK_PAGE_OWNERSHIP_MS + 500);
+    });
+
+    // Safari: rescue for a callback page whose content script never injected
+    // (e.g. missing per-site permission). Delayed past the page's ownership
+    // window — the content script exchanges the code itself, and a second
+    // context POSTing the same single-use code would invalidate the first.
+    // If the page finished, pending auth is cleared and finishOidcCallback
+    // just returns the stored tokens (no second POST).
+    try {
+      browser.webNavigation?.onCommitted?.addListener((details) => {
+        if (
+          details.frameId !== 0 ||
+          !details.url ||
+          !isOidcCallbackUrl(details.url)
+        ) {
+          return;
+        }
+
+        setTimeout(() => {
+          void (async () => {
+            try {
+              const tokens = await finishOidcCallback(
+                oidcConfig(),
+                details.url,
+              );
+              if (!tokens) {
+                return;
+              }
+
+              await discoverMemoryServer();
+              await checkAuthenticationState();
+              await closeOidcCallbackTabs();
+            } catch (error) {
+              console.error("OIDC webNavigation callback failed:", error);
+              await recordAuthFailure(error);
+            }
+          })();
+        }, CALLBACK_PAGE_OWNERSHIP_MS + 500);
+      });
+    } catch (error) {
+      console.debug("OIDC webNavigation listener unavailable:", error);
+    }
+
+    // Explicit sign-out, e.g. when the user switches Portal: tokens from the
+    // old issuer are useless (and must not be sent) elsewhere.
+    async function signOutOfPortal(): Promise<void> {
+      await signOut();
+      // The device registration lives on the old portal's server; a fresh
+      // sign-in provisions a new one where the next serverURL points.
+      store.dispatch(
+        setState({
+          accessToken: null,
+          deviceId: null,
+          discoveryHint: null,
+          memoryAppChoices: null,
+          deviceSetupError: null,
+        }),
+      );
+      store.dispatch(saveUserSettings());
+      browser.runtime
+        .sendMessage({
+          action: "AUTH_STATE_UPDATED",
+          payload: { accessToken: null, deviceId: null },
+        })
+        .catch(() => {
+          console.log("No receiver for AUTH_STATE_UPDATED (popup closed)");
+        });
     }
 
     browser.alarms.create(AUTH_CHECK_ALARM, { periodInMinutes: 1 });
@@ -1905,9 +2454,21 @@ export default defineBackground({
       }
     });
 
-    // Check auth once settings (incl. serverDomain) have been loaded
+    // Check auth once settings (incl. serverURL) have been loaded, and only
+    // then wire the live bookmark/download listeners.
+    //
+    // Registration MUST wait for the settings load. Both setup functions read
+    // the sync toggles out of Redux, and until loadUserSettings resolves those
+    // are still their initial `false` — so running them eagerly took the
+    // removeListener branch, and the only thing that re-registered was
+    // storage.onChanged, which fires on a *change* and not on a rewrite of the
+    // same value. The result was that after every MV3 service-worker
+    // suspension, live bookmark and download capture stayed off until the user
+    // manually toggled the setting off and on again.
     store.dispatch(loadUserSettings()).then(() => {
       checkAuthenticationState();
+      setupBookmarkListeners();
+      setupDownloadListeners();
     });
 
     const existingKeys = Object.keys(store.getState().ciState);
@@ -1946,27 +2507,39 @@ export default defineBackground({
       }
     });
 
-    browser.webNavigation.onCompleted.addListener((e) => {
+    // Both navigation events get the same http(s)-only gate. onHistoryStateUpdated
+    // was previously unfiltered, so SPA route changes on non-web schemes reached
+    // recordHit while ordinary loads on those schemes did not.
+    const onNavigation = (e: { url: string }) => {
       if (siteRegex.test(e.url)) {
         recordHit(e);
       }
-    });
-    browser.webNavigation.onHistoryStateUpdated.addListener(recordHit);
+    };
+
+    browser.webNavigation.onCompleted.addListener(onNavigation);
+    browser.webNavigation.onHistoryStateUpdated.addListener(onNavigation);
 
     browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log("Background received message:", message);
 
       try {
         if (message && message.action === "SETUP_DEVICE") {
-          try {
-            setupDevice().then(() => {
+          // .catch, not try/catch: setupDevice is async, so a rejection never
+          // reaches the surrounding synchronous handler — the popup was left
+          // waiting on a sendResponse that never came, plus an unhandled
+          // rejection.
+          setupDevice()
+            .then(() => {
+              store.dispatch(setState({ deviceSetupError: null }));
               sendResponse({ success: true });
+            })
+            .catch((error: any) => {
+              const errorMessage =
+                error?.message || error?.toString() || "Unknown error occurred";
+              console.error("Device setup failed:", error);
+              store.dispatch(setState({ deviceSetupError: errorMessage }));
+              sendResponse({ success: false, error: errorMessage });
             });
-          } catch (error: any) {
-            const errorMessage =
-              error?.message || error?.toString() || "Unknown error occurred";
-            sendResponse({ success: false, error: errorMessage });
-          }
 
           return true;
         }
@@ -2026,13 +2599,14 @@ export default defineBackground({
           return true;
         }
 
-        if (message.action === "AUTHORIZE") {
-          authorizeWithPortal()
-            .then(() => {
-              sendResponse({ success: true });
+        // Popup queue pill / Connect footer / Activity summary: read-only
+        // retry-queue depth.
+        if (message.action === "GET_QUEUE_STATUS") {
+          getQueuedCaptures()
+            .then((queued) => {
+              sendResponse({ success: true, queued: queued.length });
             })
             .catch((error) => {
-              console.error("Authorization failed:", error);
               sendResponse({
                 success: false,
                 error: error?.message || String(error),
@@ -2040,6 +2614,165 @@ export default defineBackground({
             });
 
           return true;
+        }
+
+        // Popup "Check again" / Settings "Find my Memory": re-ask the Portal
+        // which Memories this account has and surface them as choices. The
+        // response reports what was found so the caller can give feedback.
+        if (message.action === "DISCOVER_MEMORY") {
+          discoverMemoryServer({ force: true })
+            .then(() => {
+              const { memoryAppChoices, discoveryHint } =
+                store.getState().ciState;
+              sendResponse({
+                success: true,
+                found: memoryAppChoices?.length ?? 0,
+                hint: discoveryHint,
+              });
+            })
+            .catch((error) => {
+              console.error("Forced Memory discovery failed:", error);
+              sendResponse({
+                success: false,
+                error: error?.message || String(error),
+              });
+            });
+
+          return true;
+        }
+
+        if (message.action === "SIGN_OUT") {
+          signOutOfPortal()
+            .then(() => {
+              void updateActionBadge();
+              sendResponse({ success: true });
+            })
+            .catch((error) => {
+              console.error("Sign-out failed:", error);
+              sendResponse({
+                success: false,
+                error: error?.message || String(error),
+              });
+            });
+
+          return true;
+        }
+
+        if (message.action === "OIDC_CALLBACK") {
+          const url = typeof message.url === "string" ? message.url : "";
+          void (async () => {
+            try {
+              const tokens = await finishOidcCallback(oidcConfig(), url);
+              if (!tokens) {
+                // No pending PKCE session (expired after 2 min, or sign-in was
+                // started against a different Portal). Retrying won't help.
+                sendResponse({
+                  success: false,
+                  error:
+                    "No sign-in in progress. Reopen the extension popup and press Sign in again.",
+                });
+
+                return;
+              }
+
+              // When the in-memory tab waiter died, authorizeWithPortal may not
+              // run discovery — do it here. Harmless if both paths run.
+              await discoverMemoryServer();
+              await checkAuthenticationState();
+              await closeOidcCallbackTabs();
+              sendResponse({ success: true });
+            } catch (error) {
+              console.error("OIDC_CALLBACK failed:", error);
+              await recordAuthFailure(error);
+              sendResponse({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+              });
+              browser.runtime
+                .sendMessage({
+                  action: "AUTH_FAILED",
+                  error: error instanceof Error ? error.message : String(error),
+                })
+                .catch(() => undefined);
+            }
+          })();
+
+          return true;
+        }
+
+        if (message.action === "SIGNED_IN") {
+          // The callback content script completed the PKCE exchange itself
+          // and stored the tokens; this is a best-effort nudge so an awake
+          // background runs discovery and closes the callback tab right away.
+          // If this message never arrives (background unloaded), the reopened
+          // popup's CHECK_AUTH_STATUS does the same from the stored tokens.
+          void (async () => {
+            try {
+              await discoverMemoryServer();
+              await checkAuthenticationState();
+              await closeOidcCallbackTabs();
+              sendResponse({ success: true });
+            } catch (error) {
+              console.error("SIGNED_IN follow-up failed:", error);
+              sendResponse({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          })();
+
+          return true;
+        }
+
+        if (message.action === "AUTHORIZE") {
+          // Ack immediately. Completion via AUTH_STATE_UPDATED / AUTH_FAILED.
+          // Safari: popup sends `prepared` first (start capture), then opens the
+          // authorize tab; optional AUTHORIZE_TAB attaches the tab id later.
+          const tabId =
+            typeof message.tabId === "number" ? message.tabId : undefined;
+          const prepared =
+            message.prepared &&
+            typeof message.prepared.authorizeUrl === "string" &&
+            typeof message.prepared.verifier === "string" &&
+            typeof message.prepared.state === "string" &&
+            typeof message.prepared.redirectUri === "string" &&
+            typeof message.prepared.tokenEndpoint === "string"
+              ? (message.prepared as PreparedAuthorize)
+              : undefined;
+          sendResponse({ success: true, started: true });
+          authorizeWithPortal(tabId, prepared)
+            .then(() => {
+              void closeOidcCallbackTabs();
+              // checkAuthenticationState already broadcasts AUTH_STATE_UPDATED.
+            })
+            .catch((error) => {
+              console.error("Authorization failed:", error);
+              void recordAuthFailure(error);
+              if (tabId !== undefined) {
+                void browser.tabs.remove(tabId).catch(() => undefined);
+              }
+
+              browser.runtime
+                .sendMessage({
+                  action: "AUTH_FAILED",
+                  error: error?.message || String(error),
+                })
+                .catch(() => {
+                  console.log("No receiver for AUTH_FAILED (popup closed)");
+                });
+            });
+
+          return false;
+        }
+
+        if (message.action === "AUTHORIZE_TAB") {
+          if (typeof message.tabId === "number") {
+            attachAuthorizeTabId(message.tabId);
+          }
+
+          sendResponse({ success: true });
+
+          return false;
         }
 
         if (message.action === "DOMAIN_SCRAPE_DATA") {
@@ -2061,23 +2794,28 @@ export default defineBackground({
 
     // Set up bookmark listeners based on settings
     const setupBookmarkListeners = () => {
+      if (!hasBookmarksApi()) {
+        return;
+      }
+
       const state = store.getState().ciState;
+      // No onRemoved listener: bookmark removals are not captured. A saved
+      // bookmark becomes a content row, and a deletion has nothing to say there.
       if (state.bookmarkSyncEnabled) {
         browser.bookmarks.onCreated.addListener(handleBookmarkCreated);
         browser.bookmarks.onChanged.addListener(handleBookmarkChanged);
-        browser.bookmarks.onRemoved.addListener(handleBookmarkRemoved);
       } else {
         browser.bookmarks.onCreated.removeListener(handleBookmarkCreated);
         browser.bookmarks.onChanged.removeListener(handleBookmarkChanged);
-        browser.bookmarks.onRemoved.removeListener(handleBookmarkRemoved);
       }
     };
 
-    // Initial setup
-    setupBookmarkListeners();
-
     // Set up download listeners based on settings
     const setupDownloadListeners = () => {
+      if (!hasDownloadsApi()) {
+        return;
+      }
+
       const state = store.getState().ciState;
       if (state.downloadSyncEnabled) {
         browser.downloads.onCreated.addListener(handleDownloadCreated);
@@ -2086,8 +2824,8 @@ export default defineBackground({
       }
     };
 
-    // Initial setup
-    setupDownloadListeners();
+    // Initial registration happens in the loadUserSettings().then() above, once
+    // the toggles hold their persisted values rather than their defaults.
 
     // Listen for setting changes
     browser.storage.onChanged.addListener((changes) => {

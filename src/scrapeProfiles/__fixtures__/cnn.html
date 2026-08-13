@@ -1,0 +1,322 @@
+<!doctype html>
+<!--
+  CNN home page (www.cnn.com).
+  SYNTHETIC — models the structure of the real page; see README.md.
+  Every headline, byline, timestamp and image URL is fabricated.
+
+  Structural details modelled from the live site, because they are what the
+  profile's selectors do (and do not) hit:
+    - a story card is <div class="card container__item ..."> inside a
+      "container_<zone-name>" wrapper, with data-uri / data-component-name
+      attributes left in (scrubbed of ids)
+    - the whole card is wrapped in a single <a class="container__link">
+    - the headline is a <span class="container__headline-text"> inside a
+      <div class="container__headline">; CNN's card markup uses NO heading tag,
+      the headings on the page are the zone titles OUTSIDE the cards
+    - images are <img class="image__dam-img"> inside <picture class="image__picture">
+    - there is no breaking-news banner on this capture, so the profile's
+      `breakingNews` selector is not exercised here
+-->
+<html lang="en" data-uri="cms.cnn.com/_pages/homepage">
+  <head>
+    <title>Breaking News, Latest News and Videos | CNN</title>
+    <meta name="description" content="View the latest news and breaking news today." />
+  </head>
+  <body class="layout-homepage">
+    <div class="layout__wrapper layout-homepage__wrapper">
+      <header class="header header--fixed" data-editable="settings">
+        <div class="header__container">
+          <a class="header__logo" href="/" aria-label="CNN logo">
+            <img src="https://example.test/img.jpg" alt="CNN" width="48" height="24" />
+          </a>
+          <nav class="subnav" aria-label="Primary">
+            <ul class="subnav__sections">
+              <li class="subnav__section"><a class="subnav__section-link" href="/us">US</a></li>
+              <li class="subnav__section"><a class="subnav__section-link" href="/world">World</a></li>
+              <li class="subnav__section"><a class="subnav__section-link" href="/politics">Politics</a></li>
+              <li class="subnav__section"><a class="subnav__section-link" href="/business">Business</a></li>
+              <li class="subnav__section"><a class="subnav__section-link" href="/health">Health</a></li>
+              <li class="subnav__section"><a class="subnav__section-link" href="/entertainment">Entertainment</a></li>
+            </ul>
+          </nav>
+          <div class="header__member-account">
+            <button class="header__member-account-button" type="button">Account</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="ad-slot ad-slot-header ad-slot--leaderboard" data-ad-slot="header">
+        <div class="ad-slot__placeholder">Advertisement</div>
+      </div>
+
+      <section class="layout__top layout-homepage__top">
+        <div
+          class="container container_lead-plus-headlines container_lead-plus-headlines--has-media"
+          data-uri="cms.cnn.com/_components/container/instances/container_lead-plus-headlines"
+          data-editable="settings"
+        >
+          <div class="container__field-links container_lead-plus-headlines__field-links">
+            <div class="container_lead-plus-headlines__cards-wrapper">
+              <div
+                class="container__item container__item--type-media-image container_lead-plus-headlines__item container_lead-plus-headlines__item--type-media-image"
+              >
+                <div
+                  class="card container__item container__item--type-media-image"
+                  data-component-name="card"
+                  data-editable="settings"
+                  data-uri="cms.cnn.com/_components/card/instances/card-lead"
+                >
+                  <a
+                    data-link-type="article"
+                    class="container__link container__link--type-article container_lead-plus-headlines__link"
+                    href="/2026/07/29/politics/fictional-subcommittee-hearing-postponed/index.html"
+                  >
+                    <div
+                      class="container__item-media-wrapper container_lead-plus-headlines__item-media-wrapper"
+                    >
+                      <div class="container__item-media container_lead-plus-headlines__item-media">
+                        <div class="image image--media" data-editable="cms.image">
+                          <picture class="image__picture">
+                            <source media="(min-width: 1280px)" srcset="https://example.test/img.jpg" />
+                            <img
+                              class="image__dam-img"
+                              src="https://example.test/img.jpg"
+                              alt=""
+                              loading="eager"
+                              width="1600"
+                              height="900"
+                            />
+                          </picture>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="container__text container_lead-plus-headlines__text">
+                      <div
+                        class="container__headline container__headline--lead container_lead-plus-headlines__headline"
+                      >
+                        <span data-editable="headline" class="container__headline-text"
+                          >Fictional subcommittee postpones hearing on a bill that does not
+                          exist</span
+                        >
+                      </div>
+                    </div>
+                  </a>
+                </div>
+              </div>
+
+              <div class="container_lead-plus-headlines__headlines-wrapper">
+                <div class="container__item container_lead-plus-headlines__item">
+                  <div
+                    class="card container__item"
+                    data-component-name="card"
+                    data-editable="settings"
+                    data-uri="cms.cnn.com/_components/card/instances/card-headline-1"
+                  >
+                    <a
+                      data-link-type="article"
+                      class="container__link container__link--type-article container_lead-plus-headlines__link"
+                      href="/2026/07/29/business/invented-index-closes-flat-again/index.html"
+                    >
+                      <div class="container__text container_lead-plus-headlines__text">
+                        <div class="container__headline container_lead-plus-headlines__headline">
+                          <span data-editable="headline" class="container__headline-text"
+                            >Invented market index closes flat for the eleventh straight
+                            session</span
+                          >
+                        </div>
+                      </div>
+                    </a>
+                  </div>
+                </div>
+
+                <div class="container__item container_lead-plus-headlines__item">
+                  <div
+                    class="card container__item"
+                    data-component-name="card"
+                    data-editable="settings"
+                    data-uri="cms.cnn.com/_components/card/instances/card-headline-2"
+                  >
+                    <a
+                      data-link-type="article"
+                      class="container__link container__link--type-article container_lead-plus-headlines__link"
+                      href="/2026/07/29/health/made-up-study-finds-nothing-conclusive/index.html"
+                    >
+                      <div class="container__text container_lead-plus-headlines__text">
+                        <div class="container__headline container_lead-plus-headlines__headline">
+                          <span data-editable="headline" class="container__headline-text"
+                            >Made-up study of made-up participants finds nothing conclusive</span
+                          >
+                        </div>
+                      </div>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="layout__main layout-homepage__main">
+        <div
+          class="container container_vertical-strip"
+          data-uri="cms.cnn.com/_components/container/instances/container_vertical-strip"
+          data-editable="settings"
+        >
+          <div class="container__title container_vertical-strip__title">
+            <h2 class="container__title-text container_vertical-strip__title-text">More top stories</h2>
+          </div>
+          <div class="container__field-links container_vertical-strip__field-links">
+            <div class="container__item container_vertical-strip__item">
+              <div
+                class="card container__item container__item--type-media-image"
+                data-component-name="card"
+                data-editable="settings"
+                data-uri="cms.cnn.com/_components/card/instances/card-strip-1"
+              >
+                <a
+                  data-link-type="article"
+                  class="container__link container__link--type-article container_vertical-strip__link"
+                  href="/2026/07/29/tech/nonexistent-startup-raises-nonexistent-round/index.html"
+                >
+                  <div class="container__item-media-wrapper container_vertical-strip__item-media-wrapper">
+                    <div class="container__item-media container_vertical-strip__item-media">
+                      <div class="image image--media" data-editable="cms.image">
+                        <picture class="image__picture">
+                          <img
+                            class="image__dam-img"
+                            src="https://example.test/img.jpg"
+                            alt=""
+                            loading="lazy"
+                            width="640"
+                            height="360"
+                          />
+                        </picture>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="container__text container_vertical-strip__text">
+                    <div class="container__headline container_vertical-strip__headline">
+                      <span data-editable="headline" class="container__headline-text"
+                        >Nonexistent startup raises a funding round from investors who declined to
+                        be named or to exist</span
+                      >
+                    </div>
+                  </div>
+                </a>
+              </div>
+            </div>
+
+            <div class="container__item container_vertical-strip__item">
+              <div
+                class="card container__item container__item--type-media-image"
+                data-component-name="card"
+                data-editable="settings"
+                data-uri="cms.cnn.com/_components/card/instances/card-strip-2"
+              >
+                <a
+                  data-link-type="article"
+                  class="container__link container__link--type-article container_vertical-strip__link"
+                  href="/2026/07/28/world/imaginary-summit-ends-without-communique/index.html"
+                >
+                  <div class="container__item-media-wrapper container_vertical-strip__item-media-wrapper">
+                    <div class="container__item-media container_vertical-strip__item-media">
+                      <div class="image image--media" data-editable="cms.image">
+                        <picture class="image__picture">
+                          <img
+                            class="image__dam-img"
+                            src="https://example.test/img.jpg"
+                            alt=""
+                            loading="lazy"
+                            width="640"
+                            height="360"
+                          />
+                        </picture>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="container__text container_vertical-strip__text">
+                    <div class="container__headline container_vertical-strip__headline">
+                      <span data-editable="headline" class="container__headline-text"
+                        >Imaginary summit ends without a communiqué, delegates blame the
+                        catering</span
+                      >
+                    </div>
+                  </div>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="container container_video-cards"
+          data-uri="cms.cnn.com/_components/container/instances/container_video-cards"
+          data-editable="settings"
+        >
+          <div class="container__title container_video-cards__title">
+            <h2 class="container__title-text container_video-cards__title-text">Video</h2>
+          </div>
+          <div class="container__field-links container_video-cards__field-links">
+            <div class="container__item container_video-cards__item">
+              <div
+                class="card container__item container__item--type-video"
+                data-component-name="card"
+                data-editable="settings"
+                data-uri="cms.cnn.com/_components/card/instances/card-video-1"
+              >
+                <a
+                  data-link-type="video"
+                  class="container__link container__link--type-video container_video-cards__link"
+                  href="/videos/entertainment/2026/07/28/fabricated-clip-of-a-thing-that-did-not-happen.cnn"
+                >
+                  <div class="container__item-media-wrapper container_video-cards__item-media-wrapper">
+                    <div class="container__item-media container_video-cards__item-media">
+                      <div class="image image--media" data-editable="cms.image">
+                        <picture class="image__picture">
+                          <img
+                            class="image__dam-img"
+                            src="https://example.test/img.jpg"
+                            alt=""
+                            loading="lazy"
+                            width="640"
+                            height="360"
+                          />
+                        </picture>
+                      </div>
+                      <div class="container__item-media__playing-time">02:14</div>
+                    </div>
+                  </div>
+                  <div class="container__text container_video-cards__text">
+                    <div class="container__headline container_video-cards__headline">
+                      <span data-editable="headline" class="container__headline-text"
+                        >Watch: fabricated clip of an event that did not take place</span
+                      >
+                    </div>
+                  </div>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ad-slot ad-slot-inline" data-ad-slot="inline">
+          <div class="ad-slot__placeholder">Advertisement</div>
+        </div>
+      </section>
+
+      <footer class="footer" data-editable="settings">
+        <nav class="footer__nav" aria-label="Footer">
+          <ul class="footer__nav-list">
+            <li class="footer__nav-item"><a class="footer__nav-link" href="/terms">Terms of Use</a></li>
+            <li class="footer__nav-item"><a class="footer__nav-link" href="/privacy">Privacy Policy</a></li>
+            <li class="footer__nav-item"><a class="footer__nav-link" href="/about">About CNN</a></li>
+          </ul>
+        </nav>
+        <div class="footer__copyright">
+          <p>Fictional copy for a fixture. Not a real page.</p>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

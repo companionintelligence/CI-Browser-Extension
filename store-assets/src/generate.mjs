@@ -2,7 +2,29 @@
 // design system. Output SVGs are rendered to PNG/GIF by render.sh.
 import { writeFileSync } from "node:fs";
 import { LOGO_B64 } from "./logo.mjs";
-import { T, renderPopup, renderIgnored, framedPopup, POPUP_W, BRAND_GRAD_DEF } from "./popup.mjs";
+import { T, renderPopup, renderIgnored, framedPopup, popupParts, POPUP_W, BRAND_GRAD_DEF } from "./popup.mjs";
+
+// Popup states differ a lot in height (the signed-out view is a third of the
+// signed-in one). Fixed placement left short states stranded in the top corner
+// of a 1280x800 canvas, so fit each state into a right-hand column: scale
+// toward a target height, but never wider than the column, then centre it.
+const SHOT_H = 800;
+const COL_X = 752; // left edge of the popup column
+const COL_W = 1280 - COL_X - 64; // to the canvas edge, minus the page margin
+
+function popupFrameFit(state, { target = 620, min = 0.85 } = {}) {
+  const { h } = popupParts(state);
+  const total = h + 30; // + title bar drawn by framedPopup
+  // Width is the hard constraint — overshooting it clips the window off-canvas.
+  const maxScale = COL_W / POPUP_W;
+  const scale = Math.min(maxScale, Math.max(min, target / total));
+
+  return {
+    scale,
+    x: Math.round(COL_X + (COL_W - POPUP_W * scale) / 2),
+    y: Math.round((SHOT_H - total * scale) / 2),
+  };
+}
 
 const FRAMES = new URL("../frames/", import.meta.url).pathname;
 const OUT = new URL("../out/", import.meta.url).pathname;
@@ -67,7 +89,7 @@ function hero() {
   s += tx(80, 340, "your", { size: 64, weight: 800, fill: T.text, ls: "-1" });
   s += `<text x="250" y="340" font-family="${T.font}" font-size="64" font-weight="800" fill="url(#tealText)" letter-spacing="-1">private memory.</text>`;
   s += tx(80, 392, "A privacy-first browser extension that syncs your history,", { size: 21, fill: T.muted });
-  s += tx(80, 422, "bookmarks, and downloads to your own CI Server — never the cloud.", { size: 21, fill: T.muted });
+  s += tx(80, 422, "bookmarks, highlights, and downloads to a server you control.", { size: 21, fill: T.muted });
   s += checkRow(82, 482, "Local-first & self-hosted", { size: 18 });
   s += checkRow(82, 520, "Ignore lists keep private sites private", { size: 18 });
   s += checkRow(82, 558, "Chrome · Firefox · Safari", { size: 18 });
@@ -130,7 +152,7 @@ function promoMarquee() {
   s += tx(196, 192, "Intelligence", { size: 30, weight: 800, fill: T.teal });
   s += tx(96, 296, "Your browsing,", { size: 58, weight: 800, fill: T.text, ls: "-1" });
   s += `<text x="96" y="360" font-family="${T.font}" font-size="58" font-weight="800" fill="url(#tealText)" letter-spacing="-1">your private memory.</text>`;
-  s += tx(96, 412, "History · bookmarks · downloads → your own CI Server.", { size: 22, fill: T.muted });
+  s += tx(96, 412, "History · bookmarks · highlights → a server you control.", { size: 22, fill: T.muted });
   s += pill(96, 450, "Privacy-first") + pill(252, 450, "Self-hosted") + pill(420, 450, "Chrome · Firefox · Safari");
   s += framedPopup("loggedIn", 940, 70, 1.06, "marq");
   s += `</svg>`;
@@ -161,11 +183,16 @@ writeFileSync(`${OUT}hero.svg`, hero());
 writeFileSync(`${OUT}promo-small.svg`, promoSmall());
 writeFileSync(`${OUT}promo-marquee.svg`, promoMarquee());
 
+// Store screenshots. Chrome allows five; the fifth carries the differentiator
+// (site profiles), which nothing else in the listing shows.
+// "CI Server" is internal vocabulary — users see "Companion Memory" in the
+// product, so the marketing copy says that or plainly "your own server".
 const shots = [
-  { idx: 1, state: "synced", headline: "Browsing history,\nself-hosted.", sub: "Sync to your own CI Server — not the cloud.", callouts: ["One-click history sync", "Pick your own time range", "See every sync in the log"] },
-  { idx: 2, state: "loggedIn", headline: "History, bookmarks\n& downloads.", sub: "Choose exactly what gets captured.", callouts: ["Auto-sync in the background", "Toggle each data type", "Device-aware syncing"] },
+  { idx: 1, state: "synced", headline: "Your browsing,\non your server.", sub: "History syncs to your own Companion Memory — not the cloud.", callouts: ["One-click history sync", "Pick your own time range", "See every sync in the log"] },
+  { idx: 2, state: "loggedIn", headline: "History, bookmarks\n& downloads.", sub: "Choose exactly what gets captured.", callouts: ["Auto-sync in the background", "Toggle each data type", "Offline captures retry automatically"] },
   { idx: 3, state: "ignored", headline: "Private stays\nprivate.", sub: "Ignore lists exclude sites and pages you choose.", callouts: ["Ignore whole sites", "Ignore individual pages", "Add the current tab in one click"] },
-  { idx: 4, state: "loggedOut", headline: "Point it at\nyour server.", sub: "Connect to any CI Server you control.", callouts: ["Your data, your infrastructure", "Token-based authentication", "Works across browsers"] },
+  { idx: 4, state: "loggedOut", headline: "One sign-in.\nNothing to copy.", sub: "Sign in with your Companion account and it finds your Memory.", callouts: ["No API keys to paste", "Your server is discovered for you", "Chrome · Firefox · Safari"] },
+  { idx: 5, state: "loggedIn", headline: "Recover what\nservices forget.", sub: "Site profiles save what you watched, read, and booked.", callouts: ["Netflix, Disney+, Max & more", "GitHub activity and articles read", "Financial capture is off by default"] },
 ];
 // screenshots need multi-line headline handling
 function screenshotMulti(opts) {
@@ -183,8 +210,8 @@ function screenshotMulti(opts) {
   for (const ln of lines) { s += tx(64, hy, ln, { size: 52, weight: 800, fill: T.text, ls: "-1" }); hy += 58; }
   s += tx(64, hy + 8, opts.sub, { size: 21, fill: T.muted }); hy += 56;
   for (const c of opts.callouts) { s += checkRow(70, hy, c, { size: 20 }); hy += 50; }
-  const scale = opts.state === "ignored" ? 0.9 : 1.0;
-  s += framedPopup(opts.state, 808, 110, scale, `ss${opts.idx}`);
+  const fit = popupFrameFit(opts.state);
+  s += framedPopup(opts.state, fit.x, fit.y, fit.scale, `ss${opts.idx}`);
   s += tx(64, 756, "Self-hosted · Open data · No third-party servers", { size: 16, fill: T.faint });
   s += `</svg>`;
   return s;

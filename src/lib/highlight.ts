@@ -1,14 +1,18 @@
-import type { BrowserActivity } from "@/services/captureEvents";
+import type { BrowserActivity } from "@/services/browserActivity";
 import { parseUrl } from "@/utils";
 
 // Keep stored highlights a sane size; selections beyond this are truncated
 export const MAX_HIGHLIGHT_LENGTH = 10000;
 
 /**
- * Build a CaptureEvent-ready browser activity for a saved text selection.
+ * Build a capture record for a saved text selection (right-click →
+ * "Save highlight").
  *
- * Phase 3: highlights ride the same unified `/v1/events` path as every other
- * capture (kind `browser.highlight`), replacing the legacy event envelope.
+ * Highlights upload to `/api/v1/contents` as `type: 'highlight'`, NOT to
+ * browser-activity: a saved selection is a reading annotation with a body, not a
+ * page visit. `properties.text` is how the selection reaches the sender
+ * (BrowserActivity has no text field of its own) — toHighlightContentRecord
+ * lifts it into the content row's `text`. See @/services/browserActivity.
  */
 export function buildHighlightActivity(
   selectionText: string,

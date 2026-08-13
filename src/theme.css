@@ -1,3 +1,10 @@
+/*
+ * CI browser extension styles.
+ *
+ * Canonical design tokens from @companionintelligence/tokens v0.3
+ * (phthalo-mist palette, Manrope). Extension-only: texture-surface,
+ * PWA standalone utilities, heading weight 600, .btn-brand.
+ */
 @import "tailwindcss";
 @import "@@/node_modules/tw-animate-css/dist/tw-animate.css";
 
@@ -6,188 +13,7 @@
 
 @source "../packages/shadcn";
 
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --shadow-sm: var(--shadow-sm);
-  --shadow-md: var(--shadow-md);
-  --shadow-lg: var(--shadow-lg);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 10px);
-  --font-sans: var(--font-sans);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-  /* CI enriched palette v0.2.0 — semantic + brand-teal utility mappings */
-  --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
-  --color-warning: var(--warning);
-  --color-warning-foreground: var(--warning-foreground);
-  --color-info: var(--info);
-  --color-info-foreground: var(--info-foreground);
-  --color-teal-500: var(--teal-500);
-  --color-teal-600: var(--teal-600);
-}
-
-:root {
-  --radius: 0.625rem;
-  --font-sans: 'Montserrat', system-ui, sans-serif;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.502043 0.0822 204.9225);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
-
-  /* CI enriched palette v0.2.0 — brand teal ramp + accent hues + radius scale (mode-independent) */
-  --teal-50: #eef7f8;
-  --teal-100: #d3e9ec;
-  --teal-200: #abd4d8;
-  --teal-300: #7fbcc2;
-  --teal-400: #4c9aa3;
-  --teal-500: #1c8791;
-  --teal-600: #0f717a;
-  --teal-700: #0d5f67;
-  --teal-800: #0e4a52;
-  --teal-900: #0a222e;
-  --teal-950: #041620;
-  --aqua: #00a9a7;
-  --aqua-light: #72ddd4;
-  --mint: #58ebbf;
-  --teal-accent: #2c676d;
-  --teal-mid: #409b9b;
-  --radius-sm: calc(var(--radius, 0.625rem) - 4px);
-  --radius-md: calc(var(--radius, 0.625rem) - 2px);
-  --radius-lg: var(--radius, 0.625rem);
-  --radius-xl: calc(var(--radius, 0.625rem) + 4px);
-  --radius-2xl: calc(var(--radius, 0.625rem) + 10px);
-
-  /* enriched — semantic status + gradients + elevation (light) */
-  --success: #16a34a;
-  --success-foreground: #ffffff;
-  --warning: #d97706;
-  --warning-foreground: #ffffff;
-  --info: #0284c7;
-  --info-foreground: #ffffff;
-  --gradient-brand: linear-gradient(135deg, #0f717a, #00a9a7);
-  --gradient-hero: linear-gradient(135deg, #e8f9f8, #abd4d8);
-  --gradient-aurora: radial-gradient(
-    120% 90% at 50% -10%,
-    rgba(80, 150, 150, 0.1),
-    transparent 60%
-  );
-  --shadow-sm: 0 1px 2px rgba(15, 113, 122, 0.08);
-  --shadow-md: 0 4px 12px rgba(15, 113, 122, 0.1);
-  --shadow-lg: 0 12px 30px rgba(15, 113, 122, 0.14);
-}
-
-.dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.84195 0.043 203.701);
-  --primary-foreground: oklch(0.19008 0.032 234.379);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
-
-  /* CI enriched palette v0.2.0 — semantic status + gradients + elevation (dark) */
-  --success: #4ade80;
-  --success-foreground: #052e16;
-  --warning: #fbbf24;
-  --warning-foreground: #422006;
-  --info: #38bdf8;
-  --info-foreground: #082f49;
-  --gradient-aurora: radial-gradient(
-    120% 90% at 50% -10%,
-    rgba(64, 155, 155, 0.28),
-    transparent 60%
-  );
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.45);
-}
+@import "@companionintelligence/tokens/globals.css";
 
 @layer base {
   * {
@@ -196,7 +22,7 @@
   html,
   body {
     @apply font-sans bg-background text-foreground;
-    line-height: 1.0;
+    line-height: 1.5;
   }
   h1,
   h2,
@@ -204,10 +30,33 @@
   h4,
   h5,
   h6 {
-    font-family: 'Montserrat', system-ui, sans-serif;
-    font-weight: 200;
-    line-height: 1.0;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    line-height: 1.2;
   }
+}
+
+/*
+ * The one gradient CTA (max one per screen). Colors come from the tokens'
+ * branded-button recipe so both themes keep the light-on-phthalo treatment —
+ * --primary-foreground would flip to navy in dark mode and break it.
+ */
+.btn-brand {
+  background-color: var(--phthalo);
+  background-image: var(--gradient-button);
+  color: var(--ci-button-foreground);
+  border: 1px solid var(--ci-button-border);
+  box-shadow: var(--ci-button-shadow);
+}
+
+.btn-brand:hover {
+  background-image: linear-gradient(135deg, var(--phthalo-hover), var(--phthalo));
+  box-shadow: var(--ci-button-shadow-hover);
+}
+
+.btn-brand:disabled {
+  opacity: 0.6;
+  box-shadow: none;
 }
 
 .texture-surface {

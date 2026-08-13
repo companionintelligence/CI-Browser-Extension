@@ -6,9 +6,16 @@ on:
   pull_request:
     branches: [ master ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
 
     steps:
     - name: Checkout code
@@ -18,12 +25,16 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 22.x
+        registry-url: "https://npm.pkg.github.com"
+        scope: "@companionintelligence"
 
     - name: Enable Corepack (yarn 4)
       run: corepack enable
 
     - name: Install dependencies
       run: yarn install --immutable
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Run linting
       run: yarn lint
@@ -31,8 +42,10 @@ jobs:
     - name: Run type checking
       run: yarn compile
 
+    # --coverage so jest.config's coverageThreshold is actually enforced;
+    # a bare `jest` run collects no coverage and the ratchet never applies.
     - name: Run tests
-      run: yarn test
+      run: yarn test:coverage
 
     - name: Build Chrome extension
       run: yarn build
@@ -40,16 +53,36 @@ jobs:
     - name: Build Firefox extension
       run: yarn build:firefox
 
+    - name: Build Safari extension
+      run: yarn build:safari
+
+    - name: Build Safari Mobile extension
+      run: yarn build:safari-mobile
+
     - name: Upload Chrome build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: chrome-extension
         path: .output/chrome-mv3
-        retention-days: 30
+        retention-days: 7
 
     - name: Upload Firefox build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: firefox-extension
         path: .output/firefox-mv2
-        retention-days: 30
+        retention-days: 7
+
+    - name: Upload Safari build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: safari-extension
+        path: .output/safari-mv2
+        retention-days: 7
+
+    - name: Upload Safari Mobile build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: safari-mobile-extension
+        path: .output/safari-mv3
+        retention-days: 7

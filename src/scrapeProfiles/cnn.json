@@ -1,13 +1,17 @@
 {
   "domain": "cnn.com",
-  "name": "CNN News Data Scraper", 
+  "name": "CNN News Data Scraper",
   "description": "Scrapes CNN articles, headlines, and news content",
+  "matchPatterns": [
+    "*://*.cnn.com/*"
+  ],
   "targetUrl": [
     "https://www.cnn.com/*",
     "https://edition.cnn.com/*"
   ],
   "dataSelectors": {
     "articles": {
+      "personalDataType": "news_consumption",
       "container": "[data-testid='article'], .article, .card, .media, .list-item",
       "fields": {
         "headline": {
@@ -50,6 +54,7 @@
       }
     },
     "breakingNews": {
+      "personalDataType": "news_consumption",
       "container": "[data-testid='breaking-news'], .breaking-news, .alert, .urgent",
       "fields": {
         "headline": {
@@ -71,6 +76,7 @@
       }
     },
     "headlines": {
+      "personalDataType": "news_consumption",
       "container": "[data-testid='headline-item'], .headline-item, .top-story, .featured",
       "fields": {
         "title": {
@@ -91,22 +97,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "news_articles",
-      "description": "CNN news articles and content viewed",
-      "personalDataType": "news_consumption"
-    },
-    {
-      "name": "breaking_news",
-      "description": "CNN breaking news alerts and urgent updates",
-      "personalDataType": "news_consumption"
-    },
-    {
-      "name": "headlines",
-      "description": "CNN top headlines and featured stories",
-      "personalDataType": "news_consumption"
-    }
-  ]
+  }
 }

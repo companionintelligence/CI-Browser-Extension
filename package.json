@@ -1,7 +1,7 @@
 {
   "name": "@ci/ci-browser-extension",
-  "description": "Companion Intelligence browser extension for Chrome and Firefox",
-  "version": "1.4.0",
+  "description": "Companion Intelligence browser extension for Chrome, Firefox, and Safari",
+  "version": "1.5.0",
   "workspaces": [
     "packages/*"
   ],
@@ -40,21 +40,20 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "scrape:check": "jest src/scrape/fixtures.test.ts --verbose -t",
     "prepare:store": "npm run clean && npm run zip:all",
     "check:types": "tsc --noEmit --skipLibCheck"
   },
   "dependencies": {
     "@ci/shadcn": "workspace:*",
-    "@fontsource/montserrat": "^5.2.8",
+    "@companionintelligence/tokens": "^0.3.1",
+    "@fontsource/manrope": "^5.2.8",
     "@reduxjs/toolkit": "^2.8.2",
     "@sentry/browser": "^10.69.0",
-    "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.18",
     "@vitejs/plugin-react-swc": "^4.2.3",
     "axios": "^1.11.0",
     "bowser": "^2.11.0",
-    "jwt-decode": "^4.0.0",
-    "moment": "^2.30.1",
     "next-themes": "^0.4.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -64,6 +63,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.27.0",
+    "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",

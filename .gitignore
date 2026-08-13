@@ -9,6 +9,14 @@ lerna-debug.log*
 
 node_modules
 .output
+.safari-xcode/
+
+# Local build-time config (WXT bakes WXT_* into the artifact). .env.example is
+# the committed template; a real .env carries the Sentry DSN.
+.env
+.env.local
+.env.*.local
+!.env.example
 
 # Yarn local state (yarn 4, nodeLinker: node-modules)
 .yarn/
@@ -27,3 +35,13 @@ web-ext.config.ts
 *.njsproj
 *.sln
 *.sw?
+
+# Jest coverage output (now produced on every CI test run)
+coverage/
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions

@@ -1,0 +1,8 @@
+{
+  "url": "https://www.paramountplus.com/watchlist/",
+  "provenance": "synthetic",
+  "note": "Models the My List grid, with a Trending Now carousel below it as a decoy that reuses the same poster markup. The type chip is present on three of the four tiles, so `showType` hits 3/4 by design. `continueWatching` is uncovered: the Keep Watching carousel lives on the home hub, which is not in this profile's targetUrl. Replace with a captured, scrubbed page next time someone is signed in — see README.md.",
+  "expect": {
+    "watchlist": 4
+  }
+}

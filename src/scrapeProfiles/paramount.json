@@ -2,6 +2,9 @@
   "domain": "paramountplus.com",
   "name": "Paramount+ Data Scraper",
   "description": "Scrapes Paramount+ watchlist, viewing history, and profile data",
+  "matchPatterns": [
+    "*://*.paramountplus.com/*"
+  ],
   "targetUrl": [
     "https://www.paramountplus.com/watchlist*",
     "https://www.paramountplus.com/account*",
@@ -10,6 +13,7 @@
   ],
   "dataSelectors": {
     "watchlist": {
+      "personalDataType": "entertainment_preferences",
       "container": "[data-testid='watchlist-tile'], .watchlist-tile, .content-tile, .show-tile",
       "fields": {
         "title": {
@@ -42,6 +46,7 @@
       }
     },
     "continueWatching": {
+      "personalDataType": "entertainment_preferences",
       "container": "[data-testid='continue-watching-item'], .continue-watching-item, .progress-tile",
       "fields": {
         "title": {
@@ -67,17 +72,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "watchlist",
-      "description": "Paramount+ saved watchlist items",
-      "personalDataType": "entertainment_preferences"
-    },
-    {
-      "name": "viewing_history", 
-      "description": "Paramount+ continue watching and viewing progress",
-      "personalDataType": "entertainment_preferences"
-    }
-  ]
+  }
 }

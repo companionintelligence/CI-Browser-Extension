@@ -1,0 +1,249 @@
+<!doctype html>
+<!--
+  Robinhood account → Investing tab (robinhood.com/account/investing): the
+  holdings table.
+
+  `orders` (account → History / an individual order page) and `watchlist` (the
+  "Lists" rail on the logged-in home dashboard) are separate pages and are
+  deliberately absent. The home dashboard is where holdings and watchlist appear
+  together, but its URL is the site root, which this profile's targetUrl does not
+  match — see the note in robinhood.json.
+
+  SYNTHETIC — models the structure of the real page; see README.md.
+  Every ticker, company, share count, price and balance below is invented; none
+  of these securities exist and no real account is represented.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Investing | Robinhood</title>
+  </head>
+  <body>
+    <div id="react_root">
+      <div class="css-1n1pnhg">
+        <header class="css-1qkxi8f" role="banner">
+          <nav class="css-1u8qly9" aria-label="Primary">
+            <a class="css-1kt5yq5" href="/" aria-label="Robinhood home">
+              <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"></svg>
+            </a>
+            <div class="css-1x4rp1n" role="search">
+              <input
+                type="text"
+                class="css-1a7hb0l"
+                placeholder="Search"
+                aria-label="Search stocks, ETFs, and crypto"
+                autocomplete="off"
+              />
+            </div>
+            <ul class="css-1jd6cxq">
+              <li><a class="css-1x8wgtv" href="/rewards">Rewards</a></li>
+              <li><a class="css-1x8wgtv" href="/notifications">Notifications</a></li>
+              <li><a class="css-1x8wgtv css-selected" href="/account/investing" aria-current="page">Account</a></li>
+            </ul>
+          </nav>
+        </header>
+
+        <main class="css-1oa4qpx" role="main">
+          <div class="css-7d0lnr">
+            <nav class="css-nqf9xr" aria-label="Account sections">
+              <ul class="css-1cgf5lp">
+                <li><a class="css-1x8wgtv css-selected" href="/account/investing" aria-current="page">Investing</a></li>
+                <li><a class="css-1x8wgtv" href="/account/retirement">Retirement</a></li>
+                <li><a class="css-1x8wgtv" href="/account/spending">Spending</a></li>
+                <li><a class="css-1x8wgtv" href="/account/crypto">Crypto</a></li>
+                <li><a class="css-1x8wgtv" href="/account/history">History</a></li>
+                <li><a class="css-1x8wgtv" href="/account/reports">Reports and statements</a></li>
+                <li><a class="css-1x8wgtv" href="/account/settings">Settings</a></li>
+              </ul>
+            </nav>
+
+            <section class="css-1t9wxvb" aria-labelledby="investing-heading">
+              <header class="css-1ub9wnr">
+                <h1 id="investing-heading" class="css-1ktbcns">Investing</h1>
+                <div class="css-1ju0f0a">
+                  <span class="css-6kj7c8">Total value</span>
+                  <h2 class="css-1s1cnvx">$3,705.52</h2>
+                  <span class="css-1nnlrq3">
+                    <span class="css-1eu5vzo" aria-hidden="true">▲</span>
+                    $319.06 (9.42%)
+                    <span class="css-6kj7c8">All time</span>
+                  </span>
+                </div>
+                <div class="css-15bqmey" role="group" aria-label="Chart range">
+                  <button type="button" class="css-1x3hyfg css-selected">1D</button>
+                  <button type="button" class="css-1x3hyfg">1W</button>
+                  <button type="button" class="css-1x3hyfg">1M</button>
+                  <button type="button" class="css-1x3hyfg">3M</button>
+                  <button type="button" class="css-1x3hyfg">YTD</button>
+                  <button type="button" class="css-1x3hyfg">1Y</button>
+                  <button type="button" class="css-1x3hyfg">ALL</button>
+                </div>
+                <div class="css-fyj5m9">
+                  <svg viewBox="0 0 640 160" class="css-1sdlwsp" aria-hidden="true" role="presentation">
+                    <path d="M0 120 L80 108 L160 118 L240 92 L320 96 L400 70 L480 78 L560 54 L640 46" fill="none" stroke-width="2"></path>
+                  </svg>
+                </div>
+              </header>
+
+              <div class="css-1e2urwe">
+                <div class="css-1yagfvw">
+                  <span class="css-6kj7c8">Buying power</span>
+                  <span class="css-1ktbcns">$212.19</span>
+                </div>
+                <div class="css-1yagfvw">
+                  <span class="css-6kj7c8">Dividends received</span>
+                  <span class="css-1ktbcns">$18.44</span>
+                </div>
+              </div>
+
+              <div class="css-x3ny91">
+                <div class="css-1ub9wnr">
+                  <h3 class="css-1ktbcns">Stocks and ETFs</h3>
+                  <button type="button" class="css-1x3hyfg" aria-expanded="true">
+                    Sort: Market value
+                    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"></svg>
+                  </button>
+                </div>
+
+                <div class="css-1cxjbsn" role="table" aria-label="Your holdings">
+                  <div class="css-p3jk1v" role="row">
+                    <span class="css-6kj7c8" role="columnheader">Name</span>
+                    <span class="css-6kj7c8" role="columnheader">Symbol</span>
+                    <span class="css-6kj7c8" role="columnheader">Shares</span>
+                    <span class="css-6kj7c8" role="columnheader">Price</span>
+                    <span class="css-6kj7c8" role="columnheader">Average cost</span>
+                    <span class="css-6kj7c8" role="columnheader">Total return</span>
+                    <span class="css-6kj7c8" role="columnheader">Equity</span>
+                  </div>
+
+                  <a
+                    class="holding css-1jw1a5l"
+                    data-testid="portfolio-item"
+                    role="row"
+                    href="/stocks/ZPHR"
+                    aria-label="Zephyr Dynamics Inc"
+                  >
+                    <span class="css-1p8ncgk" role="cell">
+                      <span data-testid="company-name" class="company-name css-1ktbcns">Zephyr Dynamics Inc.</span>
+                      <span data-testid="symbol" class="symbol css-6kj7c8">ZPHR</span>
+                    </span>
+                    <span data-testid="shares" class="shares css-1ktbcns" role="cell">24 Shares</span>
+                    <span data-testid="current-price" class="current-price css-1ktbcns" role="cell">$41.18</span>
+                    <span class="average-cost css-1ktbcns" role="cell">$35.66</span>
+                    <span data-testid="total-return" class="total-return css-1eu5vzo" role="cell">+$132.44 (+15.47%)</span>
+                    <span data-testid="market-value" class="market-value css-1ktbcns" role="cell">$988.32</span>
+                    <span class="css-1sdlwsp" role="cell" aria-hidden="true">
+                      <svg viewBox="0 0 64 24" width="64" height="24" role="presentation">
+                        <path d="M0 18 L16 14 L32 16 L48 8 L64 6" fill="none" stroke-width="1.5"></path>
+                      </svg>
+                    </span>
+                  </a>
+
+                  <a
+                    class="holding css-1jw1a5l"
+                    data-testid="portfolio-item"
+                    role="row"
+                    href="/stocks/MRLN"
+                    aria-label="Marlin Optics Corp"
+                  >
+                    <span class="css-1p8ncgk" role="cell">
+                      <span data-testid="company-name" class="company-name css-1ktbcns">Marlin Optics Corp.</span>
+                      <span data-testid="symbol" class="symbol css-6kj7c8">MRLN</span>
+                    </span>
+                    <span data-testid="shares" class="shares css-1ktbcns" role="cell">8 Shares</span>
+                    <span data-testid="current-price" class="current-price css-1ktbcns" role="cell">$126.05</span>
+                    <span class="average-cost css-1ktbcns" role="cell">$135.31</span>
+                    <span data-testid="total-return" class="total-return css-c5dpvo" role="cell">-$74.10 (-6.84%)</span>
+                    <span data-testid="market-value" class="market-value css-1ktbcns" role="cell">$1,008.40</span>
+                    <span class="css-1sdlwsp" role="cell" aria-hidden="true">
+                      <svg viewBox="0 0 64 24" width="64" height="24" role="presentation">
+                        <path d="M0 6 L16 10 L32 9 L48 15 L64 18" fill="none" stroke-width="1.5"></path>
+                      </svg>
+                    </span>
+                  </a>
+
+                  <a
+                    class="holding css-1jw1a5l"
+                    data-testid="portfolio-item"
+                    role="row"
+                    href="/stocks/BRKT"
+                    aria-label="Bracket Labs Holdings"
+                  >
+                    <span class="css-1p8ncgk" role="cell">
+                      <span data-testid="company-name" class="company-name css-1ktbcns">Bracket Labs Holdings</span>
+                      <span data-testid="symbol" class="symbol css-6kj7c8">BRKT</span>
+                    </span>
+                    <span data-testid="shares" class="shares css-1ktbcns" role="cell">150 Shares</span>
+                    <span data-testid="current-price" class="current-price css-1ktbcns" role="cell">$6.72</span>
+                    <span class="average-cost css-1ktbcns" role="cell">$5.30</span>
+                    <span data-testid="total-return" class="total-return css-1eu5vzo" role="cell">+$212.50 (+26.70%)</span>
+                    <span data-testid="market-value" class="market-value css-1ktbcns" role="cell">$1,008.00</span>
+                    <span class="css-1sdlwsp" role="cell" aria-hidden="true">
+                      <svg viewBox="0 0 64 24" width="64" height="24" role="presentation">
+                        <path d="M0 20 L16 17 L32 12 L48 11 L64 4" fill="none" stroke-width="1.5"></path>
+                      </svg>
+                    </span>
+                  </a>
+
+                  <a
+                    class="holding css-1jw1a5l"
+                    data-testid="portfolio-item"
+                    role="row"
+                    href="/stocks/NMBS"
+                    aria-label="Nimbus Freight Co"
+                  >
+                    <span class="css-1p8ncgk" role="cell">
+                      <span data-testid="company-name" class="company-name css-1ktbcns">Nimbus Freight Co.</span>
+                      <span data-testid="symbol" class="symbol css-6kj7c8">NMBS</span>
+                    </span>
+                    <span data-testid="shares" class="shares css-1ktbcns" role="cell">12 Shares</span>
+                    <span data-testid="current-price" class="current-price css-1ktbcns" role="cell">$58.40</span>
+                    <span class="average-cost css-1ktbcns" role="cell">$54.38</span>
+                    <span data-testid="total-return" class="total-return css-1eu5vzo" role="cell">+$48.22 (+7.39%)</span>
+                    <span data-testid="market-value" class="market-value css-1ktbcns" role="cell">$700.80</span>
+                    <span class="css-1sdlwsp" role="cell" aria-hidden="true">
+                      <svg viewBox="0 0 64 24" width="64" height="24" role="presentation">
+                        <path d="M0 14 L16 15 L32 11 L48 12 L64 9" fill="none" stroke-width="1.5"></path>
+                      </svg>
+                    </span>
+                  </a>
+                </div>
+              </div>
+
+              <!-- Decoy: the "recently viewed" strip reuses the symbol / name /
+                   price atoms but is not a holding, so the container selector has
+                   to keep it out. -->
+              <div class="css-x3ny91">
+                <h3 class="css-1ktbcns">Recently viewed</h3>
+                <div class="css-1cxjbsn" role="list">
+                  <a class="recent-item css-8ka9nc" role="listitem" href="/stocks/HLYN">
+                    <span class="symbol css-6kj7c8">HLYN</span>
+                    <span class="company-name css-1ktbcns">Halcyon Rail Group</span>
+                    <span class="current-price css-1ktbcns">$18.03</span>
+                  </a>
+                  <a class="recent-item css-8ka9nc" role="listitem" href="/stocks/QRVX">
+                    <span class="symbol css-6kj7c8">QRVX</span>
+                    <span class="company-name css-1ktbcns">Quarrelvex Mining</span>
+                    <span class="current-price css-1ktbcns">$3.94</span>
+                  </a>
+                </div>
+              </div>
+            </section>
+          </div>
+        </main>
+
+        <footer class="css-1qkxi8f" role="contentinfo">
+          <ul class="css-1jd6cxq">
+            <li><a class="css-1x8wgtv" href="/legal/disclosures">Disclosures</a></li>
+            <li><a class="css-1x8wgtv" href="/legal/privacy">Privacy</a></li>
+            <li><a class="css-1x8wgtv" href="/support">Support</a></li>
+          </ul>
+          <p class="css-6kj7c8">
+            All figures on this page are fabricated sample data. Investing involves risk.
+          </p>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>

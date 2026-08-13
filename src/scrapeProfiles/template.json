@@ -2,9 +2,13 @@
   "domain": "example.com",
   "name": "Example Domain Profile",
   "description": "Template for creating new domain scrape profiles",
+  "matchPatterns": [
+    "*://*.example.com/*"
+  ],
   "targetUrl": "https://www.example.com/path/*",
   "dataSelectors": {
     "exampleData": {
+      "personalDataType": "browsing_history",
       "container": ".data-container, .item",
       "fields": {
         "title": {
@@ -30,12 +34,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "example_data",
-      "description": "Example data scraped from the domain",
-      "personalDataType": "general"
-    }
-  ]
+  }
 }

@@ -1,0 +1,231 @@
+<!doctype html>
+<!--
+  Prime Video Watchlist (www.primevideo.com/watchlist), signed in.
+  SYNTHETIC — models the structure of the real page; see README.md.
+
+  All titles, synopses, entitlements and artwork URLs are fabricated.
+
+  Structure notes that matter to the selectors:
+    * Prime Video ships hashed CSS-module class names alongside stable
+      data-automation-id hooks, so cards carry both (._1Yh0O + .av-card +
+      data-automation-id). That is why the profile's container lists a hash.
+      Hashed names churn on every deploy — the ones here are the ones the
+      profile already encodes.
+    * The hover overlay is a sibling of the card, not a child, so its markup
+      does not double the card count.
+    * The "More to explore" row and the entitlement banner are decoys: same
+      grid scaffolding, different card component, and neither is a saved item.
+-->
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prime Video: Watchlist</title>
+  </head>
+  <body class="dv-web-player-body">
+    <div id="dv-web-player" class="dv-node-dp-root">
+      <header id="navbar" class="dv-nav" role="banner">
+        <nav class="dv-nav__bar" aria-label="Primary">
+          <a class="dv-nav__logo" href="/" aria-label="Prime Video"></a>
+          <ul class="dv-nav__links">
+            <li class="dv-nav__link-item"><a class="dv-nav__link" href="/">Home</a></li>
+            <li class="dv-nav__link-item"><a class="dv-nav__link" href="/storefront/store">Store</a></li>
+            <li class="dv-nav__link-item"><a class="dv-nav__link" href="/storefront/live">Live TV</a></li>
+            <li class="dv-nav__link-item"><a class="dv-nav__link" href="/settings/categories">Categories</a></li>
+            <li class="dv-nav__link-item dv-nav__link-item--selected">
+              <a class="dv-nav__link" href="/watchlist" aria-current="page">My Stuff</a>
+            </li>
+          </ul>
+          <div class="dv-nav__utility">
+            <button class="dv-nav__search" type="button" aria-label="Search"></button>
+            <div class="dv-nav__profile" data-automation-id="profile-switcher">
+              <img class="dv-nav__avatar" src="https://example.test/avatar-teal.png" alt="Ada Lovelace" width="28" height="28" />
+              <span class="dv-nav__profile-name">Ada</span>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <div id="pv-nav-container" class="pv-nav-container">
+        <main id="pv-main" class="_2Q73g" role="main">
+          <div class="_1BdCU watchlist-header">
+            <h1 class="_2Zc2A">Watchlist</h1>
+            <div class="_3JXHo filter-row" role="tablist" aria-label="Filter watchlist">
+              <button class="_1Yv5r filter-chip filter-chip--active" role="tab" aria-selected="true" type="button">
+                All
+              </button>
+              <button class="_1Yv5r filter-chip" role="tab" aria-selected="false" type="button">TV shows</button>
+              <button class="_1Yv5r filter-chip" role="tab" aria-selected="false" type="button">Movies</button>
+              <button class="_1Yv5r filter-chip" role="tab" aria-selected="false" type="button">Rentals</button>
+            </div>
+          </div>
+
+          <!-- Decoy: entitlement banner, not a card. -->
+          <div class="_2kQdV banner" role="status">
+            <p class="_2kQdV__copy">Rentals expire 30 days after purchase and 48 hours after you start watching.</p>
+          </div>
+
+          <ul class="_1ZBaO watchlist-grid" data-automation-id="watchlist-grid" role="list">
+            <li
+              class="_1Yh0O av-card"
+              data-testid="watchlist-item"
+              data-automation-id="wl-item-0"
+              role="listitem"
+            >
+              <div class="av-card-image">
+                <a class="_2f4Kg" href="/detail/0GA00000000000001QBQ/ref=atv_wl_hom_c_0">
+                  <img class="_1eQZ1" src="https://example.test/img.jpg" alt="" loading="lazy" width="320" height="180" />
+                </a>
+                <span class="badge _3aTiL">Included with Prime</span>
+              </div>
+              <div class="av-card-text">
+                <h3 class="_2XJZ2 card-title">
+                  <a class="_1L4wI" href="/detail/0GA00000000000001QBQ/ref=atv_wl_hom_t_0">Quantum Bakers</a>
+                </h3>
+                <div class="_1AaZ6 card-meta">
+                  <span class="_2Ffhr">2026</span>
+                  <span class="runtime">3 seasons</span>
+                  <span class="_1zA6d rating-badge">TV-PG</span>
+                </div>
+                <p class="_1jUGZ card-synopsis">
+                  Rival pastry chefs are handed a kitchen that runs on impossible physics.
+                </p>
+              </div>
+              <div class="_2SBmO card-actions">
+                <button class="_1Ph0N" type="button" data-automation-id="wl-remove-0">Remove from Watchlist</button>
+              </div>
+            </li>
+
+            <li
+              class="_1Yh0O av-card"
+              data-testid="watchlist-item"
+              data-automation-id="wl-item-1"
+              role="listitem"
+            >
+              <div class="av-card-image">
+                <a class="_2f4Kg" href="/detail/0GA00000000000002QBQ/ref=atv_wl_hom_c_1">
+                  <img class="_1eQZ1" src="https://example.test/img.jpg" alt="" loading="lazy" width="320" height="180" />
+                </a>
+                <span class="badge _3aTiL">Included with Prime</span>
+              </div>
+              <div class="av-card-text">
+                <h3 class="_2XJZ2 card-title">
+                  <a class="_1L4wI" href="/detail/0GA00000000000002QBQ/ref=atv_wl_hom_t_1">Lighthouse Nine</a>
+                </h3>
+                <div class="_1AaZ6 card-meta">
+                  <span class="_2Ffhr">2025</span>
+                  <span class="runtime">1 season</span>
+                  <span class="_1zA6d rating-badge">TV-14</span>
+                </div>
+                <p class="_1jUGZ card-synopsis">
+                  A keeper on a shuttered island station receives weather reports from a year
+                  that has not happened yet.
+                </p>
+              </div>
+              <div class="_2SBmO card-actions">
+                <button class="_1Ph0N" type="button" data-automation-id="wl-remove-1">Remove from Watchlist</button>
+              </div>
+            </li>
+
+            <li
+              class="_1Yh0O av-card"
+              data-testid="watchlist-item"
+              data-automation-id="wl-item-2"
+              role="listitem"
+            >
+              <div class="av-card-image">
+                <a class="_2f4Kg" href="/detail/0GA00000000000003QBQ/ref=atv_wl_hom_c_2">
+                  <img class="_1eQZ1" src="https://example.test/img.jpg" alt="" loading="lazy" width="320" height="180" />
+                </a>
+                <span class="badge _3aTiL">Rent or buy</span>
+              </div>
+              <div class="av-card-text">
+                <h3 class="_2XJZ2 card-title">
+                  <a class="_1L4wI" href="/detail/0GA00000000000003QBQ/ref=atv_wl_hom_t_2">Salt Flats Marathon</a>
+                </h3>
+                <div class="_1AaZ6 card-meta">
+                  <span class="_2Ffhr">2026</span>
+                  <span class="runtime">1 h 48 min</span>
+                  <span class="_1zA6d rating-badge">PG-13</span>
+                </div>
+                <p class="_1jUGZ card-synopsis">
+                  A retired courier runs one last delivery across a dry lake bed on foot.
+                </p>
+              </div>
+              <div class="_2SBmO card-actions">
+                <button class="_1Ph0N" type="button" data-automation-id="wl-remove-2">Remove from Watchlist</button>
+              </div>
+            </li>
+
+            <li
+              class="_1Yh0O av-card"
+              data-testid="watchlist-item"
+              data-automation-id="wl-item-3"
+              role="listitem"
+            >
+              <div class="av-card-image">
+                <a class="_2f4Kg" href="/detail/0GA00000000000004QBQ/ref=atv_wl_hom_c_3">
+                  <img class="_1eQZ1" src="https://example.test/img.jpg" alt="" loading="lazy" width="320" height="180" />
+                </a>
+                <span class="badge _3aTiL">Included with Prime</span>
+              </div>
+              <div class="av-card-text">
+                <h3 class="_2XJZ2 card-title">
+                  <a class="_1L4wI" href="/detail/0GA00000000000004QBQ/ref=atv_wl_hom_t_3">The Paper Orchard</a>
+                </h3>
+                <div class="_1AaZ6 card-meta">
+                  <span class="_2Ffhr">2024</span>
+                  <span class="runtime">2 seasons</span>
+                  <span class="_1zA6d rating-badge">TV-G</span>
+                </div>
+                <p class="_1jUGZ card-synopsis">
+                  Three siblings inherit a print shop and, with it, every letter their town
+                  never mailed.
+                </p>
+              </div>
+              <div class="_2SBmO card-actions">
+                <button class="_1Ph0N" type="button" data-automation-id="wl-remove-3">Remove from Watchlist</button>
+              </div>
+            </li>
+          </ul>
+
+          <!--
+            Decoy row. Different card component (._3kYzD, not ._1Yh0O/.av-card)
+            and these are storefront promos rather than saved titles.
+          -->
+          <section class="_2wLXn" data-automation-id="more-to-explore" aria-labelledby="explore-heading">
+            <h2 class="row-title" id="explore-heading">More to explore</h2>
+            <ul class="_1XmRt" role="list">
+              <li class="_3kYzD explore-card" role="listitem">
+                <a class="_2f4Kg" href="/detail/0GA0000000000000AQBQ/ref=atv_dp_rel_0">
+                  <img class="_1eQZ1" src="https://example.test/img.jpg" alt="" loading="lazy" />
+                </a>
+                <h3 class="card-title">The Second Proof</h3>
+              </li>
+              <li class="_3kYzD explore-card" role="listitem">
+                <a class="_2f4Kg" href="/detail/0GA0000000000000BQBQ/ref=atv_dp_rel_1">
+                  <img class="_1eQZ1" src="https://example.test/img.jpg" alt="" loading="lazy" />
+                </a>
+                <h3 class="card-title">Kiln Street</h3>
+              </li>
+              <li class="_3kYzD explore-card" role="listitem">
+                <a class="_2f4Kg" href="/detail/0GA0000000000000CQBQ/ref=atv_dp_rel_2">
+                  <img class="_1eQZ1" src="https://example.test/img.jpg" alt="" loading="lazy" />
+                </a>
+                <h3 class="card-title">No Flour, No Fire</h3>
+              </li>
+            </ul>
+          </section>
+        </main>
+      </div>
+
+      <footer id="pv-footer" class="dv-footer" role="contentinfo">
+        <ul class="dv-footer__links">
+          <li><a class="dv-footer__link" href="/help">Help</a></li>
+          <li><a class="dv-footer__link" href="/legal/terms">Terms and Privacy Notice</a></li>
+          <li><a class="dv-footer__link" href="/settings">Account &amp; Settings</a></li>
+        </ul>
+      </footer>
+    </div>
+  </body>
+</html>

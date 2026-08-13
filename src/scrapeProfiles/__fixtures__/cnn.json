@@ -1,0 +1,8 @@
+{
+  "url": "https://www.cnn.com/",
+  "provenance": "synthetic",
+  "note": "Home page with six fabricated cards across a lead zone, a vertical strip and a video zone. The `articles` container matches for a real reason — CNN's story cards genuinely carry `class=\"card container__item ...\"` — but only two of its seven fields hit: articleUrl 6/6 and imageUrl 4/6. headline, summary, publishDate, author and category all hit 0/6, because CNN's card markup uses `container__headline-text` / `container__text` and no heading tag, while the profile looks for `.headline, h1, h2, h3, .card-title`. So today this profile captures URLs and image srcs with no headline text. `breakingNews` is not covered: this page has no breaking-news banner (the common case), and CNN's banner does not use the `.breaking-news / .alert / .urgent` tokens the profile expects. `headlines` is not covered either: `.headline-item, .top-story, .featured` are not CNN class conventions — nothing on the real page matches them. Replace with a captured page — see README.md.",
+  "expect": {
+    "articles": 4
+  }
+}

@@ -2,6 +2,9 @@
   "domain": "quora.com",
   "name": "Quora Data Scraper",
   "description": "Scrapes Quora questions, answers, and user activity",
+  "matchPatterns": [
+    "*://*.quora.com/*"
+  ],
   "targetUrl": [
     "https://www.quora.com/profile/*",
     "https://www.quora.com/*",
@@ -9,6 +12,7 @@
   ],
   "dataSelectors": {
     "questions": {
+      "personalDataType": "social_activity",
       "container": "[data-testid='question'], .q-box, .QuestionText, .question",
       "fields": {
         "title": {
@@ -35,6 +39,7 @@
       }
     },
     "answers": {
+      "personalDataType": "social_activity",
       "container": "[data-testid='answer'], .AnswerBase, .answer, .Answer",
       "fields": {
         "content": {
@@ -66,6 +71,7 @@
       }
     },
     "following": {
+      "personalDataType": "social_connections",
       "container": "[data-testid='user-card'], .user-card, .UserCard",
       "fields": {
         "name": {
@@ -86,22 +92,5 @@
         }
       }
     }
-  },
-  "dataTypes": [
-    {
-      "name": "questions",
-      "description": "Quora questions asked by user",
-      "personalDataType": "social_activity"
-    },
-    {
-      "name": "answers",
-      "description": "Quora answers written by user",
-      "personalDataType": "social_activity"
-    },
-    {
-      "name": "following",
-      "description": "Quora users and topics followed",
-      "personalDataType": "social_connections"
-    }
-  ]
+  }
 }

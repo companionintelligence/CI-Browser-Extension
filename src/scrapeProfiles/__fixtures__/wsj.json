@@ -1,0 +1,8 @@
+{
+  "url": "https://www.wsj.com/",
+  "provenance": "synthetic",
+  "note": "Front page with a lead story and a three-item river, all fabricated. Read this before trusting the green: WSJ compiles its class names with a build hash (`WSJTheme--story--XB4V2mLz`, `WSJTheme--headline--7VCzo7Ez`), so the profile's unhashed `.WSJTheme--story`, `.WSJTheme--headline`, `.WSJTheme--summary`, `.WSJTheme--byline`, `.WSJTheme--timestamp` and `.WSJTheme--market-data` selectors cannot match a class token on the live page. The fixture keeps the hashed names, so the only thing holding the `articles` container up is `[data-testid='article']` — which I could NOT verify WSJ actually emits. Treat that as the weakest assumption in this directory and re-check it on a captured page. Field hits within the four stories: articleUrl 4/4, summary 4/4 (via the bare `p`), headline 1/4 — the lead uses `<h2>` and the river uses `<h3>`, which the selector list omits — and author, publishDate, section, isPremium 0/4. `markets` is not covered: the markets summary strip IS present in the fixture as a decoy and matches zero containers, because `.market-data / .quote / .WSJTheme--market-data` are not the real widget's classes. Replace with a captured page — see README.md.",
+  "expect": {
+    "articles": 4
+  }
+}
