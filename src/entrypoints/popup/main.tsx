@@ -12,6 +12,9 @@ import "@fontsource/montserrat/600.css";
 import "@fontsource/montserrat/700.css";
 import { Provider } from "react-redux";
 import { Store } from "webext-redux";
+import { initExtensionSentry } from "@/lib/sentry";
+
+initExtensionSentry("popup");
 
 const store = new Store();
 

@@ -19,6 +19,9 @@ import { portalOidcConfig } from "@/services/portalConfig";
 import bowser from "bowser";
 import type { ScrapeResult } from "@/domainScraper";
 import { database } from "@/indexeddb";
+import { initExtensionSentry } from "@/lib/sentry";
+
+initExtensionSentry("background");
 
 const SLICE_SIZE = 100;
 const BOOKMARK_SYNC_KEY = "lastBookmarkSync";
