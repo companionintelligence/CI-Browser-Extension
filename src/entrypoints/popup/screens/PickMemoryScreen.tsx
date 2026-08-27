@@ -126,7 +126,10 @@ export function PickMemoryScreen({
               variant="outline"
               onClick={() => choose(choice)}
               disabled={savingUrl !== null}
-              className="h-auto w-full justify-start gap-3 overflow-hidden px-3 py-2.5 text-left"
+              // shadcn Button defaults to h-9 + whitespace-nowrap. Chrome then
+              // sizes the <button> to one line and clips the device name + URL.
+              // min-h-16 is two text lines + padding; h-auto lets it grow.
+              className="h-auto min-h-16 w-full items-center justify-start gap-3 whitespace-normal px-3 py-2.5 text-left"
             >
               {savingUrl === choice.url ? (
                 <Spinner className="size-4 shrink-0 text-primary" />
@@ -136,15 +139,15 @@ export function PickMemoryScreen({
                   strokeWidth={1.75}
                 />
               )}
-              <span className="min-w-0 flex-1">
+              <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
                 <span
-                  className="block truncate text-sm leading-snug font-medium"
+                  className="w-full truncate text-sm leading-snug font-medium"
                   title={choiceTitle(choice)}
                 >
                   {choiceTitle(choice)}
                 </span>
                 <span
-                  className="block truncate text-xs leading-snug text-muted-foreground"
+                  className="w-full truncate text-xs leading-snug text-muted-foreground"
                   title={choice.url}
                 >
                   {host}
