@@ -909,12 +909,16 @@ async function convertToBrowserActivity(
             const nextVisit = visits.find(
               (v) => v.visitTime! > closestVisit.visitTime!,
             );
+            // No next visit yet means this is (so far) the most recent visit
+            // to this URL -- leave duration_seconds unset like title/
+            // description/scroll_depth do elsewhere in this function when the
+            // underlying signal is unknown, rather than fabricating a value a
+            // later re-sync could never correct (browser_activity has no
+            // self-healing refresh columns).
             if (nextVisit && nextVisit.visitTime) {
               duration_seconds = Math.round(
                 (nextVisit.visitTime - closestVisit.visitTime) / 1000,
               );
-            } else {
-              duration_seconds = 30;
             }
           }
         }
