@@ -32,6 +32,9 @@ import {
   finishIngest,
   sendBrowserCaptures,
   type BrowserActivity,
+  browserBrand,
+  browserBrandLabel,
+  rememberBrowserBrand,
 } from "@/services/browserActivity";
 import {
   getAccessToken,
@@ -158,6 +161,25 @@ async function retryQueuedCaptures(): Promise<void> {
 
 // The portal OIDC client config, derived from the configured Portal URL (or
 // a legacy explicit portalIssuer override). See services/portalConfig.
+/**
+ * Older Brave builds hide from both the UA string and the Client Hints brands
+ * list; the one thing they expose is `navigator.brave.isBrave()`, which is
+ * async. Probe once at worker start and remember the answer so the
+ * synchronous browserBrand() can report it.
+ */
+void (async () => {
+  try {
+    const brave = (
+      navigator as Navigator & { brave?: { isBrave?: () => Promise<boolean> } }
+    ).brave;
+    if (brave?.isBrave && (await brave.isBrave())) {
+      rememberBrowserBrand("brave");
+    }
+  } catch {
+    // Not Brave, or no such API.
+  }
+})();
+
 function oidcConfig() {
   const { portalUrl, portalIssuer } = store.getState().ciState;
 
@@ -536,17 +558,27 @@ const recordHit = async function (e: any) {
     store.dispatch(saveUserSettings());
 
     const deviceId = await getDeviceId();
-    const date = new Date().getTime();
+    // The browser's own visit instant, not "now": the History-file importer
+    // and a Takeout export both carry Chrome's visitTime, and the server dedups
+    // on it (see browserActivity.ts). onCompleted fires after the page loaded,
+    // seconds after the visit was committed, so stamping Date.now() here made
+    // every live capture a row of its own — and one the extension's own history
+    // sync then uploaded again under the real time.
+    const observedAt = Date.now();
+    const visitTime =
+      (await nativeVisitTime(navigatedUrl, observedAt)) ?? observedAt;
     const newActivity = await convertToBrowserActivity(
       navigatedUrl,
-      date,
+      visitTime,
       deviceId,
     );
 
     try {
       await postLiveCapture([newActivity]);
 
-      const historyId = `${navigatedUrl}_${date}`;
+      // Same key shape syncHistory checks (`${url}_${visitTime}`), so the
+      // backfill recognizes this visit as already delivered.
+      const historyId = `${navigatedUrl}_${visitTime}`;
       await addSyncedItem(SYNCED_HISTORY_KEY, historyId);
     } catch (err) {
       console.error("Error posting event:", err);
@@ -833,7 +865,12 @@ async function setupDevice(): Promise<string> {
 function getDeviceInfo() {
   const browser_info = bowser.getParser(navigator.userAgent);
   const osName = browser_info.getOSName() || "unknown";
-  const browserName = browser_info.getBrowserName() || "Chrome";
+  // The brand, not the UA parser's answer: Brave masquerades as Chrome in the
+  // UA string and registered every Brave install as "Chrome on <OS>".
+  const browserName =
+    browserBrandLabel(browserBrand()) ||
+    browser_info.getBrowserName() ||
+    "Chrome";
   const browserVersion = browser_info.getBrowserVersion() || "unknown";
   const osVersion = browser_info.getOSVersion() || undefined;
 
@@ -867,6 +904,57 @@ function getDeviceInfo() {
     os_version: osVersion,
     app_version: browserVersion,
   };
+}
+
+/**
+ * How far back a live navigation may look for the history visit it belongs
+ * to. The visit is committed before onCompleted fires; a slow page can put
+ * minutes between the two, a history entry older than this is a previous
+ * visit to the same page.
+ */
+const LIVE_VISIT_MAX_AGE_MS = 5 * 60 * 1000;
+
+/** Clock skew tolerance between the history backend and Date.now(). */
+const LIVE_VISIT_FUTURE_SLACK_MS = 2000;
+
+/**
+ * The browser's recorded visit instant for a navigation observed at
+ * `observedAt`: the newest `history.getVisits` entry for the URL that is not
+ * in the future and not older than LIVE_VISIT_MAX_AGE_MS. Undefined when
+ * history is unavailable (no permission, incognito, a page the browser does
+ * not record) — the caller falls back to the observation time, which is
+ * honest but will not converge with an import.
+ */
+async function nativeVisitTime(
+  url: string,
+  observedAt: number,
+): Promise<number | undefined> {
+  try {
+    const visits = await browser.history.getVisits({ url });
+    let newest: number | undefined;
+    for (const visit of visits) {
+      const at = visit.visitTime;
+      if (typeof at !== "number" || !Number.isFinite(at)) {
+        continue;
+      }
+
+      if (at > observedAt + LIVE_VISIT_FUTURE_SLACK_MS) {
+        continue;
+      }
+
+      if (newest === undefined || at > newest) {
+        newest = at;
+      }
+    }
+
+    if (newest !== undefined && observedAt - newest <= LIVE_VISIT_MAX_AGE_MS) {
+      return newest;
+    }
+  } catch {
+    // No history access; fall through.
+  }
+
+  return undefined;
 }
 
 async function convertToBrowserActivity(
@@ -1708,11 +1796,15 @@ async function createDownloadEvent(
   return {
     time,
     device_id: deviceId || "",
-    url: download.url,
+    // The URL the bytes actually came from, after redirects: that is what the
+    // importer reads as the last hop of Chromium's downloads_url_chains, and
+    // the dedup key is (start ms, that url). Firefox has no finalUrl.
+    url: download.finalUrl || download.url,
     title: download.filename || "Unknown Download",
     action_type: "download" as const,
     properties: {
       download_id: download.id.toString(),
+      initiating_url: download.url,
       event_type: eventType,
       filename: download.filename,
       total_bytes: download.totalBytes,

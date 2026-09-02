@@ -28,7 +28,26 @@
  * `destination: 'events'` do NOT dedup against these writes — the first run
  * after this change re-materializes them into `browser_activity` / `content`.
  * That is the point of the migration; the old `ci.events` rows are left alone.
+ *
+ * IDENTITY IS SHARED WITH THE IMPORTER. A visit, bookmark or download this
+ * extension captures is the same datum CI-Server's import tools read from a
+ * Google Takeout `Chrome/History.json`, a Chromium `History` SQLite database
+ * or a Firefox `places.sqlite` — and CI-Server dedups rows on
+ * `(user_id, source_system, source_id)`. So those records carry the SAME
+ * `source_system` as the importer (`chromium` for every Chromium-family
+ * browser, `firefox` for Firefox) and the SAME `source_id` format, which is
+ * CI-Server's `domains/memory/identity/browser.ts`, re-implemented here
+ * verbatim because this repo cannot import it:
+ *
+ *   visit:<unix ms>:<url>       (also reload / search / form_submit)
+ *   bookmark:<unix s>:<url>
+ *   download:<unix ms>:<final url>
+ *
+ * Times are TRUNCATED (Math.floor), never rounded, to the coarsest precision
+ * every producer can reach exactly. The test suite pins the same fixtures as
+ * CI-Server's `identity.test.ts`; change the format in one repo, change both.
  */
+import bowser from "bowser";
 
 /** The browser-activity record the background builders produce. */
 export interface BrowserActivity {
@@ -67,22 +86,168 @@ export interface IngestResult {
 }
 
 /**
- * Every browser capture shares one source; dedup is keyed per-record below.
+ * `source_system` for captures that exist ONLY because of this extension —
+ * highlights and scrapes. Nothing else produces them, so they stay under the
+ * extension's own name (the platform event-ingest spec's name for this source,
+ * and the OIDC client id).
  *
- * This MUST match the platform's event-ingest spec, which names this source
- * `ci-browser-extension` — the same string as the OIDC client id. CI-Server's
- * content→event auto-linking joins on the exact provenance triple
- * (`source_type`, `source_system`, `source_id`), so while the extension sent
- * the shorter `browser-extension` its rows could never link to importer rows
- * describing the same item.
- *
- * Changing this is a deliberate BREAKING change to the dedup key: it is part of
- * the server-side unique index, so previously-uploaded captures do not dedup
- * against the new value and the first sync after this change re-materializes
- * them under the corrected source. Accepted pre-release; the duplicate rows are
- * the one-time cost of getting provenance right before there is real data.
+ * Browser-native captures (visits, bookmarks, downloads) do NOT use this: they
+ * are stamped with the browser's own system name — see browserSourceSystem —
+ * so they converge with the same records arriving through CI-Server's import
+ * tools. (They used to carry this name too, and a Takeout re-import of the
+ * same history then duplicated every visit.)
  */
-export const SOURCE_SYSTEM = "ci-browser-extension";
+export const EXTENSION_SOURCE_SYSTEM = "ci-browser-extension";
+
+/**
+ * The BRAND, as a lowercase slug (`chrome`, `brave`, `edge`, `opera`,
+ * `vivaldi`, `firefox`, `safari`), or undefined when it cannot be told. This
+ * is a fact about the arrival and rides in `properties.browser` — it is
+ * deliberately NOT the `source_system`, which stays the engine family so a
+ * Brave visit delivered by this extension and by CI-Server's History-file
+ * importer land on one row. The importer writes the same key when the file's
+ * name or path says which brand wrote it.
+ *
+ * Brave hides itself in the user agent string, so the UA parser reports it as
+ * Chrome; the Client Hints `userAgentData.brands` list names it, as it names
+ * Edge, Opera and Chrome (Arc and Vivaldi deliberately do not appear and read
+ * as Chrome). Older Brave builds without a brand entry are caught by the
+ * async `navigator.brave.isBrave()` probe, which background.ts runs at
+ * startup and records through rememberBrowserBrand.
+ */
+export function browserBrand(
+  nav: Pick<Navigator, "userAgent"> & {
+    userAgentData?: { brands?: Array<{ brand: string }> };
+  } = globalThis.navigator,
+): string | undefined {
+  if (rememberedBrand) {
+    return rememberedBrand;
+  }
+
+  const brands = nav?.userAgentData?.brands;
+  if (Array.isArray(brands)) {
+    for (const { brand } of brands) {
+      const name = brand.toLowerCase();
+      // Chromium's GREASE entries look like "Not A;Brand" / "Not(A:Brand"; the
+      // engine itself is not a brand.
+      if (
+        name === "chromium" ||
+        (name.includes("not") && name.includes("brand"))
+      ) {
+        continue;
+      }
+
+      return BRAND_SLUGS[name] ?? name.replace(/\s+/g, "");
+    }
+  }
+
+  const ua = nav?.userAgent ?? "";
+  if (!ua.trim()) {
+    return undefined;
+  }
+
+  if (/\bEdg(?:e|A|iOS)?\//.test(ua)) {
+    return "edge";
+  }
+
+  if (/\bOPR\//.test(ua)) {
+    return "opera";
+  }
+
+  if (/\bVivaldi\//.test(ua)) {
+    return "vivaldi";
+  }
+
+  const parsed = bowser.getParser(ua).getBrowserName().toLowerCase();
+
+  return parsed
+    ? (BRAND_SLUGS[parsed] ?? parsed.replace(/\s+/g, ""))
+    : undefined;
+}
+
+const BRAND_SLUGS: Readonly<Record<string, string>> = {
+  "google chrome": "chrome",
+  chrome: "chrome",
+  "microsoft edge": "edge",
+  brave: "brave",
+  opera: "opera",
+  vivaldi: "vivaldi",
+  firefox: "firefox",
+  safari: "safari",
+};
+
+let rememberedBrand: string | undefined;
+
+/**
+ * Record a brand learned asynchronously (the Brave probe). Overrides UA-based
+ * detection from then on; `undefined` clears it (tests).
+ */
+export function rememberBrowserBrand(brand: string | undefined): void {
+  rememberedBrand = brand;
+}
+
+/** A display label for a brand slug, for the device record ("Brave on Linux"). */
+export function browserBrandLabel(
+  brand: string | undefined,
+): string | undefined {
+  if (!brand) {
+    return undefined;
+  }
+
+  return BRAND_LABELS[brand] ?? brand.charAt(0).toUpperCase() + brand.slice(1);
+}
+
+const BRAND_LABELS: Readonly<Record<string, string>> = {
+  chrome: "Chrome",
+  brave: "Brave",
+  edge: "Microsoft Edge",
+  opera: "Opera",
+  vivaldi: "Vivaldi",
+  firefox: "Firefox",
+  safari: "Safari",
+};
+
+/** The importer-shared names, plus the extension's own for anything else. */
+export type BrowserSourceSystem =
+  | "chromium"
+  | "firefox"
+  | "safari"
+  | typeof EXTENSION_SOURCE_SYSTEM;
+
+/**
+ * The `source_system` for a browser-native capture: the ENGINE, not the brand.
+ * Chrome, Brave, Edge, Arc and Opera all keep the same Chromium `History`
+ * database, all run the Chrome Web Store build of this extension, and
+ * CI-Server's importer files all of them under `chromium` — so a per-brand
+ * name would split the very rows that are supposed to meet. (CI-Server also
+ * aliases the brand names to `chromium`, but sending the canonical name is
+ * the contract, not a fallback.) Gecko is `firefox`, matching the
+ * `places.sqlite` importer. Safari has no importer counterpart; it keeps its
+ * own name so a future one has a contract to meet. Anything unrecognized
+ * falls back to the extension's name rather than guessing an engine.
+ *
+ * Read from the user agent at call time, not the build target: a Brave user
+ * runs the `chrome` build, and the Firefox build could be sideloaded anywhere.
+ */
+export function browserSourceSystem(
+  userAgent: string = globalThis.navigator?.userAgent ?? "",
+): BrowserSourceSystem {
+  // bowser throws on an empty string rather than returning "unknown".
+  if (!userAgent.trim()) {
+    return EXTENSION_SOURCE_SYSTEM;
+  }
+
+  switch (bowser.getParser(userAgent).getEngineName()) {
+    case "Blink":
+      return "chromium";
+    case "Gecko":
+      return "firefox";
+    case "WebKit":
+      return "safari";
+    default:
+      return EXTENSION_SOURCE_SYSTEM;
+  }
+}
 
 // `time` must satisfy the server's Zod `.datetime()` (Z form). A bare
 // "YYYY-MM-DD HH:MM:SS" (no zone) is treated as UTC rather than local time; an
@@ -97,20 +262,49 @@ export function toInstant(s: string): string {
 }
 
 /**
- * Stable per-record id (the dedup key with SOURCE_SYSTEM). Prefer an explicit
- * browser id (bookmark/download) when present; otherwise derive a deterministic
- * key from the action, instant, and URL so a re-sent capture dedups.
+ * Unix milliseconds of a capture's `time`, truncated — the visit instant as
+ * the WebExtension history API reports it (a double of ms) floors to the same
+ * integer CI-Server derives from Takeout's or the SQLite file's microseconds.
+ * `toInstant` already went through a JS Date, which holds whole milliseconds
+ * by truncation, so this is exact for anything the builders in
+ * background.ts produce.
+ */
+export function unixMsOf(a: BrowserActivity): number {
+  return Math.floor(new Date(toInstant(a.time)).getTime());
+}
+
+/**
+ * Stable per-record id: the dedup key together with the record's
+ * `source_system`.
+ *
+ * Browser-native captures use CI-Server's shared browser identity format (see
+ * the header): `<action>:<unix ms>:<url>`, except bookmarks, which key on
+ * whole SECONDS because Takeout's `Bookmarks.html` only carries `ADD_DATE`
+ * seconds and the key has to be the coarsest precision every producer has.
+ * The browser's own `bookmark_id` / `download_id` are deliberately NOT the
+ * key any more: they are per-profile integers the importer never sees (and
+ * Brave's `42` is not Chrome's `42`); they still ride in `properties`.
+ *
+ * Extension-only captures (highlights, scrapes) keep their own scheme: an
+ * explicit per-item `source_id` when the producer minted one, else the
+ * action, ISO instant and URL.
  */
 export function sourceIdFor(a: BrowserActivity): string {
-  const explicit =
-    a.properties?.source_id ??
-    a.properties?.bookmark_id ??
-    a.properties?.download_id;
+  const url = a.url?.trim() ?? "";
+  const explicit = a.properties?.source_id;
   if (typeof explicit === "string" && explicit) {
     return `${a.action_type}:${explicit}`;
   }
 
-  return `${a.action_type}:${toInstant(a.time)}:${a.url}`;
+  switch (a.action_type) {
+    case "highlight":
+    case "scrape":
+      return `${a.action_type}:${toInstant(a.time)}:${url}`;
+    case "bookmark":
+      return `bookmark:${Math.floor(unixMsOf(a) / 1000)}:${url}`;
+    default:
+      return `${a.action_type}:${unixMsOf(a)}:${url}`;
+  }
 }
 
 /**
@@ -251,6 +445,14 @@ function extraProperties(a: BrowserActivity): Record<string, unknown> {
     extra.observed_at = toInstant(a.observed_at);
   }
 
+  // Which brand recorded this (see browserBrand) — an arrival fact, kept off
+  // the identity. Absent when unknown rather than guessed, so the importer's
+  // answer for the same row is not out-voted by a blank.
+  const brand = browserBrand();
+  if (brand && extra.browser === undefined) {
+    extra.browser = brand;
+  }
+
   if (a.action_type && !SERVER_ACTION_TYPES.has(a.action_type)) {
     extra.action_type = a.action_type;
   }
@@ -286,7 +488,9 @@ export function toBrowserActivityRecord(
     time: toInstant(a.time),
     url,
     source_type: SOURCE_TYPE,
-    source_system: SOURCE_SYSTEM,
+    // The browser's system, not the extension's: this row must meet the
+    // importer's row for the same visit.
+    source_system: browserSourceSystem(),
     source_id: sourceIdFor(a),
   };
 
@@ -343,7 +547,8 @@ export function toBookmarkContentRecord(
     type: BOOKMARK_CONTENT_TYPE,
     url,
     source_type: SOURCE_TYPE,
-    source_system: SOURCE_SYSTEM,
+    // Browser-native, like a visit: converges with the importer's bookmark row.
+    source_system: browserSourceSystem(),
     source_id: sourceIdFor(a),
   };
 
@@ -392,7 +597,7 @@ export function toHighlightContentRecord(
     url,
     mimetype: "text/plain",
     source_type: SOURCE_TYPE,
-    source_system: SOURCE_SYSTEM,
+    source_system: EXTENSION_SOURCE_SYSTEM,
     source_id: sourceIdFor(a),
     source_data: sourceData,
   };
@@ -461,7 +666,7 @@ export function toScrapeContentRecord(
     url: itemUrl(fields) ?? pageUrl,
     source_url: pageUrl,
     source_type: SOURCE_TYPE,
-    source_system: SOURCE_SYSTEM,
+    source_system: EXTENSION_SOURCE_SYSTEM,
     source_id: sourceIdFor(a),
     source_data: sourceData,
   };
