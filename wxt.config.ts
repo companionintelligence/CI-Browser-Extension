@@ -165,7 +165,22 @@ export default defineConfig({
     build: {
       minify: false,
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      // iOS Safari Web Extension popups resolve `/chunks/…` against the wrong
+      // origin, so the script never loads and the sheet is blank. Rewrite to
+      // same-directory relatives. Do not set Vite `base: './'` — WXT emits
+      // popup.html at the bundle root while Vite still treats the source as
+      // `src/entrypoints/popup/`, which produces `../../../chunks/…` (outside
+      // the .appex).
+      {
+        name: "safari-popup-relative-urls",
+        transformIndexHtml(html) {
+          return html.replace(/(src|href)="\//g, '$1="./');
+        },
+      },
+    ],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
