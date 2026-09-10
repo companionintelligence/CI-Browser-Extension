@@ -88,5 +88,6 @@
     "typescript-eslint": "^8.40.0",
     "wxt": "^0.20.6"
   },
-  "packageManager": "yarn@4.9.1"
+  "packageManager": "yarn@4.9.1",
+  "license": "PolyForm-Noncommercial-1.0.0"
 }
