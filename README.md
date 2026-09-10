@@ -11,7 +11,7 @@ never the cloud.
 
 `v1.4.0` · Chrome · Firefox · Safari · WXT + TypeScript
 
-> #### PRIVATE AND CONFIDENTIAL — PROPERTY OF LIFESCOPE INC.
+> [PolyForm Noncommercial 1.0.0](LICENSE.md) · [License FAQ](License-FAQ.md) · © LifeScope INC, DBA Companion Intelligence
 
 <img src="store-assets/shared/demo.gif" alt="Popup walkthrough" width="320">
 
