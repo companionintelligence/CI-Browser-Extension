@@ -11,7 +11,8 @@ import react from "@vitejs/plugin-react-swc";
  *   - `action.default_icon`      — the toolbar button on MV3 (Chrome)
  *   - `browser_action.default_icon` — the toolbar button on MV2 (Firefox)
  *
- * The files are generated from public/icon/logo.png; they shipped for a while as
+ * The files are verified copies of @companionintelligence/assets icons/png/* (scripts/sync-brand.mjs
+ * --check); the origin is CI-Common assets/logos. They shipped for a while as
  * the wxt template's green puzzle-piece placeholders.
  */
 const ICONS = {
