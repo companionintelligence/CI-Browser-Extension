@@ -64,6 +64,8 @@
     "webext-redux": "^4.0.0"
   },
   "devDependencies": {
+    "@companionintelligence/assets": "^1.0.0",
+    "@companionintelligence/config": "^1.0.0",
     "@eslint/js": "^9.27.0",
     "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.8.0",
@@ -88,9 +90,7 @@
     "ts-jest": "^29.4.1",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.40.0",
-    "wxt": "^0.20.6",
-    "@companionintelligence/assets": "^1.0.0",
-    "@companionintelligence/config": "^1.0.0"
+    "wxt": "^0.20.6"
   },
   "packageManager": "yarn@4.9.1",
   "license": "PolyForm-Noncommercial-1.0.0"
