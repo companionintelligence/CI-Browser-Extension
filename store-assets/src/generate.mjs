@@ -67,11 +67,11 @@ function tx(x, y, s, { size = 24, fill = T.text, weight = 400, anchor = "start",
 
 function pill(x, y, label) {
   const w = 16 + label.length * 8.2;
-  return `<g><rect x="${x}" y="${y}" width="${w}" height="30" rx="15" fill="rgba(171,212,216,0.12)" stroke="${T.teal}" stroke-opacity="0.4"/><text x="${x + w / 2}" y="${y + 20}" font-family="${T.font}" font-size="13" fill="${T.teal}" text-anchor="middle" font-weight="600">${esc(label)}</text></g>`;
+  return `<g><rect x="${x}" y="${y}" width="${w}" height="30" rx="15" fill="rgba(197,232,220,0.12)" stroke="${T.teal}" stroke-opacity="0.4"/><text x="${x + w / 2}" y="${y + 20}" font-family="${T.font}" font-size="13" fill="${T.teal}" text-anchor="middle" font-weight="600">${esc(label)}</text></g>`;
 }
 
 function checkRow(x, y, label, { size = 18, gap = 30 } = {}) {
-  return `<circle cx="${x + 10}" cy="${y - 5}" r="10" fill="rgba(171,212,216,0.15)"/><path d="M ${x + 5} ${y - 5} l 3.5 3.5 l 7 -8" stroke="${T.teal}" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>` + tx(x + gap, y, label, { size, fill: T.text });
+  return `<circle cx="${x + 10}" cy="${y - 5}" r="10" fill="rgba(197,232,220,0.15)"/><path d="M ${x + 5} ${y - 5} l 3.5 3.5 l 7 -8" stroke="${T.teal}" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>` + tx(x + gap, y, label, { size, fill: T.text });
 }
 
 // ============ README hero (1280x640) ============

@@ -1,35 +1,35 @@
 // Faithful SVG reproduction of the CI-Browser-Extension popup, built from the
 // real App.tsx layout, copy, and design-system tokens. The app renders the
 // popup with next-themes; these mocks use the DARK theme, so colors are the
-// resolved .dark token values from theme.css (canonical CI teal, v0.2.0):
-//   --primary #abd4d8 (teal-200) · --primary-foreground #041620 ·
-//   --background #020618 · --card #0f172b · --muted-foreground #90a1b9 ·
-//   --destructive #ff6467 · --success #4ade80 · --warning #fbbf24.
-// The primary CTA uses --gradient-brand (#0f717a → #00a9a7). Rendered to PNG
+// resolved .dark token values from theme.css (canonical CI phthalo-mist, v0.3):
+//   --primary #c5e8dc (sage) · --primary-foreground #041620 ·
+//   --background #041620 · --card #0c323c · --muted-foreground #a3babf ·
+//   --destructive #ef7070 · --success #34d399 · --warning #fbbf24.
+// The primary CTA uses --gradient-brand (#0a6358 → #00a9a7). Rendered to PNG
 // for the demo GIF and store screenshots.
 import { LOGO_B64 } from "./logo.mjs";
 
 export const T = {
   // Brand constants (theme-independent) — CTA gradient + marketing chrome.
-  gradFrom: "#0f717a", // teal-600 / --primary (light)
+  gradFrom: "#0a6358", // phthalo / --primary (light)
   gradTo: "#00a9a7", // aqua
   brandLight: "#72ddd4", // aqua-light — headline gradient start
   brandMid: "#1c8791", // teal-500 — ambient glow
   // Dark-theme UI tokens (what the popup renders in dark mode).
-  teal: "#abd4d8", // --primary (dark) → headings, accents, primary button fill
+  teal: "#c5e8dc", // --primary (dark) → headings, accents, primary button fill
   primaryFg: "#041620", // --primary-foreground (dark) → text on primary buttons
   tealHover: "#7fbcc2", // teal-300
-  bg: "#020618", // --background (dark)
-  panel: "#0f172b", // --card (dark)
-  secondary: "#1d293d", // --secondary/--muted (dark)
-  panelAccent: "rgba(171,212,216,0.06)", // bg-primary/5-ish tint
+  bg: "#041620", // --background (dark)
+  panel: "#0c323c", // --card (dark)
+  secondary: "#073038", // --secondary/--muted (dark)
+  panelAccent: "rgba(197,232,220,0.06)", // bg-primary/5-ish tint
   border: "rgba(255,255,255,0.10)", // --border (dark)
-  text: "#f8fafc", // --foreground (dark)
-  muted: "#90a1b9", // --muted-foreground (dark)
+  text: "#e8f2f4", // --foreground (dark)
+  muted: "#a3babf", // --muted-foreground (dark)
   faint: "#64748b",
-  success: "#4ade80", // --success (dark)
+  success: "#34d399", // --success (dark)
   warn: "#fbbf24", // --warning (dark)
-  fail: "#ff6467", // --destructive (dark)
+  fail: "#ef7070", // --destructive (dark)
   white: "#ffffff",
   font: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
   mono: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -88,7 +88,7 @@ function signedOutIntro(y) {
 function loginBar(y, loggedIn) {
   if (loggedIn) {
     // Tinted status banner (bg-primary/10) — "Authorized with Companion Intelligence".
-    let s = rrect(16, y, W - 32, 40, 9, "rgba(171,212,216,0.12)", { stroke: "rgba(171,212,216,0.25)", sw: 1 });
+    let s = rrect(16, y, W - 32, 40, 9, "rgba(197,232,220,0.12)", { stroke: "rgba(197,232,220,0.25)", sw: 1 });
     s += `<circle cx="34" cy="${y + 20}" r="4" fill="${T.success}"/>`;
     s += txt(48, y + 25, "Authorized with Companion Intelligence", { size: 13, fill: T.teal, weight: 500 });
     return { svg: s, y: y + 52 };
@@ -105,7 +105,7 @@ function advancedRow(y) {
 }
 
 function autoSyncCard(y, checked) {
-  let s = rrect(16, y, W - 32, 64, 10, T.panelAccent, { stroke: "rgba(171,212,216,0.12)", sw: 1 });
+  let s = rrect(16, y, W - 32, 64, 10, T.panelAccent, { stroke: "rgba(197,232,220,0.12)", sw: 1 });
   s += checkbox(28, y + 14, checked);
   s += txt(54, y + 27, "Auto-sync all browser history", { size: 13.5, fill: T.text, weight: 500 });
   s += txt(54, y + 48, "Excludes ignored sites and pages", { size: 11.5, fill: T.muted });
@@ -125,7 +125,7 @@ function timeRange(y) {
 }
 
 function statusLine(y, text, tone = "muted") {
-  const bg = "rgba(171,212,216,0.10)";
+  const bg = "rgba(197,232,220,0.10)";
   let s = rrect(16, y, W - 32, 32, 6, bg);
   const color = tone === "success" ? T.success : tone === "syncing" ? T.teal : T.muted;
   s += txt(16 + (W - 32) / 2, y + 20, text, { size: 11.8, fill: color, anchor: "middle", weight: 500 });
@@ -136,7 +136,7 @@ function statusLine(y, text, tone = "muted") {
 // the real popup (those APIs are unimplemented). Regenerate a Safari variant
 // here if App Store listing assets need to match.
 function togglesRow(y) {
-  let s = rrect(16, y, W - 32, 48, 10, T.panelAccent, { stroke: "rgba(171,212,216,0.12)", sw: 1 });
+  let s = rrect(16, y, W - 32, 48, 10, T.panelAccent, { stroke: "rgba(197,232,220,0.12)", sw: 1 });
   const cols = [["History", true], ["Bookmarks", true], ["Downloads", false]];
   let cx = 30;
   for (const [label, on] of cols) {
@@ -258,7 +258,7 @@ export function renderIgnored() {
   s += txt(16, y + 28, "automatic browser history sync.", { size: 12, fill: T.muted });
   y += 48;
   // tabs
-  s += rrect(16, y, (W - 32) / 2, 36, 8, "rgba(171,212,216,0.15)", { stroke: T.teal, sw: 1 });
+  s += rrect(16, y, (W - 32) / 2, 36, 8, "rgba(197,232,220,0.15)", { stroke: T.teal, sw: 1 });
   s += txt(16 + (W - 32) / 4, y + 23, "Ignored Sites (3)", { size: 12.5, fill: T.teal, anchor: "middle", weight: 600 });
   s += txt(16 + (W - 32) * 0.75, y + 23, "Ignored Pages (5)", { size: 12.5, fill: T.muted, anchor: "middle" });
   y += 48;
