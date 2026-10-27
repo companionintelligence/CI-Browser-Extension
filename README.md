@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Your browsing, your private memory.</strong></p>
 
-<p align="center"><a href="#installation">Get started</a></p>
+<p align="center"><a href="#installation">Get started</a> · <a href="https://docs.ci.computer/docs/reference/open-source-systems">Systems map</a></p>
 
 A privacy-first browser extension that syncs your history, bookmarks, downloads,
 and highlights to a **Companion Intelligence (CI) Server that you control** —
