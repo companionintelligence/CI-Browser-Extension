@@ -6,7 +6,18 @@
 
 <p align="center"><strong>Your browsing, your private memory.</strong></p>
 
-<p align="center"><a href="#installation">Get started</a> · <a href="https://docs.ci.computer/docs/reference/open-source-systems">Systems map</a></p>
+</div>
+
+[![release](https://img.shields.io/github/v/release/companionintelligence/CI-Browser-Extension?style=flat-square&color=0a6358&label=release)](https://github.com/companionintelligence/CI-Browser-Extension/releases/latest)
+[![platform](https://img.shields.io/badge/platform-Chrome%20%C2%B7%20Firefox%20%C2%B7%20Safari-0a6358?style=flat-square)](https://github.com/companionintelligence/CI-Browser-Extension)
+[![License](https://img.shields.io/badge/license-PolyForm%20NC%201.0-0a6358?style=flat-square)](LICENSE.md)
+[![Discord](https://img.shields.io/badge/chat-Discord-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.com/invite/yQp9hwpzAa)
+
+<p align="center"><a href="#installation">Get started</a> · <a href="https://docs.ci.computer/docs/reference/open-source-systems">Systems map</a> · <a href="README.md#usage">Documentation</a></p>
+
+<p align="center">
+  <a href="https://github.com/companionintelligence/CI-Browser-Extension/releases/latest"><img src="https://img.shields.io/badge/Download%20browser%20builds-Download%20browser%20builds-0a6358?style=for-the-badge&logo=github&logoColor=white" alt="Download browser builds" height="30"></a>
+</p>
 
 A privacy-first browser extension that syncs your history, bookmarks, downloads,
 and highlights to a **Companion Intelligence (CI) Server that you control** —
@@ -16,9 +27,7 @@ never the cloud.
 
 > [PolyForm Noncommercial 1.0.0](LICENSE.md) · [License FAQ](License-FAQ.md) · © LifeScope INC, DBA Companion Intelligence
 
-<img src="store-assets/shared/demo.gif" alt="Popup walkthrough" width="320">
-
-</div>
+<p align="center"><img src="store-assets/shared/demo.gif" alt="Popup walkthrough" width="320"></p>
 
 ## 🌟 Overview
 
@@ -30,6 +39,14 @@ CI-Portal, which necessarily learns who you are — but never what you capture.
 You can point the extension at your own Portal under **Advanced**.)
 
 ## ✨ Features
+
+| Feature | What it provides |
+|---|---|
+| **History and archive** | Sync browsing history, bookmarks, downloads and page highlights. |
+| **Site-specific capture** | Use explicit profiles and per-source toggles, including opt-in financial-site capture. |
+| **Private delivery** | Send data to the user's configured server over an authenticated background queue. |
+| **Permission controls** | Use ignored pages/sites and local settings to limit capture. |
+
 
 - **History sync** — sync your browsing history (URL, title, visit time, dwell,
   scroll depth, page description) to your CI Server, over a time range you pick.
@@ -140,6 +157,20 @@ src/
 ├── store/                      # Redux Toolkit + webext-redux
 └── utils.ts                    # URL parsing, ignore-list matching
 store-assets/                   # store + README art (regenerate via render.sh)
+```
+
+
+## How it fits together
+
+The content script reads only enabled page data, the service worker applies settings and deduplication, and a retry queue sends records to the user's configured server; OIDC sign-in is separate.
+
+```mermaid
+flowchart LR
+  Page[Enabled page profile] --> Content[Content script]
+  Content --> Worker[Background service worker]
+  Worker --> Store[Local settings and retry queue]
+  Store --> Server[User-configured CI Server]
+  Login[OIDC PKCE] --> Portal[CI Portal identity]
 ```
 
 ## 🏗️ Architecture
