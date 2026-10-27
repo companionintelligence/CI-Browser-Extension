@@ -2,9 +2,12 @@
 
 <img src="store-assets/shared/hero.png" alt="Companion Intelligence Browser Extension" width="820">
 
-# Companion Intelligence Browser Extension
+<h1 align="center">Companion Intelligence Browser Extension</h1>
 
-**Your browsing, your private memory.**
+<p align="center"><strong>Your browsing, your private memory.</strong></p>
+
+<p align="center"><a href="#installation">Get started</a></p>
+
 A privacy-first browser extension that syncs your history, bookmarks, downloads,
 and highlights to a **Companion Intelligence (CI) Server that you control** —
 never the cloud.
