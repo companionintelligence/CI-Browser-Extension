@@ -203,3 +203,18 @@ before pushing. CI (GitHub Actions) runs lint/type/test/build on every PR.
 
 support@ci.computer — and check the popup status, your CI Server connectivity,
 and the browser console for diagnostics.
+
+<!-- companion-hub-readme-deep-review -->
+
+## Data flow and permission summary
+
+| Data or access | How it is used | Control
+|---|---|
+| Browsing history and page metadata | Captured and synced to the Memory server you configure | History toggle |
+| Bookmarks and downloads | Optional capture types | Separate toggles; off by default |
+| Selected text | Saved only when you invoke the context-menu action | Explicit user action |
+| Financial-account capture | Supported-site extraction | Off by default |
+| Crash diagnostics | Extension error and stack details; no captured URLs or page contents | Disable in the extension popup |
+
+Captured browsing data is sent to the Memory server you control; Lifescope's identity service handles sign-in, and the extension's optional crash reporting is a separate channel. Read the full [Privacy Policy](PRIVACY.md) before enabling capture, especially for shared or managed browsers. See [Development](DEVELOPMENT.md) for build details.
+
