@@ -270,6 +270,12 @@ manually-submitted listing.
 Publish step runs `web-ext sign --channel listed`, which both signs and
 submits the already-listed add-on as a new version.
 
+To retry AMO publication for a release that already exists, run the
+**Publish Existing Firefox Release** workflow with that release tag. It
+downloads the existing Firefox zip and submits it without rebuilding packages
+or recreating GitHub release assets. Run **Verify Store Credentials** first;
+the configured AMO account must be an author of the existing listing.
+
 ### Chrome Web Store
 | Secret | Where to get it |
 |---|---|
