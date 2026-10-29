@@ -8,6 +8,11 @@ name: Release
 # <<< ci-local:gated
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag to publish (must match package.json, e.g. v1.6.0)'
+        required: true
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,21 +21,26 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: read
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Validate release tag
+      env:
+        RELEASE_TAG: ${{ inputs.release_tag }}
       shell: bash
       run: |
-        if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
-          echo "Release workflow must be dispatched on a version tag (for example, v1.6.0)." >&2
+        if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Release tag must use the vMAJOR.MINOR.PATCH form (for example, v1.6.0)." >&2
           exit 1
         fi
         package_version=$(node -p "require('./package.json').version")
-        if [[ "$GITHUB_REF_NAME" != "v${package_version}" ]]; then
-          echo "Tag $GITHUB_REF_NAME does not match package version $package_version." >&2
+        if [[ "$RELEASE_TAG" != "v${package_version}" ]]; then
+          echo "Tag $RELEASE_TAG does not match package version $package_version." >&2
           exit 1
         fi
 
@@ -38,12 +48,16 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '22.x'
+        registry-url: "https://npm.pkg.github.com"
+        scope: "@companionintelligence"
 
     - name: Enable Corepack (yarn 4)
       run: corepack enable
 
     - name: Install dependencies
       run: yarn install --immutable
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Run linting
       run: yarn lint
@@ -66,12 +80,12 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref_name }}
-        release_name: Release ${{ github.ref_name }}
+        tag_name: ${{ inputs.release_tag }}
+        release_name: Release ${{ inputs.release_tag }}
         draft: false
         prerelease: false
         body: |
-          Release ${{ github.ref_name }}
+          Release ${{ inputs.release_tag }}
 
           ## Chrome Web Store
           Use `ci-browser-extension-*-chrome.zip` for Chrome Web Store submission.
@@ -105,7 +119,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.chrome_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-chrome.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-chrome.zip
         asset_content_type: application/zip
 
     - name: Resolve Firefox Release Asset Path
@@ -119,7 +133,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.firefox_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-firefox.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-firefox.zip
         asset_content_type: application/zip
 
     - name: Resolve Firefox Sources Asset Path
@@ -133,7 +147,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.sources_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-sources.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-sources.zip
         asset_content_type: application/zip
 
     - name: Resolve Safari Release Asset Path
@@ -147,7 +161,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.safari_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-safari.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-safari.zip
         asset_content_type: application/zip
 
     - name: Resolve Safari Mobile Release Asset Path
@@ -161,7 +175,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.safari_mobile_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-safari-mobile.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-safari-mobile.zip
         asset_content_type: application/zip
 
     - name: Resolve Edge Release Asset Path
@@ -175,7 +189,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.edge_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-edge.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-edge.zip
         asset_content_type: application/zip
 
     # ---------------------------------------------------------------------
