@@ -1,7 +1,7 @@
 {
   "name": "@ci/ci-browser-extension",
-  "description": "Companion Intelligence browser extension for Chrome, Firefox, and Safari",
-  "version": "1.6.0",
+  "description": "Companion Intelligence browser extension for Chrome, Firefox, Edge, and Safari",
+  "version": "1.6.1",
   "workspaces": [
     "packages/*"
   ],

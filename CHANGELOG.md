@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] — 2026-10-29
+
 ### Added
 - **Opt-out error reporting (Sentry)** — the background worker and the popup can
   report their own crashes to Sentry project `ci-browser-extension`. On wherever
@@ -30,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not committed to this repo). DEVELOPMENT.md and README.md document local
   Safari testing.
 - **Store auto-publish** — `release.yml` now publishes to Chrome Web Store,
-  Firefox AMO, and Microsoft Edge Add-ons on every `v*` tag, gated on
+  Firefox AMO, and Microsoft Edge Add-ons when the Release workflow is dispatched for a matching `v*` tag, gated on
   per-store secrets (skips cleanly if they're unset). Edge's release zip is
   now attached to GitHub Releases too (previously built but never uploaded).
   See PUBLISHING.md → "CI/CD Auto-Publish Setup" for which secrets each store
@@ -109,5 +111,7 @@ capture-expansion work.
 - Initial release: browsing-history capture to a private CI Server with
   token-based authentication.
 
-[Unreleased]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.6.0...v1.6.1
+[1.6.0]: https://github.com/companionintelligence/CI-Browser-Extension/releases/tag/v1.6.0
 [1.4.0]: https://github.com/companionintelligence/CI-Browser-Extension/releases/tag/v1.4.0
