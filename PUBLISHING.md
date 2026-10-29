@@ -228,12 +228,15 @@ The repository includes GitHub Actions workflows:
 - **CI/CD** (`build-and-test.yml`): lint/type-check/test, then builds Chrome,
   Firefox, and Safari (both desktop and iOS/mobile) on every push/PR as a
   smoke test that all four targets still compile.
-- **Release** (`release.yml`): on a `v*` tag, runs `yarn prepare:store`,
+- **Release** (`release.yml`): after pushing a `v*` tag, manually dispatch the
+  workflow with that tag selected as its ref. It verifies the tag matches the
+  `package.json` version, runs `yarn prepare:store`,
   attaches the Chrome, Edge, Firefox (+ sources), and Safari (desktop +
   mobile) zips to the GitHub Release, then **auto-publishes to Chrome Web
   Store, Firefox AMO, and Microsoft Edge Add-ons** if the store credentials
   below are configured as repo secrets. See "CI/CD Auto-Publish Setup" below.
-- Tag releases like `v1.0.0` to trigger automated release builds.
+- For example, push `v1.6.0`, then run the **Release** workflow on ref
+  `v1.6.0` to build and publish that version.
 
 CI only produces the raw Safari web-extension bundle — it does **not** run
 `safari-web-extension-converter` or touch Xcode. The Xcode wrapper, signing,

@@ -21,6 +21,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Validate release tag
+      shell: bash
+      run: |
+        if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+          echo "Release workflow must be dispatched on a version tag (for example, v1.6.0)." >&2
+          exit 1
+        fi
+        package_version=$(node -p "require('./package.json').version")
+        if [[ "$GITHUB_REF_NAME" != "v${package_version}" ]]; then
+          echo "Tag $GITHUB_REF_NAME does not match package version $package_version." >&2
+          exit 1
+        fi
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
@@ -53,12 +66,12 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
         draft: false
         prerelease: false
         body: |
-          Release ${{ github.ref }}
+          Release ${{ github.ref_name }}
 
           ## Chrome Web Store
           Use `ci-browser-extension-*-chrome.zip` for Chrome Web Store submission.
