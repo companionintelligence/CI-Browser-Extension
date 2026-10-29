@@ -235,8 +235,8 @@ The repository includes manually dispatched GitHub Actions workflows:
   mobile) zips to the GitHub Release, then **auto-publishes to Chrome Web
   Store, Firefox AMO, and Microsoft Edge Add-ons** if the store credentials
   below are configured as repo secrets. See "CI/CD Auto-Publish Setup" below.
-- For example, push `v1.6.0`, then run the **Release** workflow on `master`
-  with `release_tag=v1.6.0` to build and publish that version.
+- For example, push `v1.6.1`, then run the **Release** workflow on `master`
+  with `release_tag=v1.6.1` to build and publish that version.
 
 CI only produces the raw Safari web-extension bundle — it does **not** run
 `safari-web-extension-converter` or touch Xcode. The Xcode wrapper, signing,
