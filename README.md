@@ -23,7 +23,7 @@ A privacy-first browser extension that syncs your history, bookmarks, downloads,
 and highlights to a **Companion Intelligence (CI) Server that you control** —
 never the cloud.
 
-`v1.4.0` · Chrome · Firefox · Safari · WXT + TypeScript
+`v1.6.1` · [Chrome](https://chromewebstore.google.com/detail/companion-intelligence/bcocflgkdeimninckpmdifcniajoneih) · [Firefox](https://addons.mozilla.org/en-US/firefox/addon/companion-intelligence/) · Safari (not yet released) · WXT + TypeScript
 
 > [PolyForm Noncommercial 1.0.0](LICENSE.md) · [License FAQ](License-FAQ.md) · © LifeScope INC, DBA Companion Intelligence
 
@@ -84,9 +84,20 @@ data-handling disclosure, and [`CHANGELOG.md`](CHANGELOG.md) for release notes.
 ## 🚀 Installation
 
 ### For users
-Store listings are prepared for the Chrome Web Store, Firefox Add-ons, and the
-Apple App Store (Safari). See [`store-assets/STORE-LISTING.md`](store-assets/STORE-LISTING.md)
-and [`PUBLISHING.md`](PUBLISHING.md).
+Install **Companion Intelligence** from your browser's extension store:
+
+| Browser | Where to get it |
+|---|---|
+| Firefox | [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/companion-intelligence/) (desktop Firefox) |
+| Chrome | [Chrome Web Store](https://chromewebstore.google.com/detail/companion-intelligence/bcocflgkdeimninckpmdifcniajoneih) |
+| Edge | Not yet listed on Microsoft Edge Add-ons |
+| Safari | Not yet available |
+
+The [latest GitHub release](https://github.com/companionintelligence/CI-Browser-Extension/releases/latest)
+also attaches the per-browser build packages (Chrome, Edge, Firefox and Safari).
+For the store listing copy and the submission steps, see
+[`store-assets/STORE-LISTING.md`](store-assets/STORE-LISTING.md) and
+[`PUBLISHING.md`](PUBLISHING.md).
 
 ### For developers (manual install)
 
