@@ -11,9 +11,52 @@ import {
   sendBrowserCaptures,
   sourceIdFor,
   toInstant,
-  SOURCE_SYSTEM,
+  unixMsOf,
+  browserSourceSystem,
+  browserBrand,
+  browserBrandLabel,
+  rememberBrowserBrand,
+  EXTENSION_SOURCE_SYSTEM,
   type BrowserActivity,
 } from "./browserActivity";
+
+const CHROME_UA =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+const BRAVE_UA = CHROME_UA; // Brave ships Chrome's UA verbatim.
+const EDGE_UA = `${CHROME_UA} Edg/128.0.0.0`;
+const FIREFOX_UA =
+  "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0";
+const SAFARI_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15";
+
+function setUserAgent(ua: string) {
+  Object.defineProperty(globalThis.navigator, "userAgent", {
+    value: ua,
+    configurable: true,
+  });
+}
+
+// The record builders read the engine from navigator.userAgent; jsdom's own UA
+// is nothing a user runs, so every suite below speaks as Chrome unless it says
+// otherwise.
+beforeEach(() => {
+  setUserAgent(CHROME_UA);
+  rememberBrowserBrand(undefined);
+  // jsdom has no Client Hints; each brand test installs what it needs.
+  Object.defineProperty(globalThis.navigator, "userAgentData", {
+    value: undefined,
+    configurable: true,
+  });
+});
+
+function setBrands(brands: string[] | undefined) {
+  Object.defineProperty(globalThis.navigator, "userAgentData", {
+    value: brands
+      ? { brands: brands.map((brand) => ({ brand, version: "1" })) }
+      : undefined,
+    configurable: true,
+  });
+}
 
 function activity(over: Partial<BrowserActivity> = {}): BrowserActivity {
   return {
@@ -27,12 +70,38 @@ function activity(over: Partial<BrowserActivity> = {}): BrowserActivity {
 
 const UUID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
 
-describe("SOURCE_SYSTEM", () => {
-  // Pinned deliberately: this string is part of the server-side dedup triple
-  // AND the join key for content→event auto-linking, so it has to match the
-  // platform event-ingest spec exactly. Changing it re-uploads everything.
+describe("EXTENSION_SOURCE_SYSTEM", () => {
+  // Pinned deliberately: this string is part of the server-side dedup key for
+  // highlights and scrapes, so it has to match the platform event-ingest spec
+  // exactly. Changing it re-uploads everything.
   it("matches the platform spec's name for this capture source", () => {
-    expect(SOURCE_SYSTEM).toBe("ci-browser-extension");
+    expect(EXTENSION_SOURCE_SYSTEM).toBe("ci-browser-extension");
+  });
+});
+
+describe("browserSourceSystem", () => {
+  // The importer's names, by ENGINE: CI-Server files Chrome, Brave, Edge, Arc
+  // and Opera history under one `chromium` system, so a Brave user running the
+  // Chrome build must not get a system of their own.
+  it("names every Chromium-family browser chromium", () => {
+    expect(browserSourceSystem(CHROME_UA)).toBe("chromium");
+    expect(browserSourceSystem(BRAVE_UA)).toBe("chromium");
+    expect(browserSourceSystem(EDGE_UA)).toBe("chromium");
+  });
+
+  it("names Firefox firefox — the places.sqlite importer's name", () => {
+    expect(browserSourceSystem(FIREFOX_UA)).toBe("firefox");
+  });
+
+  it("names Safari safari, and falls back to the extension's own name otherwise", () => {
+    expect(browserSourceSystem(SAFARI_UA)).toBe("safari");
+    expect(browserSourceSystem("curl/8.0")).toBe(EXTENSION_SOURCE_SYSTEM);
+    expect(browserSourceSystem("")).toBe(EXTENSION_SOURCE_SYSTEM);
+  });
+
+  it("reads navigator.userAgent by default", () => {
+    setUserAgent(FIREFOX_UA);
+    expect(browserSourceSystem()).toBe("firefox");
   });
 });
 
@@ -86,8 +155,91 @@ describe("toInstant", () => {
   });
 });
 
+describe("browserBrand", () => {
+  // Brave ships Chrome's UA string verbatim; only Client Hints name it.
+  it("names Brave from the Client Hints brands, which the UA string cannot", () => {
+    setBrands(["Not A;Brand", "Chromium", "Brave"]);
+    expect(browserBrand()).toBe("brave");
+    setBrands(undefined);
+    expect(browserBrand()).toBe("chrome"); // the UA lies, and that is all there is
+  });
+
+  it("names Chrome, Edge and Opera from brands, skipping GREASE and the engine", () => {
+    setBrands(["Chromium", "Google Chrome", "Not(A:Brand"]);
+    expect(browserBrand()).toBe("chrome");
+    setBrands(["Not/A)Brand", "Microsoft Edge", "Chromium"]);
+    expect(browserBrand()).toBe("edge");
+    setBrands(["Opera", "Chromium", "Not_A Brand"]);
+    expect(browserBrand()).toBe("opera");
+  });
+
+  it("falls back to UA tokens, then the UA parser", () => {
+    expect(browserBrand({ userAgent: EDGE_UA })).toBe("edge");
+    expect(browserBrand({ userAgent: `${CHROME_UA} OPR/110.0.0.0` })).toBe(
+      "opera",
+    );
+    expect(browserBrand({ userAgent: FIREFOX_UA })).toBe("firefox");
+    expect(browserBrand({ userAgent: SAFARI_UA })).toBe("safari");
+    expect(browserBrand({ userAgent: "" })).toBeUndefined();
+  });
+
+  it("honors a brand learned asynchronously (the Brave probe)", () => {
+    rememberBrowserBrand("brave");
+    expect(browserBrand({ userAgent: CHROME_UA })).toBe("brave");
+  });
+
+  it("labels a brand for the device record", () => {
+    expect(browserBrandLabel("brave")).toBe("Brave");
+    expect(browserBrandLabel("edge")).toBe("Microsoft Edge");
+    expect(browserBrandLabel("arc")).toBe("Arc");
+    expect(browserBrandLabel(undefined)).toBeUndefined();
+  });
+});
+
+describe("properties.browser", () => {
+  // The brand is an ARRIVAL fact: it rides in the properties bag, under the
+  // key CI-Server's History-file importer writes when a filename or profile
+  // folder tells it the brand, and it stays off source_system so both
+  // arrivals of a Brave visit are one row.
+  it("stamps the brand on browser-native records without touching the identity", () => {
+    setBrands(["Chromium", "Brave", "Not A;Brand"]);
+    const r = toBrowserActivityRecord(activity());
+    expect(r?.properties).toMatchObject({ browser: "brave" });
+    expect(r?.source_system).toBe("chromium");
+    expect(
+      toBookmarkContentRecord(activity({ action_type: "bookmark" }))
+        ?.source_data,
+    ).toMatchObject({ browser: "brave" });
+  });
+
+  it("does not invent a brand when none can be told, and never overrides one already set", () => {
+    expect(
+      toBrowserActivityRecord(activity({ properties: { browser: "arc" } }))
+        ?.properties,
+    ).toMatchObject({ browser: "arc" });
+    rememberBrowserBrand(undefined);
+    setUserAgent("curl/8.0");
+    expect(
+      toBrowserActivityRecord(activity())?.properties?.browser,
+    ).toBeUndefined();
+  });
+});
+
 describe("sourceIdFor", () => {
-  it("prefers an explicit browser id (bookmark / download)", () => {
+  const MS = Date.parse("2024-01-02T03:04:05.000Z");
+
+  it("keys a visit on visit:<unix ms>:<url> — CI-Server's browser identity format", () => {
+    expect(sourceIdFor(activity())).toBe(
+      `visit:${MS}:https://example.com/page`,
+    );
+    expect(sourceIdFor(activity({ action_type: "reload" }))).toBe(
+      `reload:${MS}:https://example.com/page`,
+    );
+  });
+
+  // Per-profile browser ids are NOT the key: the importer never sees them and
+  // Brave's bookmark 42 is not Chrome's bookmark 42. They stay in properties.
+  it("keys a bookmark on whole seconds, ignoring bookmark_id", () => {
     expect(
       sourceIdFor(
         activity({
@@ -95,7 +247,10 @@ describe("sourceIdFor", () => {
           properties: { bookmark_id: "b1" },
         }),
       ),
-    ).toBe("bookmark:b1");
+    ).toBe(`bookmark:${MS / 1000}:https://example.com/page`);
+  });
+
+  it("keys a download on (start ms, url), ignoring download_id", () => {
     expect(
       sourceIdFor(
         activity({
@@ -103,12 +258,18 @@ describe("sourceIdFor", () => {
           properties: { download_id: "d3" },
         }),
       ),
-    ).toBe("download:d3");
+    ).toBe(`download:${MS}:https://example.com/page`);
   });
 
-  it("otherwise derives a deterministic action:instant:url key", () => {
-    expect(sourceIdFor(activity())).toBe(
-      "visit:2024-01-02T03:04:05.000Z:https://example.com/page",
+  it("trims the url so the key matches the record's url", () => {
+    expect(sourceIdFor(activity({ url: "  https://example.com/page " }))).toBe(
+      `visit:${MS}:https://example.com/page`,
+    );
+  });
+
+  it("keeps the extension-only scheme for highlights", () => {
+    expect(sourceIdFor(activity({ action_type: "highlight" }))).toBe(
+      "highlight:2024-01-02T03:04:05.000Z:https://example.com/page",
     );
   });
 
@@ -148,9 +309,14 @@ describe("toBrowserActivityRecord", () => {
       scroll_depth_percent: 80,
       is_incognito: false,
       source_type: "capture",
-      source_system: SOURCE_SYSTEM,
-      source_id: "visit:2024-01-02T03:04:05.000Z:https://example.com/page",
+      source_system: "chromium",
+      source_id: `visit:${Date.parse("2024-01-02T03:04:05.000Z")}:https://example.com/page`,
     });
+  });
+
+  it("stamps the Firefox build's records firefox", () => {
+    setUserAgent(FIREFOX_UA);
+    expect(toBrowserActivityRecord(activity())?.source_system).toBe("firefox");
   });
 
   // `time` must satisfy the server's Zod `.datetime()` (Z form).
@@ -214,8 +380,8 @@ describe("toBookmarkContentRecord", () => {
       title: "Saved page",
       url: "https://example.com/page",
       source_type: "capture",
-      source_system: SOURCE_SYSTEM,
-      source_id: "bookmark:b1",
+      source_system: "chromium",
+      source_id: `bookmark:${Date.parse("2024-01-02T03:04:05.000Z") / 1000}:https://example.com/page`,
     });
     expect(r?.source_data).toMatchObject({ bookmark_id: "b1" });
   });
@@ -249,7 +415,7 @@ describe("toHighlightContentRecord", () => {
       url: "https://example.com/page",
       mimetype: "text/plain",
       source_type: "capture",
-      source_system: SOURCE_SYSTEM,
+      source_system: EXTENSION_SOURCE_SYSTEM,
       source_id: "highlight:2024-01-02T03:04:05.000Z:https://example.com/page",
     });
   });
@@ -352,7 +518,7 @@ describe("toScrapeContentRecord", () => {
     const r = toScrapeContentRecord(scraped());
     expect(r).toMatchObject({
       source_type: "capture",
-      source_system: SOURCE_SYSTEM,
+      source_system: EXTENSION_SOURCE_SYSTEM,
       source_id: "scrape:netflix.com:viewingHistory:0",
     });
     expect(r?.source_data).toMatchObject({
@@ -524,5 +690,71 @@ describe("finishIngest", () => {
       .mockRejectedValue(new Error("offline"));
 
     expect(await finishIngest("https://hub.ci.computer", "t")).toBe(false);
+  });
+});
+
+/**
+ * CROSS-REPO CONFORMANCE. These fixtures are the same ones CI-Server pins in
+ * `backend/apps/api/src/domains/memory/identity/__tests__/identity.test.ts`:
+ * one Chrome visit as Takeout's Unix microseconds, as the History SQLite's
+ * 1601-epoch microseconds, and as the history API's double of milliseconds.
+ * The server derives `visit:1749556800123:<url>` from the first two; this
+ * extension must derive it from the third, or the row never converges.
+ */
+describe("conformance with CI-Server's identity/browser.ts", () => {
+  const URL = "https://example.com/path?q=1#frag";
+  const UNIX_MS = 1749556800123; // 2025-06-10T12:00:00.123Z
+  const API_MS = UNIX_MS + 0.456; // what chrome.history hands out
+
+  // What background.ts does with a visitTime: chromeTimeToISO → new Date(ms).
+  function fromHistoryApi(
+    visitTime: number,
+    over: Partial<BrowserActivity> = {},
+  ): BrowserActivity {
+    return activity({
+      time: new Date(visitTime).toISOString(),
+      url: URL,
+      ...over,
+    });
+  }
+
+  it("truncates the history API's sub-millisecond visitTime, never rounds", () => {
+    expect(unixMsOf(fromHistoryApi(API_MS))).toBe(UNIX_MS);
+    expect(unixMsOf(fromHistoryApi(UNIX_MS + 0.999))).toBe(UNIX_MS);
+  });
+
+  it("mints the server's visit identity for the shared fixture", () => {
+    expect(toBrowserActivityRecord(fromHistoryApi(API_MS))).toMatchObject({
+      source_system: "chromium",
+      source_id: `visit:${UNIX_MS}:${URL}`,
+    });
+  });
+
+  it("mints the server's bookmark identity (whole seconds) for the shared fixture", () => {
+    expect(
+      toBookmarkContentRecord(
+        fromHistoryApi(API_MS, {
+          action_type: "bookmark",
+          properties: { bookmark_id: "7" },
+        }),
+      ),
+    ).toMatchObject({
+      source_system: "chromium",
+      source_id: `bookmark:1749556800:${URL}`,
+    });
+  });
+
+  it("mints the server's download identity for the shared fixture", () => {
+    expect(
+      toBrowserActivityRecord(
+        fromHistoryApi(API_MS, {
+          action_type: "download",
+          properties: { download_id: "9" },
+        }),
+      ),
+    ).toMatchObject({
+      source_system: "chromium",
+      source_id: `download:${UNIX_MS}:${URL}`,
+    });
   });
 });

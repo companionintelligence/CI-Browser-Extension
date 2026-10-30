@@ -1,9 +1,18 @@
 name: Release
 
+# >>> ci-local:gated original triggers below, restore with `ci-local restore`
+# on:
+#   push:
+#     tags:
+#       - 'v*'
+# <<< ci-local:gated
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag to publish (must match package.json, e.g. v1.6.0)'
+        required: true
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,6 +21,9 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: read
 
     # Store-credential gates MUST live at job level.
     #
@@ -45,6 +57,21 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Validate release tag
+      env:
+        RELEASE_TAG: ${{ inputs.release_tag }}
+      shell: bash
+      run: |
+        if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Release tag must use the vMAJOR.MINOR.PATCH form (for example, v1.6.0)." >&2
+          exit 1
+        fi
+        package_version=$(node -p "require('./package.json').version")
+        if [[ "$RELEASE_TAG" != "v${package_version}" ]]; then
+          echo "Tag $RELEASE_TAG does not match package version $package_version." >&2
+          exit 1
+        fi
 
     # Runs before install/build so a credential gap costs seconds, not a full
     # release build, and so the tag author sees the failure immediately.
@@ -132,12 +159,16 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '22.x'
+        registry-url: "https://npm.pkg.github.com"
+        scope: "@companionintelligence"
 
     - name: Enable Corepack (yarn 4)
       run: corepack enable
 
     - name: Install dependencies
       run: yarn install --immutable
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Run linting
       run: yarn lint
@@ -160,12 +191,12 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        tag_name: ${{ inputs.release_tag }}
+        release_name: Release ${{ inputs.release_tag }}
         draft: false
         prerelease: false
         body: |
-          Release ${{ github.ref }}
+          Release ${{ inputs.release_tag }}
 
           ## Chrome Web Store
           Use `ci-browser-extension-*-chrome.zip` for Chrome Web Store submission.
@@ -199,7 +230,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.chrome_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-chrome.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-chrome.zip
         asset_content_type: application/zip
 
     - name: Resolve Firefox Release Asset Path
@@ -213,7 +244,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.firefox_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-firefox.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-firefox.zip
         asset_content_type: application/zip
 
     - name: Resolve Firefox Sources Asset Path
@@ -227,7 +258,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.sources_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-sources.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-sources.zip
         asset_content_type: application/zip
 
     - name: Resolve Safari Release Asset Path
@@ -241,7 +272,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.safari_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-safari.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-safari.zip
         asset_content_type: application/zip
 
     - name: Resolve Safari Mobile Release Asset Path
@@ -255,7 +286,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.safari_mobile_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-safari-mobile.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-safari-mobile.zip
         asset_content_type: application/zip
 
     - name: Resolve Edge Release Asset Path
@@ -269,7 +300,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.edge_asset.outputs.asset }}
-        asset_name: ci-browser-extension-${{ github.ref_name }}-edge.zip
+        asset_name: ci-browser-extension-${{ inputs.release_tag }}-edge.zip
         asset_content_type: application/zip
 
     # ---------------------------------------------------------------------
@@ -381,14 +412,40 @@ jobs:
     - name: Summarize store publishing
       if: always()
       shell: bash
+      env:
+        STORE_PUBLISH_OPTIONAL: ${{ vars.STORE_PUBLISH_OPTIONAL }}
       run: |
+        set -euo pipefail
+        waived=",$(printf '%s' "${STORE_PUBLISH_OPTIONAL:-}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]'),"
+
+        store_outcome() {
+          local key="$1" ready="$2" present=false flag
+          shift 2
+          if [ "$ready" = 'true' ]; then
+            echo 'published'
+            return
+          fi
+          for flag in "$@"; do
+            if [ "$flag" = 'true' ]; then
+              present=true
+            fi
+          done
+          if [ "$present" = 'true' ]; then
+            echo 'blocked — partial credentials'
+          elif [[ "$waived" == *",$key,"* ]]; then
+            echo 'waived — manual upload required'
+          else
+            echo 'blocked — credentials missing'
+          fi
+        }
+
         {
           echo "## Store publishing"
           echo ""
           echo "| Store | Outcome |"
           echo "|---|---|"
-          echo "| Firefox Add-ons (AMO) | $([ "$FIREFOX_READY" = 'true' ] && echo 'published' || echo 'waived — manual upload required') |"
-          echo "| Chrome Web Store | $([ "$CHROME_READY" = 'true' ] && echo 'published' || echo 'waived — manual upload required') |"
-          echo "| Microsoft Edge Add-ons | $([ "$EDGE_READY" = 'true' ] && echo 'published' || echo 'waived — manual upload required') |"
+          echo "| Firefox Add-ons (AMO) | $(store_outcome firefox "$FIREFOX_READY" "$HAS_AMO_JWT_ISSUER" "$HAS_AMO_JWT_SECRET") |"
+          echo "| Chrome Web Store | $(store_outcome chrome "$CHROME_READY" "$HAS_CHROME_CLIENT_ID" "$HAS_CHROME_CLIENT_SECRET" "$HAS_CHROME_REFRESH_TOKEN" "$HAS_CHROME_EXTENSION_ID") |"
+          echo "| Microsoft Edge Add-ons | $(store_outcome edge "$EDGE_READY" "$HAS_EDGE_PRODUCT_ID" "$HAS_EDGE_CLIENT_ID" "$HAS_EDGE_CLIENT_SECRET" "$HAS_EDGE_ACCESS_TOKEN_URL") |"
           echo "| Safari (App Store) | manual — no publish API (see PUBLISHING.md) |"
         } >> "$GITHUB_STEP_SUMMARY"

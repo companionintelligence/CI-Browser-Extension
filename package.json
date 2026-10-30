@@ -1,7 +1,7 @@
 {
   "name": "@ci/ci-browser-extension",
-  "description": "Companion Intelligence browser extension for Chrome, Firefox, and Safari",
-  "version": "1.5.0",
+  "description": "Companion Intelligence browser extension for Chrome, Firefox, Edge, and Safari",
+  "version": "1.6.1",
   "workspaces": [
     "packages/*"
   ],
@@ -42,11 +42,13 @@
     "test:coverage": "jest --coverage",
     "scrape:check": "jest src/scrape/fixtures.test.ts --verbose -t",
     "prepare:store": "npm run clean && npm run zip:all",
-    "check:types": "tsc --noEmit --skipLibCheck"
+    "check:types": "tsc --noEmit --skipLibCheck",
+    "lint:canon": "ci-lint-canon . && node scripts/sync-brand.mjs --check",
+    "brand:sync": "node scripts/sync-brand.mjs"
   },
   "dependencies": {
     "@ci/shadcn": "workspace:*",
-    "@companionintelligence/tokens": "^0.3.1",
+    "@companionintelligence/tokens": "^1.0.0",
     "@fontsource/manrope": "^5.2.8",
     "@reduxjs/toolkit": "^2.8.2",
     "@sentry/browser": "^10.69.0",
@@ -62,6 +64,8 @@
     "webext-redux": "^4.0.0"
   },
   "devDependencies": {
+    "@companionintelligence/assets": "^1.0.0",
+    "@companionintelligence/config": "^1.0.0",
     "@eslint/js": "^9.27.0",
     "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.8.0",
@@ -88,5 +92,6 @@
     "typescript-eslint": "^8.40.0",
     "wxt": "^0.20.6"
   },
-  "packageManager": "yarn@4.9.1"
+  "packageManager": "yarn@4.9.1",
+  "license": "PolyForm-Noncommercial-1.0.0"
 }

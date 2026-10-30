@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # GIF canvas padding — matches the popup's canonical --background (dark theme)
 # so shorter frames pad seamlessly. Keep in sync with T.bg in src/popup.mjs.
-BG="#020618"
+BG="#041620"
 
 # out/ and frames/ are gitignored intermediates — ensure they exist on a
 # fresh checkout before generate.mjs writes into them.

@@ -1,6 +1,10 @@
 name: Style canon lint
 
-on: [pull_request, push]
+# >>> ci-local:gated original triggers below, restore with `ci-local restore`
+# on: [pull_request, push]
+# <<< ci-local:gated
+on:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,4 +18,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: node scripts/lint-canon.mjs .
+      - run: corepack enable
+      # ci-lint-canon (@companionintelligence/config) reads the canon + retired list from the
+      # tokens package; @companionintelligence/assets is the origin of the icon files.
+      - run: yarn install --immutable
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: yarn lint:canon

@@ -224,16 +224,19 @@ privacy questionnaire answers. Screenshots: `store-assets/shared/screenshot-1..4
 
 ## Automation
 
-The repository includes GitHub Actions workflows:
+The repository includes manually dispatched GitHub Actions workflows:
 - **CI/CD** (`build-and-test.yml`): lint/type-check/test, then builds Chrome,
-  Firefox, and Safari (both desktop and iOS/mobile) on every push/PR as a
-  smoke test that all four targets still compile.
-- **Release** (`release.yml`): on a `v*` tag, runs `yarn prepare:store`,
+  Firefox, and Safari (both desktop and iOS/mobile) as a smoke test that all
+  four targets still compile.
+- **Release** (`release.yml`): after pushing a `v*` tag, dispatch the workflow
+  on `master` with `release_tag` set to that tag. It verifies the tag matches
+  the `package.json` version, runs `yarn prepare:store`,
   attaches the Chrome, Edge, Firefox (+ sources), and Safari (desktop +
   mobile) zips to the GitHub Release, then **auto-publishes to Chrome Web
   Store, Firefox AMO, and Microsoft Edge Add-ons** if the store credentials
   below are configured as repo secrets. See "CI/CD Auto-Publish Setup" below.
-- Tag releases like `v1.0.0` to trigger automated release builds.
+- For example, push `v1.6.1`, then run the **Release** workflow on `master`
+  with `release_tag=v1.6.1` to build and publish that version.
 
 CI only produces the raw Safari web-extension bundle — it does **not** run
 `safari-web-extension-converter` or touch Xcode. The Xcode wrapper, signing,
@@ -289,6 +292,12 @@ manually-submitted listing.
 
 Publish step runs `web-ext sign --channel listed`, which both signs and
 submits the already-listed add-on as a new version.
+
+To retry AMO publication for a release that already exists, run the
+**Publish Existing Firefox Release** workflow with that release tag. It
+downloads the existing Firefox zip and submits it without rebuilding packages
+or recreating GitHub release assets. Run **Verify Store Credentials** first;
+the configured AMO account must be an author of the existing listing.
 
 ### Chrome Web Store
 | Secret | Where to get it |
