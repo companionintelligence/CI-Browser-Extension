@@ -25,6 +25,35 @@ jobs:
       contents: write
       packages: read
 
+    # Store-credential gates MUST live at job level.
+    #
+    # These flags used to be declared in each publish step's own `env:` block and
+    # read back from that same step's `if:` (e.g. `if: env.CHROME_CLIENT_ID != ''`).
+    # A step's `if:` is evaluated before that step's `env:` is applied, so the
+    # `env` context there only ever contains workflow- and job-level variables —
+    # the expression was reading an undefined value, compared it to '', and was
+    # therefore ALWAYS FALSE. Every store publish step silently skipped on every
+    # release, including Firefox, whose AMO credentials have been present since
+    # 2026-07-29. The workflow still reported green, so nothing surfaced it.
+    #
+    # Hoisting the gates here is the same pattern CI-Hub (desktop-release.yml)
+    # and CI-Capture (release.yml) already use for their signing gates.
+    env:
+      FIREFOX_READY: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' && 'true' || 'false' }}
+      CHROME_READY: ${{ secrets.CHROME_CLIENT_ID != '' && secrets.CHROME_CLIENT_SECRET != '' && secrets.CHROME_REFRESH_TOKEN != '' && secrets.CHROME_EXTENSION_ID != '' && 'true' || 'false' }}
+      EDGE_READY: ${{ secrets.EDGE_PRODUCT_ID != '' && secrets.EDGE_CLIENT_ID != '' && secrets.EDGE_CLIENT_SECRET != '' && secrets.EDGE_ACCESS_TOKEN_URL != '' && 'true' || 'false' }}
+      # Per-secret presence, so the preflight can name exactly what is missing.
+      HAS_AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER != '' && 'true' || 'false' }}
+      HAS_AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET != '' && 'true' || 'false' }}
+      HAS_CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID != '' && 'true' || 'false' }}
+      HAS_CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET != '' && 'true' || 'false' }}
+      HAS_CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN != '' && 'true' || 'false' }}
+      HAS_CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID != '' && 'true' || 'false' }}
+      HAS_EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID != '' && 'true' || 'false' }}
+      HAS_EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID != '' && 'true' || 'false' }}
+      HAS_EDGE_CLIENT_SECRET: ${{ secrets.EDGE_CLIENT_SECRET != '' && 'true' || 'false' }}
+      HAS_EDGE_ACCESS_TOKEN_URL: ${{ secrets.EDGE_ACCESS_TOKEN_URL != '' && 'true' || 'false' }}
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -43,6 +72,88 @@ jobs:
           echo "Tag $RELEASE_TAG does not match package version $package_version." >&2
           exit 1
         fi
+
+    # Runs before install/build so a credential gap costs seconds, not a full
+    # release build, and so the tag author sees the failure immediately.
+    - name: Require store publishing credentials
+      shell: bash
+      env:
+        STORE_PUBLISH_OPTIONAL: ${{ vars.STORE_PUBLISH_OPTIONAL }}
+      run: |
+        set -euo pipefail
+
+        # Comma-separated store keys (firefox, chrome, edge) that are allowed to
+        # have NO credentials at all. Waiving a store means its zip is attached
+        # to the release for manual upload and nothing auto-publishes. A store
+        # that is only PARTIALLY configured always fails, waived or not — half a
+        # credential set is a mistake, never an intentional opt-out.
+        waived=",$(printf '%s' "${STORE_PUBLISH_OPTIONAL:-}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]'),"
+        fatal=0
+
+        check_store() {
+          local key="$1" label="$2" howto="$3"
+          shift 3
+          local missing=() present=0 total=0 name flag
+          while [ "$#" -gt 0 ]; do
+            name="$1"; flag="$2"; shift 2
+            total=$((total + 1))
+            if [ "$flag" = "true" ]; then
+              present=$((present + 1))
+            else
+              missing+=("$name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -eq 0 ]; then
+            echo "$label: all $total credentials present — this release WILL publish to the store."
+            return 0
+          fi
+
+          if [ "$present" -gt 0 ]; then
+            echo "::error::$label is PARTIALLY configured ($present of $total secrets set). Missing: ${missing[*]}. A partial credential set cannot publish, and skipping it silently is what this check exists to prevent. Set the missing secrets, or clear all $total to waive the store deliberately."
+            fatal=1
+            return 0
+          fi
+
+          if [[ "$waived" == *",$key,"* ]]; then
+            echo "::warning::$label has no publishing credentials and is waived via the STORE_PUBLISH_OPTIONAL repository variable. The store package is still attached to the release for manual upload. $howto"
+            return 0
+          fi
+
+          echo "::error::$label has NO publishing credentials, so this release would not reach the store. Missing all $total: ${missing[*]}. $howto"
+          echo "::error::Set them with 'gh secret set <NAME> --repo ${{ github.repository }}', or waive the store on purpose by adding '$key' to the STORE_PUBLISH_OPTIONAL repository variable."
+          fatal=1
+        }
+
+        check_store firefox "Firefox Add-ons (AMO)" \
+          "See PUBLISHING.md -> CI/CD Auto-Publish Setup." \
+          AMO_JWT_ISSUER "$HAS_AMO_JWT_ISSUER" \
+          AMO_JWT_SECRET "$HAS_AMO_JWT_SECRET"
+
+        check_store chrome "Chrome Web Store" \
+          "See PUBLISHING.md -> CI/CD Auto-Publish Setup." \
+          CHROME_EXTENSION_ID "$HAS_CHROME_EXTENSION_ID" \
+          CHROME_CLIENT_ID "$HAS_CHROME_CLIENT_ID" \
+          CHROME_CLIENT_SECRET "$HAS_CHROME_CLIENT_SECRET" \
+          CHROME_REFRESH_TOKEN "$HAS_CHROME_REFRESH_TOKEN"
+
+        check_store edge "Microsoft Edge Add-ons" \
+          "See PUBLISHING.md -> CI/CD Auto-Publish Setup." \
+          EDGE_PRODUCT_ID "$HAS_EDGE_PRODUCT_ID" \
+          EDGE_CLIENT_ID "$HAS_EDGE_CLIENT_ID" \
+          EDGE_CLIENT_SECRET "$HAS_EDGE_CLIENT_SECRET" \
+          EDGE_ACCESS_TOKEN_URL "$HAS_EDGE_ACCESS_TOKEN_URL"
+
+        # Safari has no publish API at all; it stays a manual Xcode step by
+        # design and is deliberately not gated here (see PUBLISHING.md).
+        echo "Safari: no store upload API exists — manual Xcode submission, not gated."
+
+        if [ "$fatal" -ne 0 ]; then
+          echo "::error::Release aborted: at least one store cannot be published to. A green release must mean every non-waived store actually received this build."
+          exit 1
+        fi
+
+        echo "All store credential checks passed."
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -193,20 +304,24 @@ jobs:
         asset_content_type: application/zip
 
     # ---------------------------------------------------------------------
-    # Store auto-publish. Each step is gated on its own secrets via `if:`,
-    # so this workflow is a safe no-op (skips straight to nothing) until the
-    # relevant secrets are added — see PUBLISHING.md → "CI/CD Auto-Publish
-    # Setup" for exactly which secrets each store needs and how to get them.
-    # Safari has no publish API and stays a manual, Xcode-based step
-    # (see the "Safari (App Store)" section of PUBLISHING.md).
+    # Store auto-publish. Each step is gated on a JOB-level readiness flag
+    # (see the `env:` block at the top of this job) — never on the step's own
+    # `env:`, which is not yet applied when `if:` is evaluated and made these
+    # gates permanently false. "Require store publishing credentials" above has
+    # already failed the run for any non-waived store with missing credentials,
+    # so a skip here can only mean a deliberate STORE_PUBLISH_OPTIONAL waiver.
+    # See PUBLISHING.md → "CI/CD Auto-Publish Setup" for how to obtain each
+    # store's secrets. Safari has no publish API and stays a manual, Xcode-based
+    # step (see the "Safari (App Store)" section of PUBLISHING.md).
     # ---------------------------------------------------------------------
 
     - name: Publish to Firefox Add-ons (AMO)
-      if: env.AMO_JWT_ISSUER != ''
+      if: env.FIREFOX_READY == 'true'
       env:
         AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
         AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
       run: |
+        set -euo pipefail
         npx --yes web-ext@10 sign \
           --source-dir .output/firefox-mv2 \
           --artifacts-dir .output/amo-artifacts \
@@ -215,7 +330,7 @@ jobs:
           --channel listed
 
     - name: Publish to Chrome Web Store
-      if: env.CHROME_CLIENT_ID != ''
+      if: env.CHROME_READY == 'true'
       env:
         CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
         CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
@@ -243,7 +358,7 @@ jobs:
     # as of this writing — re-check that doc against Partner Center's actual
     # "API access" page before the first real run.
     - name: Publish to Microsoft Edge Add-ons
-      if: env.EDGE_CLIENT_ID != ''
+      if: env.EDGE_READY == 'true'
       env:
         EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
         EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
@@ -291,3 +406,46 @@ jobs:
           "https://api.addons.microsoftedge.microsoft.com/v1/products/$EDGE_PRODUCT_ID/submissions" \
           -H "Authorization: Bearer $ACCESS_TOKEN" \
           -H "X-ClientID: $EDGE_CLIENT_ID"
+
+    # Writes the per-store outcome into the run summary so "what actually
+    # shipped" is answerable from the Actions UI without reading step logs.
+    - name: Summarize store publishing
+      if: always()
+      shell: bash
+      env:
+        STORE_PUBLISH_OPTIONAL: ${{ vars.STORE_PUBLISH_OPTIONAL }}
+      run: |
+        set -euo pipefail
+        waived=",$(printf '%s' "${STORE_PUBLISH_OPTIONAL:-}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]'),"
+
+        store_outcome() {
+          local key="$1" ready="$2" present=false flag
+          shift 2
+          if [ "$ready" = 'true' ]; then
+            echo 'published'
+            return
+          fi
+          for flag in "$@"; do
+            if [ "$flag" = 'true' ]; then
+              present=true
+            fi
+          done
+          if [ "$present" = 'true' ]; then
+            echo 'blocked — partial credentials'
+          elif [[ "$waived" == *",$key,"* ]]; then
+            echo 'waived — manual upload required'
+          else
+            echo 'blocked — credentials missing'
+          fi
+        }
+
+        {
+          echo "## Store publishing"
+          echo ""
+          echo "| Store | Outcome |"
+          echo "|---|---|"
+          echo "| Firefox Add-ons (AMO) | $(store_outcome firefox "$FIREFOX_READY" "$HAS_AMO_JWT_ISSUER" "$HAS_AMO_JWT_SECRET") |"
+          echo "| Chrome Web Store | $(store_outcome chrome "$CHROME_READY" "$HAS_CHROME_CLIENT_ID" "$HAS_CHROME_CLIENT_SECRET" "$HAS_CHROME_REFRESH_TOKEN" "$HAS_CHROME_EXTENSION_ID") |"
+          echo "| Microsoft Edge Add-ons | $(store_outcome edge "$EDGE_READY" "$HAS_EDGE_PRODUCT_ID" "$HAS_EDGE_CLIENT_ID" "$HAS_EDGE_CLIENT_SECRET" "$HAS_EDGE_ACCESS_TOKEN_URL") |"
+          echo "| Safari (App Store) | manual — no publish API (see PUBLISHING.md) |"
+        } >> "$GITHUB_STEP_SUMMARY"

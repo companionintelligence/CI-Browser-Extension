@@ -17,22 +17,35 @@ import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const EXT = resolve(process.argv[2] ?? join(here, "..", ".output", "chrome-mv3"));
+const EXT = resolve(
+  process.argv[2] ?? join(here, "..", ".output", "chrome-mv3"),
+);
 
-for (const [scheme, name] of [["light", "popup-welcome"], ["dark", "popup-welcome-dark"]]) {
-  const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "ci-ext-shot-")), {
-    channel: "chromium",
-    headless: true,
-    colorScheme: scheme,
-    args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-    viewport: { width: 350, height: 480 },
-    deviceScaleFactor: 4,
-  });
+for (const [scheme, name] of [
+  ["light", "popup-welcome"],
+  ["dark", "popup-welcome-dark"],
+]) {
+  const ctx = await chromium.launchPersistentContext(
+    mkdtempSync(join(tmpdir(), "ci-ext-shot-")),
+    {
+      channel: "chromium",
+      headless: true,
+      colorScheme: scheme,
+      args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
+      viewport: { width: 350, height: 480 },
+      deviceScaleFactor: 4,
+    },
+  );
   let [sw] = ctx.serviceWorkers();
-  if (!sw) sw = await ctx.waitForEvent("serviceworker", { timeout: 20000 });
+  if (!sw) {
+    sw = await ctx.waitForEvent("serviceworker", { timeout: 20000 });
+  }
+
   const id = new URL(sw.url()).host;
   const page = await ctx.newPage();
-  await page.goto(`chrome-extension://${id}/popup.html`, { waitUntil: "domcontentloaded" });
+  await page.goto(`chrome-extension://${id}/popup.html`, {
+    waitUntil: "domcontentloaded",
+  });
   await page.getByText("Remember everything you browse").waitFor();
   await page.getByRole("button", { name: /Sign in with CI-Portal/ }).waitFor();
   await page.waitForTimeout(1200);
