@@ -1,0 +1,181 @@
+{
+  "$schema": "https://raw.githubusercontent.com/companionintelligence/CI-Common/main/packages/video-kit/schema/storyboard.schema.json",
+  "app": {
+    "id": "ci-browser-extension",
+    "name": "Companion Intelligence browser extension",
+    "repo": "companionintelligence/CI-Browser-Extension",
+    "website": "ci.computer"
+  },
+  "meta": {
+    "fps": 30,
+    "transitionSeconds": 0.5,
+    "pacing": "fit"
+  },
+  "chapters": {
+    "start": "Set up",
+    "saves": "What it saves",
+    "yours": "What stays yours"
+  },
+  "scenes": [
+    {
+      "id": "open",
+      "kind": "intro",
+      "seconds": 5,
+      "minSeconds": 5,
+      "title": "Companion Intelligence",
+      "caption": "Your browsing, saved to a Memory you run.",
+      "narration": "The services holding your history do not keep it for you. This extension saves it to your own Companion Memory.",
+      "mark": "./assets/app-icon.png"
+    },
+    {
+      "id": "sign-in",
+      "kind": "feature",
+      "chapter": "start",
+      "seconds": 6,
+      "caption": "One sign-in. It finds your Memory.",
+      "narration": "You sign in once through your CI-Portal account, and the extension looks for your Memory there. It follows your system's light or dark setting.",
+      "items": [
+        {
+          "image": "assets/shots/popup-welcome-dark.png",
+          "alt": "The extension popup on a dark system: Remember everything you browse, with a Sign in with CI-Portal button.",
+          "label": "Dark system"
+        },
+        {
+          "image": "assets/shots/popup-welcome.png",
+          "alt": "The same popup on a light system.",
+          "label": "Light system"
+        }
+      ],
+      "columns": 2,
+      "transition": "cut"
+    },
+    {
+      "id": "what-it-saves",
+      "kind": "feature",
+      "chapter": "saves",
+      "seconds": 6,
+      "reveal": "paced",
+      "title": "What it saves",
+      "caption": "Four things. Three have their own switch.",
+      "narration": "It saves the pages you visit, your bookmarks and downloads, and any passage you highlight. The first three each get their own switch.",
+      "items": [
+        {
+          "label": "History",
+          "value": "pages as you visit them"
+        },
+        {
+          "label": "Bookmarks",
+          "value": "new and existing"
+        },
+        {
+          "label": "Downloads",
+          "value": "files you download"
+        },
+        {
+          "label": "Highlights",
+          "value": "select, right-click, save"
+        }
+      ],
+      "transition": "cut"
+    },
+    {
+      "id": "site-profiles",
+      "kind": "feature",
+      "chapter": "saves",
+      "seconds": 8,
+      "reveal": "paced",
+      "title": "13 sites, filed as what they are",
+      "caption": "Titles and dates, not anonymous visits.",
+      "narration": "Thirteen sites get their own profile, so what you watched, read or booked is filed as titles and dates. Each runs only on its own site.",
+      "items": [
+        {
+          "label": "Streaming",
+          "value": "Netflix, Hulu, Disney+, Max, Paramount+, Prime Video"
+        },
+        {
+          "label": "News",
+          "value": "CNN, WSJ, Slashdot"
+        },
+        {
+          "label": "Code and Q&A",
+          "value": "GitHub, Quora"
+        },
+        {
+          "label": "Travel",
+          "value": "Airbnb"
+        },
+        {
+          "label": "Brokerage",
+          "value": "Robinhood, off by default"
+        }
+      ],
+      "transition": "cut"
+    },
+    {
+      "id": "controls",
+      "kind": "feature",
+      "chapter": "yours",
+      "seconds": 7,
+      "reveal": "paced",
+      "title": "You decide what is saved",
+      "caption": "Ignore a site and nothing from it is uploaded.",
+      "narration": "Ignore any site or page and nothing from it is uploaded. Pause capture whenever you like. The extension never asks for cookie access.",
+      "items": [
+        {
+          "label": "Ignore",
+          "value": "any site or page"
+        },
+        {
+          "label": "Pause",
+          "value": "any time"
+        },
+        {
+          "label": "Cookies",
+          "value": "never requested"
+        },
+        {
+          "label": "Financial accounts",
+          "value": "never captured by default"
+        }
+      ],
+      "transition": "cut"
+    },
+    {
+      "id": "where-it-goes",
+      "kind": "feature",
+      "chapter": "yours",
+      "seconds": 8,
+      "reveal": "paced",
+      "title": "Where it goes",
+      "caption": "Your Memory gets the data. CI-Portal gets who you are.",
+      "narration": "Captures go to your Memory. Sign-in goes through CI-Portal, which learns who you are, never what you saved. Crash reports are anonymous, with one switch to turn them off.",
+      "items": [
+        {
+          "label": "Captures",
+          "value": "your own Memory"
+        },
+        {
+          "label": "Sign-in",
+          "value": "CI-Portal, identity only"
+        },
+        {
+          "label": "Crash reports",
+          "value": "anonymous, one switch"
+        }
+      ],
+      "transition": "cut"
+    },
+    {
+      "id": "close",
+      "kind": "outro",
+      "seconds": 6,
+      "minSeconds": 6,
+      "title": "Companion Intelligence",
+      "caption": "ci.computer",
+      "cta": "Keep your history yours",
+      "tagline": "UnCloud your life.",
+      "url": "ci.computer",
+      "narration": "Keep your history yours, with the Companion Intelligence browser extension. Visit ci dot computer. UnCloud your life."
+    }
+  ]
+}
