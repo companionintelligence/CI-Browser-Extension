@@ -315,14 +315,24 @@ API.
 ### Microsoft Edge Add-ons
 | Secret | Where to get it |
 |---|---|
-| `EDGE_PRODUCT_ID`, `EDGE_CLIENT_ID`, `EDGE_CLIENT_SECRET`, `EDGE_ACCESS_TOKEN_URL` | Partner Center → the extension's listing → **API access** page, which displays all four values directly (Partner Center generates the client secret and access-token URL for you; no separate Azure AD app registration needed) |
+| `EDGE_PRODUCT_ID` | The product GUID on the extension's Partner Center listing page or in its URL |
+| `EDGE_CLIENT_ID`, `EDGE_API_KEY` | Partner Center → Microsoft Edge → **Publish API** → enable the new experience (v1.1) → **Create API credentials** |
 
-**This step is unverified** — no Edge submission has happened yet (unlike
-Chrome/Firefox/Safari), so the request shapes in `release.yml` are written
-from Microsoft's documented [Add-ons API](https://learn.microsoft.com/en-us/microsoft-edge/extensions-chromium/publish/api/using-addons-api)
-but haven't been exercised against a live Partner Center account. Before
-relying on it: do the first Edge submission manually, generate the API
-credentials from the listing's API access page, add the secrets above, then
-watch the first automated run closely (or dry-run the `curl` calls locally
-against the real API) and fix up the request shape if Microsoft's current API
-has drifted from the doc.
+The release workflow uses Microsoft's v1.1 Add-ons Update API, which sends the
+API key in `Authorization: ApiKey` and the client ID in `X-ClientID`. Microsoft
+ended support for the older v1 bearer-token flow in 2024. API keys can expire;
+keep the current key in GitHub Secrets and rotate it there when Partner Center
+shows it expiring. The first Edge product/listing must be created and submitted
+manually in Partner Center before the update API can publish later versions.
+
+The credential check makes a read-only request for a deliberately nonexistent
+operation. A 404 is expected when the API accepts the credentials and the
+product is reachable, but the check cannot distinguish a bad product ID from a
+missing operation; confirm the product GUID in Partner Center. The release
+workflow then uploads the package, waits for upload validation, submits it for
+certification, and waits for the submission operation to finish. A successful
+workflow means the submission was accepted for review, not that Microsoft has
+approved or made it public.
+
+See Microsoft's current [Edge Add-ons Update API documentation](https://learn.microsoft.com/en-us/microsoft-edge/extensions/update/api/using-addons-api)
+and [REST API reference](https://learn.microsoft.com/en-us/microsoft-edge/extensions/update/api/addons-api-reference).

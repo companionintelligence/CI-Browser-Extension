@@ -41,7 +41,7 @@ jobs:
     env:
       FIREFOX_READY: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' && 'true' || 'false' }}
       CHROME_READY: ${{ secrets.CHROME_CLIENT_ID != '' && secrets.CHROME_CLIENT_SECRET != '' && secrets.CHROME_REFRESH_TOKEN != '' && secrets.CHROME_EXTENSION_ID != '' && 'true' || 'false' }}
-      EDGE_READY: ${{ secrets.EDGE_PRODUCT_ID != '' && secrets.EDGE_CLIENT_ID != '' && secrets.EDGE_CLIENT_SECRET != '' && secrets.EDGE_ACCESS_TOKEN_URL != '' && 'true' || 'false' }}
+      EDGE_READY: ${{ secrets.EDGE_PRODUCT_ID != '' && secrets.EDGE_CLIENT_ID != '' && secrets.EDGE_API_KEY != '' && 'true' || 'false' }}
       # Per-secret presence, so the preflight can name exactly what is missing.
       HAS_AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER != '' && 'true' || 'false' }}
       HAS_AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET != '' && 'true' || 'false' }}
@@ -51,8 +51,7 @@ jobs:
       HAS_CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID != '' && 'true' || 'false' }}
       HAS_EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID != '' && 'true' || 'false' }}
       HAS_EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID != '' && 'true' || 'false' }}
-      HAS_EDGE_CLIENT_SECRET: ${{ secrets.EDGE_CLIENT_SECRET != '' && 'true' || 'false' }}
-      HAS_EDGE_ACCESS_TOKEN_URL: ${{ secrets.EDGE_ACCESS_TOKEN_URL != '' && 'true' || 'false' }}
+      HAS_EDGE_API_KEY: ${{ secrets.EDGE_API_KEY != '' && 'true' || 'false' }}
 
     steps:
     - name: Checkout code
@@ -141,8 +140,7 @@ jobs:
           "See PUBLISHING.md -> CI/CD Auto-Publish Setup." \
           EDGE_PRODUCT_ID "$HAS_EDGE_PRODUCT_ID" \
           EDGE_CLIENT_ID "$HAS_EDGE_CLIENT_ID" \
-          EDGE_CLIENT_SECRET "$HAS_EDGE_CLIENT_SECRET" \
-          EDGE_ACCESS_TOKEN_URL "$HAS_EDGE_ACCESS_TOKEN_URL"
+          EDGE_API_KEY "$HAS_EDGE_API_KEY"
 
         # Safari has no publish API at all; it stays a manual Xcode step by
         # design and is deliberately not gated here (see PUBLISHING.md).
@@ -353,62 +351,103 @@ jobs:
           --client-secret "$CHROME_CLIENT_SECRET" \
           --refresh-token "$CHROME_REFRESH_TOKEN"
 
-    # NOTE: this step is unverified against a live Edge Partner Center account
-    # (no Edge submission has been confirmed done yet, unlike Chrome/Firefox/
-    # Safari). The request shapes below match Microsoft's documented
-    # Add-ons API (https://learn.microsoft.com/en-us/microsoft-edge/extensions-chromium/publish/api/using-addons-api)
-    # as of this writing — re-check that doc against Partner Center's actual
-    # "API access" page before the first real run.
+    # v1.1 is the supported Microsoft Edge Add-ons Update API. It authenticates
+    # with the Partner Center API key and Client ID; the old v1 bearer-token
+    # flow was retired by Microsoft after 2024. The first listing still must be
+    # created/submitted in Partner Center before this update API can be used.
     - name: Publish to Microsoft Edge Add-ons
       id: publish_edge
       if: env.EDGE_READY == 'true'
       env:
         EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
         EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
-        EDGE_CLIENT_SECRET: ${{ secrets.EDGE_CLIENT_SECRET }}
-        EDGE_ACCESS_TOKEN_URL: ${{ secrets.EDGE_ACCESS_TOKEN_URL }}
+        EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+        RELEASE_TAG: ${{ inputs.release_tag }}
       run: |
         set -euo pipefail
         EDGE_ZIP=$(ls .output/ci-browser-extension-*-edge.zip)
-
-        ACCESS_TOKEN=$(curl -sS -X POST "$EDGE_ACCESS_TOKEN_URL" \
-          -H "Content-Type: application/x-www-form-urlencoded" \
-          -d "client_id=$EDGE_CLIENT_ID" \
-          -d "scope=https://api.addons.microsoftedge.microsoft.com/.default" \
-          -d "client_secret=$EDGE_CLIENT_SECRET" \
-          -d "grant_type=client_credentials" | jq -r '.access_token')
-
-        if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
-          echo "Failed to obtain an Edge Add-ons access token" >&2
-          exit 1
-        fi
-
-        OPERATION_URL=$(curl -sS -D - -o /dev/null -X POST \
-          "https://api.addons.microsoftedge.microsoft.com/v1/products/$EDGE_PRODUCT_ID/submissions/draft/package" \
-          -H "Authorization: Bearer $ACCESS_TOKEN" \
-          -H "X-ClientID: $EDGE_CLIENT_ID" \
-          -H "Content-Type: application/zip" \
-          --data-binary "@$EDGE_ZIP" | grep -i '^location:' | tr -d '\r' | awk '{print $2}')
-
-        STATUS="InProgress"
-        for attempt in $(seq 1 30); do
-          STATUS=$(curl -sS "$OPERATION_URL" \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H "X-ClientID: $EDGE_CLIENT_ID" | jq -r '.status')
-          echo "Package validation attempt $attempt/30: $STATUS"
-          [ "$STATUS" = "Succeeded" ] && break
-          [ "$STATUS" = "Failed" ] && { echo "Edge package upload failed"; exit 1; }
-          sleep 10
-        done
-        if [ "$STATUS" != "Succeeded" ]; then
-          echo "Timed out waiting for Edge package validation" >&2
-          exit 1
-        fi
-
-        curl -sS -X POST \
-          "https://api.addons.microsoftedge.microsoft.com/v1/products/$EDGE_PRODUCT_ID/submissions" \
-          -H "Authorization: Bearer $ACCESS_TOKEN" \
+        API_ROOT="https://api.addons.microsoftedge.microsoft.com/v1/products/$EDGE_PRODUCT_ID"
+        TMP_DIR=$(mktemp -d)
+        trap 'rm -rf "$TMP_DIR"' EXIT
+        EDGE_AUTH_HEADERS=(
+          -H "Authorization: ApiKey $EDGE_API_KEY"
           -H "X-ClientID: $EDGE_CLIENT_ID"
+        )
+
+        operation_id_from_headers() {
+          local location
+          location=$(awk 'tolower($1) == "location:" { sub(/\r$/, "", $2); print $2 }' "$1" | tail -n 1)
+          local operation_id="${location##*/}"
+          operation_id="${operation_id%%\?*}"
+          if [[ -z "$operation_id" || ! "$operation_id" =~ ^[[:alnum:]_.~-]+$ ]]; then
+            echo "Edge API did not return a usable operation ID." >&2
+            return 1
+          fi
+          printf '%s' "$operation_id"
+        }
+
+        wait_for_operation() {
+          local url="$1" label="$2" response="$3" http_code status attempt
+          for attempt in $(seq 1 30); do
+            http_code=$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+              "${EDGE_AUTH_HEADERS[@]}" "$url")
+            if [[ "$http_code" != "200" ]]; then
+              echo "Edge $label status check returned HTTP $http_code." >&2
+              return 1
+            fi
+            status=$(jq -r '.status // empty' "$response")
+            echo "Edge $label status attempt $attempt/30: $status"
+            case "$status" in
+              Succeeded) return 0 ;;
+              Failed)
+                jq -r '"Edge operation failed: " + (.errorCode // "unknown") + ": " + (.message // "no details")' "$response" >&2
+                return 1
+                ;;
+              InProgress) sleep 10 ;;
+              *) echo "Edge API returned an unexpected $label status." >&2; return 1 ;;
+            esac
+          done
+          echo "Timed out waiting for the Edge $label operation." >&2
+          return 1
+        }
+
+        UPLOAD_HEADERS="$TMP_DIR/upload.headers"
+        UPLOAD_BODY="$TMP_DIR/upload.json"
+        UPLOAD_HTTP_CODE=$(curl --silent --show-error --dump-header "$UPLOAD_HEADERS" \
+          --output "$UPLOAD_BODY" --write-out '%{http_code}' --request POST \
+          "${EDGE_AUTH_HEADERS[@]}" \
+          -H "Content-Type: application/zip" \
+          --data-binary "@$EDGE_ZIP" \
+          "$API_ROOT/submissions/draft/package")
+        if [[ "$UPLOAD_HTTP_CODE" != "202" ]]; then
+          echo "Edge package upload returned HTTP $UPLOAD_HTTP_CODE." >&2
+          jq -r '.message // .errorCode // empty' "$UPLOAD_BODY" >&2 || true
+          exit 1
+        fi
+        UPLOAD_OPERATION_ID=$(operation_id_from_headers "$UPLOAD_HEADERS")
+        wait_for_operation \
+          "$API_ROOT/submissions/draft/package/operations/$UPLOAD_OPERATION_ID" \
+          "package upload" "$TMP_DIR/upload-status.json"
+
+        PUBLISH_NOTES=$(jq -nc --arg notes "Companion Intelligence ${RELEASE_TAG} submission." '{notes: $notes}')
+        PUBLISH_HEADERS="$TMP_DIR/publish.headers"
+        PUBLISH_BODY="$TMP_DIR/publish.json"
+        PUBLISH_HTTP_CODE=$(curl --silent --show-error --dump-header "$PUBLISH_HEADERS" \
+          --output "$PUBLISH_BODY" --write-out '%{http_code}' --request POST \
+          "${EDGE_AUTH_HEADERS[@]}" \
+          -H "Content-Type: application/json" \
+          --data "$PUBLISH_NOTES" \
+          "$API_ROOT/submissions")
+        if [[ "$PUBLISH_HTTP_CODE" != "202" ]]; then
+          echo "Edge submission request returned HTTP $PUBLISH_HTTP_CODE." >&2
+          jq -r '.message // .errorCode // empty' "$PUBLISH_BODY" >&2 || true
+          exit 1
+        fi
+        PUBLISH_OPERATION_ID=$(operation_id_from_headers "$PUBLISH_HEADERS")
+        wait_for_operation \
+          "$API_ROOT/submissions/operations/$PUBLISH_OPERATION_ID" \
+          "submission" "$TMP_DIR/publish-status.json"
+        echo "Edge accepted the submission for certification; store review and public availability may still be pending."
 
     # Report actual submission-step results. Credentials being present does not
     # prove that a store accepted the submission or made it public.
@@ -457,6 +496,6 @@ jobs:
           echo "|---|---|"
           echo "| Firefox Add-ons (AMO) | $(store_outcome firefox "$FIREFOX_RESULT" "$FIREFOX_READY" "$HAS_AMO_JWT_ISSUER" "$HAS_AMO_JWT_SECRET") |"
           echo "| Chrome Web Store | $(store_outcome chrome "$CHROME_RESULT" "$CHROME_READY" "$HAS_CHROME_CLIENT_ID" "$HAS_CHROME_CLIENT_SECRET" "$HAS_CHROME_REFRESH_TOKEN" "$HAS_CHROME_EXTENSION_ID") |"
-          echo "| Microsoft Edge Add-ons | $(store_outcome edge "$EDGE_RESULT" "$EDGE_READY" "$HAS_EDGE_PRODUCT_ID" "$HAS_EDGE_CLIENT_ID" "$HAS_EDGE_CLIENT_SECRET" "$HAS_EDGE_ACCESS_TOKEN_URL") |"
+          echo "| Microsoft Edge Add-ons | $(store_outcome edge "$EDGE_RESULT" "$EDGE_READY" "$HAS_EDGE_PRODUCT_ID" "$HAS_EDGE_CLIENT_ID" "$HAS_EDGE_API_KEY") |"
           echo "| Safari (App Store) | manual — no publish API (see PUBLISHING.md) |"
         } >> "$GITHUB_STEP_SUMMARY"
