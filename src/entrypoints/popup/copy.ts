@@ -1,5 +1,8 @@
 /**
- * Every user-visible popup string. Voice rules: sentence case; no developer
+ * Every user-visible popup string. The voice is the org's one brand-voice doc —
+ * @companionintelligence/content `voice/brand-voice.md` (Part II, product copy) — and
+ * product names/prices are its copy tokens; do not restate either here.
+ * Voice rules: sentence case; no developer
  * nouns (log → activity, range → how far back, blacklist → ignored sites,
  * device → this browser, URL → address, regex → pattern); "Memory" and
  * "CI-Portal" are the only capitalized product nouns; relative times

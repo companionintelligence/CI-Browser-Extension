@@ -224,16 +224,19 @@ privacy questionnaire answers. Screenshots: `store-assets/shared/screenshot-1..4
 
 ## Automation
 
-The repository includes GitHub Actions workflows:
+The repository includes manually dispatched GitHub Actions workflows:
 - **CI/CD** (`build-and-test.yml`): lint/type-check/test, then builds Chrome,
-  Firefox, and Safari (both desktop and iOS/mobile) on every push/PR as a
-  smoke test that all four targets still compile.
-- **Release** (`release.yml`): on a `v*` tag, runs `yarn prepare:store`,
+  Firefox, and Safari (both desktop and iOS/mobile) as a smoke test that all
+  four targets still compile.
+- **Release** (`release.yml`): after pushing a `v*` tag, dispatch the workflow
+  on `master` with `release_tag` set to that tag. It verifies the tag matches
+  the `package.json` version, runs `yarn prepare:store`,
   attaches the Chrome, Edge, Firefox (+ sources), and Safari (desktop +
   mobile) zips to the GitHub Release, then **auto-publishes to Chrome Web
   Store, Firefox AMO, and Microsoft Edge Add-ons** if the store credentials
   below are configured as repo secrets. See "CI/CD Auto-Publish Setup" below.
-- Tag releases like `v1.0.0` to trigger automated release builds.
+- For example, push `v1.6.1`, then run the **Release** workflow on `master`
+  with `release_tag=v1.6.1` to build and publish that version.
 
 CI only produces the raw Safari web-extension bundle — it does **not** run
 `safari-web-extension-converter` or touch Xcode. The Xcode wrapper, signing,
@@ -244,12 +247,35 @@ committing signing secrets, so this is deliberately out of CI for now.
 
 ## CI/CD Auto-Publish Setup
 
-`release.yml` has one publish step per auto-publishable store. Each step
-checks its own secrets first (`if: env.<SOMETHING> != ''`) and is skipped
-entirely if they're absent — so this is safe to merge before any secrets
-exist; releases just keep attaching zips for manual upload like before. **A
-store's first submission has to happen manually** (as described earlier in
-this doc) before its API credentials exist to automate updates.
+`release.yml` has one publish step per auto-publishable store, and a
+**Require store publishing credentials** preflight that runs before the build.
+A release **fails** if any store is missing credentials, rather than skipping
+the store and still reporting green. **A store's first submission has to happen
+manually** (as described earlier in this doc) before its API credentials exist
+to automate updates.
+
+To release before a store is automatable, waive it explicitly: add its key to
+the `STORE_PUBLISH_OPTIONAL` repository variable (comma-separated, from
+`firefox`, `chrome`, `edge`).
+
+```bash
+# Ship now, upload to Chrome and Edge by hand this time.
+gh variable set STORE_PUBLISH_OPTIONAL --repo companionintelligence/CI-Browser-Extension --body 'chrome,edge'
+```
+
+A waived store still gets its zip attached to the release for manual upload,
+and the run summary records it as `waived — manual upload required`. A store
+that is only *partially* configured always fails, waived or not — half a
+credential set is a mistake, never a deliberate opt-out.
+
+> **Why the preflight exists.** These gates were originally written as
+> `if: env.CHROME_CLIENT_ID != ''` reading the step's *own* `env:` block. A
+> step's `if:` is evaluated before its `env:` is applied, so that expression
+> read an undefined value and was **always false**. Every store publish step
+> skipped on every release — including Firefox, whose AMO credentials had been
+> present for weeks — and the workflow still went green. The gates now live in
+> the job-level `env:` block, which is the same pattern CI-Hub and CI-Capture
+> use for their signing gates.
 
 Add secrets with `gh secret set NAME --repo companionintelligence/CI-Browser-Extension`
 (it prompts for the value — nothing gets typed on the command line or pasted
@@ -266,6 +292,12 @@ manually-submitted listing.
 
 Publish step runs `web-ext sign --channel listed`, which both signs and
 submits the already-listed add-on as a new version.
+
+To retry AMO publication for a release that already exists, run the
+**Publish Existing Firefox Release** workflow with that release tag. It
+downloads the existing Firefox zip and submits it without rebuilding packages
+or recreating GitHub release assets. Run **Verify Store Credentials** first;
+the configured AMO account must be an author of the existing listing.
 
 ### Chrome Web Store
 | Secret | Where to get it |

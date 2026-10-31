@@ -11,7 +11,8 @@ import react from "@vitejs/plugin-react-swc";
  *   - `action.default_icon`      — the toolbar button on MV3 (Chrome)
  *   - `browser_action.default_icon` — the toolbar button on MV2 (Firefox)
  *
- * The files are generated from public/icon/logo.png; they shipped for a while as
+ * The files are verified copies of @companionintelligence/assets icons/png/* (scripts/sync-brand.mjs
+ * --check); the origin is CI-Common assets/logos. They shipped for a while as
  * the wxt template's green puzzle-piece placeholders.
  */
 const ICONS = {
@@ -165,7 +166,22 @@ export default defineConfig({
     build: {
       minify: false,
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      // iOS Safari Web Extension popups resolve `/chunks/…` against the wrong
+      // origin, so the script never loads and the sheet is blank. Rewrite to
+      // same-directory relatives. Do not set Vite `base: './'` — WXT emits
+      // popup.html at the bundle root while Vite still treats the source as
+      // `src/entrypoints/popup/`, which produces `../../../chunks/…` (outside
+      // the .appex).
+      {
+        name: "safari-popup-relative-urls",
+        transformIndexHtml(html) {
+          return html.replace(/(src|href)="\//g, '$1="./');
+        },
+      },
+    ],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

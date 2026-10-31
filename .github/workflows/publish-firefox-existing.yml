@@ -1,0 +1,82 @@
+name: Publish Existing Firefox Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag whose Firefox package should be submitted (for example, v1.6.1)
+        required: true
+        type: string
+
+concurrency:
+  group: publish-firefox-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Download and validate the Firefox package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must use the vMAJOR.MINOR.PATCH form." >&2
+            exit 1
+          fi
+          package_version=$(node -p "require('./package.json').version")
+          if [[ "$RELEASE_TAG" != "v${package_version}" ]]; then
+            echo "Tag $RELEASE_TAG does not match package version $package_version." >&2
+            exit 1
+          fi
+
+          mkdir -p .output/firefox-mv2 .output/amo-artifacts
+          asset_name="ci-browser-extension-${RELEASE_TAG}-firefox.zip"
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$asset_name" \
+            --dir .output
+          unzip -q ".output/$asset_name" -d .output/firefox-mv2
+          node -e '
+            const manifest = require("./.output/firefox-mv2/manifest.json");
+            const version = require("./package.json").version;
+            if (manifest.version !== version) {
+              throw new Error(`Package version ${manifest.version} does not match source version ${version}.`);
+            }
+            if (manifest.browser_specific_settings?.gecko?.id !== "@ci-browser-extension") {
+              throw new Error("Firefox package has an unexpected AMO extension ID.");
+            }
+            console.log(`Validated Firefox package ${manifest.version} (${manifest.browser_specific_settings.gecko.id}).`);
+          '
+
+      - name: Publish to Firefox Add-ons (AMO)
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$AMO_JWT_ISSUER" || -z "$AMO_JWT_SECRET" ]]; then
+            echo "AMO_JWT_ISSUER and AMO_JWT_SECRET must be configured." >&2
+            exit 1
+          fi
+          npx --yes web-ext@10 sign \
+            --source-dir .output/firefox-mv2 \
+            --artifacts-dir .output/amo-artifacts \
+            --api-key "$AMO_JWT_ISSUER" \
+            --api-secret "$AMO_JWT_SECRET" \
+            --channel listed
