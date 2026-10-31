@@ -23,7 +23,7 @@ A privacy-first browser extension that syncs your history, bookmarks, downloads,
 and highlights to a **Companion Intelligence (CI) Server that you control** —
 never the cloud.
 
-`v1.6.1` · [Chrome](https://chromewebstore.google.com/detail/companion-intelligence/bcocflgkdeimninckpmdifcniajoneih) · [Firefox](https://addons.mozilla.org/en-US/firefox/addon/companion-intelligence/) · Safari (not yet released) · WXT + TypeScript
+`v1.6.2` · [Chrome](https://chromewebstore.google.com/detail/companion-intelligence/bcocflgkdeimninckpmdifcniajoneih) · [Firefox](https://addons.mozilla.org/en-US/firefox/addon/companion-intelligence/) · Safari (bundled in Companion Memory for iOS) · WXT + TypeScript
 
 > [PolyForm Noncommercial 1.0.0](LICENSE.md) · [License FAQ](License-FAQ.md) · © LifeScope INC, DBA Companion Intelligence
 

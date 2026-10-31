@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] — 2026-10-31
+
+### Fixed
+- **Safari iOS startup** — register only the `webNavigation` events supported by
+  the current browser. Safari omits `onHistoryStateUpdated`; registering it
+  unconditionally caused the background extension to fail during startup and
+  left the popup loading indefinitely.
+
 ## [1.6.1] — 2026-10-29
 
 ### Added
@@ -111,7 +119,8 @@ capture-expansion work.
 - Initial release: browsing-history capture to a private CI Server with
   token-based authentication.
 
-[Unreleased]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.6.2...HEAD
+[1.6.2]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/companionintelligence/CI-Browser-Extension/releases/tag/v1.6.0
 [1.4.0]: https://github.com/companionintelligence/CI-Browser-Extension/releases/tag/v1.4.0
