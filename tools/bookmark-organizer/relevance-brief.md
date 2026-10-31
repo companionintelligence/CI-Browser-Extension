@@ -5,7 +5,7 @@ CI / Lifescope Inc builds a private, local-first AI "memory box" appliance (Comp
 - Voice & wearables/devices: Even Realities / Mentra / OMI / Pebble smart glasses and pins, MaixCAM, Home Assistant Voice PE, GonoPBX, DJI Osmo gimbal, voice/TTS/STT, AI avatars and companions
 - Spatial/XR/3D: Meta Quest, WebXR, Unity, three.js, Gaussian splats, MetaHuman, XREAL, virtual homes, photogrammetry
 - Active Inference research
-- App stores / distribution: CasaOS, Umbrel, Olares, Runtipi, Homebrew/Scoop, app store listings
+- App stores / distribution: CasaOS, Runtipi, Homebrew/Scoop, app store listings
 - Go-to-market: marketing, outreach, Metricool social, ads, brand studio, video generation, investors/grants/accelerators (VCs, AAIF, FUTO)
 - Infra: Cloudflare, CI/CD, Docker, DNS, Tailscale, 1Password
 Not relevant: fiction, adult content, general entertainment/gaming, shopping, unrelated hobby links, old personal admin.
