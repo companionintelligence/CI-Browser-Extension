@@ -25,7 +25,7 @@ CATS = [
     ("Companion Intelligence/02 Local-First AI & Memory", r"ollama|llama|\bllm|local ?ai|self-?host|local-first|\brag\b|vector|embedding|huggingface|knowledge ?graph|memory|\bgguf|vllm|lm studio|open ?source ai|\bmlx\b|transformers|diffusion|comfy|neural|machine learning|deep learning|\bai\b"),
     ("Companion Intelligence/06 Active Inference & Research", r"active.?inference|free.?energy|arxiv|\bpaper|bayesian|predictive coding|cognitive|neuroscience|aclanthology|research"),
     ("Companion Intelligence/07 OS & Infrastructure", r"ubuntu|cachyos|\blinux|docker|kubernetes|cloudflare|netlify|gandi|\bdns\b|github actions|ci/cd|temporal\.io|\baws\b|terraform|nginx|tailscale|homelab|proxmox|coolify|systemd|self-?hosted|1password|vpn"),
-    ("Companion Intelligence/08 App Stores & Distribution", r"appstore|app ?store|casaos|umbrel|olares|play store|itunes|marketplace|awesome-selfhost|testflight|homebrew|scoop"),
+    ("Companion Intelligence/08 App Stores & Distribution", r"appstore|app ?store|casaos|runtipi|play store|itunes|marketplace|awesome-selfhost|testflight|homebrew|scoop"),
     ("Companion Intelligence/09 Security & Safety", r"security|vulnerab|\bcve\b|exploit|alignment|unalign|cisa|pentest|privacy|threat"),
     ("Companion Intelligence/10 Marketing, GTM & Social", r"mailchimp|metricool|linkedin|\bseo\b|\bbrand|social media|feedly|outreach|\bgtm\b|go-to-market|newsletter|analytics|\bads?\b|hubspot|canva"),
     ("Companion Intelligence/11 Funding & Investors", r"\bvc\b|venture|capital|\bgrants?\b|invest|accelerator|partner network|startup funding|angel|futo|aaif|glasswing|portfolio"),

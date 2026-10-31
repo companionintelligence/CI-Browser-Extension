@@ -75,7 +75,7 @@ def final_folder(o, a):
         if f.startswith("00 Inbox"):
             return "Reference/Unsorted"
         return f
-    c, rel = a["cat"], a["rel"]
+    c, rel = a["cat"].removeprefix("Companion Intelligence/"), a["rel"]
     if c == "Personal":
         return "Personal (move out of work tree)"
     if rel >= 2 and c[:2] in CI:

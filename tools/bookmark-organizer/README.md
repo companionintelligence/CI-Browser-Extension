@@ -53,7 +53,7 @@ agent with this contract and have it write `ai/out_<k>.jsonl` with one object pe
 {"id": 12, "rel": 0, "cat": "03 Agents, MCP & Bots", "why": "MCP CLI client"}
 ```
 
-`rel` is 0 (unrelated) to 3 (core); `cat` is one of the `CATS` names in `classify.py`, `Reference/Dev Tools & Design`,
+`rel` is 0 (unrelated) to 3 (core); `cat` is one of the `CATS` names in `classify.py`, with or without the `Companion Intelligence/` prefix (for example `03 Agents, MCP & Bots`), `Reference/Dev Tools & Design`,
 `Reference/General`, `Inbox - Triage` or `Personal`. Skipping this step is fine: `build_outputs.py` then uses the
 keyword guess, which is noisy (it over-rates anything that sat in a CIntel-like folder).
 

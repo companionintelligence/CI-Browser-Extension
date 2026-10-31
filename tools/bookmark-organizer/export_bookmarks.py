@@ -23,9 +23,9 @@ def chrome(path, label):
         for c in n.get("children", []):
             walk(c, trail + ([n["name"]] if n.get("type") == "folder" else []))
 
-    for k, r in roots.items():
+    for r in roots.values():
         if isinstance(r, dict):
-            walk(r, [r.get("name", k)])
+            walk(r, [])
 
 
 def safari(path):
@@ -34,7 +34,7 @@ def safari(path):
         if t == "WebBookmarkTypeLeaf":
             rows.append(dict(browser="Safari", folder="/".join(trail), title=n.get("URIDictionary", {}).get("title", ""), url=n.get("URLString", "")))
         for c in n.get("Children", []):
-            walk(c, trail + ([n.get("Title", "")] if t == "WebBookmarkTypeList" else []))
+            walk(c, trail + ([n["Title"]] if t == "WebBookmarkTypeList" and n.get("Title") else []))
 
     walk(plistlib.load(open(path, "rb")), [])
 
