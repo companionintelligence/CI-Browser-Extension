@@ -1,18 +1,23 @@
 /**
  * Feature-detect which browser.* APIs this host actually implements.
  *
- * Safari accepts the `history` / `bookmarks` / `downloads` manifest permissions
- * but never implements the APIs (https://developer.apple.com/forums/thread/711080).
- * Retroactive sync cannot exist there — pages are captured live as the user
- * browses instead. Feature-detect rather than UA-sniff so any future Safari
- * support just works, and so Chrome/Firefox stay on the full sync path.
+ * Safari accepts some `history` / `bookmarks` / `downloads` manifest
+ * permissions but does not implement those APIs. It also exposes only part of
+ * `webNavigation`; register each event independently so an absent event cannot
+ * abort background startup. Feature-detect instead of UA-sniffing.
  */
 
 type BrowserLike = {
   history?: { search?: unknown };
   bookmarks?: { getTree?: unknown };
   downloads?: { search?: unknown };
+  webNavigation?: {
+    onCompleted?: { addListener?: unknown };
+    onHistoryStateUpdated?: { addListener?: unknown };
+  };
 };
+
+type NavigationListener = (details: { url: string }) => void;
 
 function browserApi(): BrowserLike | undefined {
   try {
@@ -37,4 +42,19 @@ export function hasBookmarksApi(): boolean {
 /** True when `browser.downloads.search` exists (Chrome / Firefox). */
 export function hasDownloadsApi(): boolean {
   return typeof browserApi()?.downloads?.search === "function";
+}
+
+/** Register only the webNavigation events implemented by this browser. */
+export function registerWebNavigationListeners(
+  listener: NavigationListener,
+): void {
+  const navigation = browserApi()?.webNavigation;
+
+  if (typeof navigation?.onCompleted?.addListener === "function") {
+    navigation.onCompleted.addListener(listener);
+  }
+
+  if (typeof navigation?.onHistoryStateUpdated?.addListener === "function") {
+    navigation.onHistoryStateUpdated.addListener(listener);
+  }
 }

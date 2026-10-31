@@ -24,6 +24,7 @@ import {
   hasBookmarksApi,
   hasDownloadsApi,
   hasHistoryApi,
+  registerWebNavigationListeners,
 } from "@/lib/browserCapabilities";
 import { scrapeSourceId } from "@/lib/scrapeIdentity";
 import { isValidBookmarkEvent } from "@/lib/captureValidation";
@@ -2603,17 +2604,16 @@ export default defineBackground({
       }
     });
 
-    // Both navigation events get the same http(s)-only gate. onHistoryStateUpdated
-    // was previously unfiltered, so SPA route changes on non-web schemes reached
-    // recordHit while ordinary loads on those schemes did not.
+    // Every supported navigation event gets the same http(s)-only gate.
+    // onHistoryStateUpdated was previously unfiltered, so SPA route changes on
+    // non-web schemes reached recordHit while ordinary loads did not.
     const onNavigation = (e: { url: string }) => {
       if (siteRegex.test(e.url)) {
         recordHit(e);
       }
     };
 
-    browser.webNavigation.onCompleted.addListener(onNavigation);
-    browser.webNavigation.onHistoryStateUpdated.addListener(onNavigation);
+    registerWebNavigationListeners(onNavigation);
 
     browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log("Background received message:", message);

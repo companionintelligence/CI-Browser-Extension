@@ -105,7 +105,7 @@ jobs:
           done
 
           if [ "${#missing[@]}" -eq 0 ]; then
-            echo "$label: all $total credentials present — this release WILL publish to the store."
+            echo "$label: all $total credentials present — this release will submit to the store."
             return 0
           fi
 
@@ -149,7 +149,7 @@ jobs:
         echo "Safari: no store upload API exists — manual Xcode submission, not gated."
 
         if [ "$fatal" -ne 0 ]; then
-          echo "::error::Release aborted: at least one store cannot be published to. A green release must mean every non-waived store actually received this build."
+          echo "::error::Release aborted: at least one store cannot receive a submission. A green release must mean every non-waived store accepted this build for review."
           exit 1
         fi
 
@@ -221,7 +221,7 @@ jobs:
 
     - name: Resolve Chrome Release Asset Path
       id: chrome_asset
-      run: echo "asset=$(ls .output/ci-browser-extension-*-chrome.zip)" >> $GITHUB_OUTPUT
+      run: printf 'asset=%s\n' .output/ci-browser-extension-*-chrome.zip >> "$GITHUB_OUTPUT"
 
     - name: Upload Chrome Release Asset
       uses: actions/upload-release-asset@v1
@@ -235,7 +235,7 @@ jobs:
 
     - name: Resolve Firefox Release Asset Path
       id: firefox_asset
-      run: echo "asset=$(ls .output/ci-browser-extension-*-firefox.zip)" >> $GITHUB_OUTPUT
+      run: printf 'asset=%s\n' .output/ci-browser-extension-*-firefox.zip >> "$GITHUB_OUTPUT"
 
     - name: Upload Firefox Release Asset
       uses: actions/upload-release-asset@v1
@@ -249,7 +249,7 @@ jobs:
 
     - name: Resolve Firefox Sources Asset Path
       id: sources_asset
-      run: echo "asset=$(ls .output/ci-browser-extension-*-sources.zip)" >> $GITHUB_OUTPUT
+      run: printf 'asset=%s\n' .output/ci-browser-extension-*-sources.zip >> "$GITHUB_OUTPUT"
 
     - name: Upload Firefox Sources
       uses: actions/upload-release-asset@v1
@@ -263,7 +263,7 @@ jobs:
 
     - name: Resolve Safari Release Asset Path
       id: safari_asset
-      run: echo "asset=$(ls .output/ci-browser-extension-*-safari.zip)" >> $GITHUB_OUTPUT
+      run: printf 'asset=%s\n' .output/ci-browser-extension-*-safari.zip >> "$GITHUB_OUTPUT"
 
     - name: Upload Safari Release Asset
       uses: actions/upload-release-asset@v1
@@ -277,7 +277,7 @@ jobs:
 
     - name: Resolve Safari Mobile Release Asset Path
       id: safari_mobile_asset
-      run: echo "asset=$(ls .output/ci-browser-extension-*-safari-mobile.zip)" >> $GITHUB_OUTPUT
+      run: printf 'asset=%s\n' .output/ci-browser-extension-*-safari-mobile.zip >> "$GITHUB_OUTPUT"
 
     - name: Upload Safari Mobile Release Asset
       uses: actions/upload-release-asset@v1
@@ -291,7 +291,7 @@ jobs:
 
     - name: Resolve Edge Release Asset Path
       id: edge_asset
-      run: echo "asset=$(ls .output/ci-browser-extension-*-edge.zip)" >> $GITHUB_OUTPUT
+      run: printf 'asset=%s\n' .output/ci-browser-extension-*-edge.zip >> "$GITHUB_OUTPUT"
 
     - name: Upload Edge Release Asset
       uses: actions/upload-release-asset@v1
@@ -316,6 +316,7 @@ jobs:
     # ---------------------------------------------------------------------
 
     - name: Publish to Firefox Add-ons (AMO)
+      id: publish_firefox
       if: env.FIREFOX_READY == 'true'
       env:
         AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
@@ -330,6 +331,7 @@ jobs:
           --channel listed
 
     - name: Publish to Chrome Web Store
+      id: publish_chrome
       if: env.CHROME_READY == 'true'
       env:
         CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
@@ -358,6 +360,7 @@ jobs:
     # as of this writing — re-check that doc against Partner Center's actual
     # "API access" page before the first real run.
     - name: Publish to Microsoft Edge Add-ons
+      id: publish_edge
       if: env.EDGE_READY == 'true'
       env:
         EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
@@ -388,11 +391,11 @@ jobs:
           --data-binary "@$EDGE_ZIP" | grep -i '^location:' | tr -d '\r' | awk '{print $2}')
 
         STATUS="InProgress"
-        for i in $(seq 1 30); do
+        for attempt in $(seq 1 30); do
           STATUS=$(curl -sS "$OPERATION_URL" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "X-ClientID: $EDGE_CLIENT_ID" | jq -r '.status')
-          echo "Package upload status: $STATUS"
+          echo "Package validation attempt $attempt/30: $STATUS"
           [ "$STATUS" = "Succeeded" ] && break
           [ "$STATUS" = "Failed" ] && { echo "Edge package upload failed"; exit 1; }
           sleep 10
@@ -407,22 +410,30 @@ jobs:
           -H "Authorization: Bearer $ACCESS_TOKEN" \
           -H "X-ClientID: $EDGE_CLIENT_ID"
 
-    # Writes the per-store outcome into the run summary so "what actually
-    # shipped" is answerable from the Actions UI without reading step logs.
-    - name: Summarize store publishing
+    # Report actual submission-step results. Credentials being present does not
+    # prove that a store accepted the submission or made it public.
+    - name: Summarize store submissions
       if: always()
       shell: bash
       env:
         STORE_PUBLISH_OPTIONAL: ${{ vars.STORE_PUBLISH_OPTIONAL }}
+        FIREFOX_RESULT: ${{ steps.publish_firefox.conclusion }}
+        CHROME_RESULT: ${{ steps.publish_chrome.conclusion }}
+        EDGE_RESULT: ${{ steps.publish_edge.conclusion }}
       run: |
         set -euo pipefail
         waived=",$(printf '%s' "${STORE_PUBLISH_OPTIONAL:-}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]'),"
 
         store_outcome() {
-          local key="$1" ready="$2" present=false flag
-          shift 2
+          local key="$1" result="$2" ready="$3" present=false flag
+          shift 3
+          case "$result" in
+            success) echo 'submitted; store review/publication may be pending'; return ;;
+            failure) echo 'failed; see publish-step logs'; return ;;
+            cancelled) echo 'cancelled'; return ;;
+          esac
           if [ "$ready" = 'true' ]; then
-            echo 'published'
+            echo 'not submitted; an earlier release step failed'
             return
           fi
           for flag in "$@"; do
@@ -440,12 +451,12 @@ jobs:
         }
 
         {
-          echo "## Store publishing"
+          echo "## Store submissions"
           echo ""
           echo "| Store | Outcome |"
           echo "|---|---|"
-          echo "| Firefox Add-ons (AMO) | $(store_outcome firefox "$FIREFOX_READY" "$HAS_AMO_JWT_ISSUER" "$HAS_AMO_JWT_SECRET") |"
-          echo "| Chrome Web Store | $(store_outcome chrome "$CHROME_READY" "$HAS_CHROME_CLIENT_ID" "$HAS_CHROME_CLIENT_SECRET" "$HAS_CHROME_REFRESH_TOKEN" "$HAS_CHROME_EXTENSION_ID") |"
-          echo "| Microsoft Edge Add-ons | $(store_outcome edge "$EDGE_READY" "$HAS_EDGE_PRODUCT_ID" "$HAS_EDGE_CLIENT_ID" "$HAS_EDGE_CLIENT_SECRET" "$HAS_EDGE_ACCESS_TOKEN_URL") |"
+          echo "| Firefox Add-ons (AMO) | $(store_outcome firefox "$FIREFOX_RESULT" "$FIREFOX_READY" "$HAS_AMO_JWT_ISSUER" "$HAS_AMO_JWT_SECRET") |"
+          echo "| Chrome Web Store | $(store_outcome chrome "$CHROME_RESULT" "$CHROME_READY" "$HAS_CHROME_CLIENT_ID" "$HAS_CHROME_CLIENT_SECRET" "$HAS_CHROME_REFRESH_TOKEN" "$HAS_CHROME_EXTENSION_ID") |"
+          echo "| Microsoft Edge Add-ons | $(store_outcome edge "$EDGE_RESULT" "$EDGE_READY" "$HAS_EDGE_PRODUCT_ID" "$HAS_EDGE_CLIENT_ID" "$HAS_EDGE_CLIENT_SECRET" "$HAS_EDGE_ACCESS_TOKEN_URL") |"
           echo "| Safari (App Store) | manual — no publish API (see PUBLISHING.md) |"
         } >> "$GITHUB_STEP_SUMMARY"
