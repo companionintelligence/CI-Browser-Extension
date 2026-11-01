@@ -29,6 +29,13 @@ import {
 import { scrapeSourceId } from "@/lib/scrapeIdentity";
 import { isValidBookmarkEvent } from "@/lib/captureValidation";
 import { buildHighlightActivity } from "@/lib/highlight";
+import { createRetryGate, isTransientFailure } from "@/lib/retryGate";
+import {
+  clearRegistrationRefusal,
+  isRegistrationRefused,
+  isRegistrationRefusal,
+  recordRegistrationRefusal,
+} from "@/lib/deviceRegistrationRefusal";
 import {
   finishIngest,
   sendBrowserCaptures,
@@ -90,8 +97,27 @@ const AUTO_SYNC_ALARM_TIME_RANGE = 24 * 60 * 60 * 1000; // sync the last 24h
  * last event and Sentry's transport is asynchronous: without holding the worker
  * open across the in-flight request, the event that explains a shutdown-time bug
  * is the one most likely to be lost. Bounded, and a no-op when reporting is off.
+ *
+ * A server outage (502 to 504 or 520 to 539, or no answer at all) is not a bug,
+ * so it is logged and not sent. Nor is a capture that finds no device: the
+ * failed or refused registration behind it is reported where it happened.
  */
 async function reportError(error: unknown, scope: string): Promise<void> {
+  if (isTransientFailure(error)) {
+    console.warn(`Transient failure in ${scope}, not reported:`, error);
+
+    return;
+  }
+
+  if (
+    error instanceof Error &&
+    error.message.startsWith("No device_id found")
+  ) {
+    console.warn(`No device yet in ${scope}, not reported:`, error);
+
+    return;
+  }
+
   captureException(error, { scope });
   await flushTelemetry();
 }
@@ -475,7 +501,8 @@ const SYNCED_BOOKMARKS_KEY = "syncedBookmarks";
 const SYNCED_DOWNLOADS_KEY = "syncedDownloads";
 const SYNCED_HISTORY_KEY = "syncedHistory";
 
-let deviceSetupInProgress = false;
+// Concurrent callers share one attempt; transient failures back off.
+const deviceSetup = createRetryGate(registerDevice);
 
 // Helper function to validate URLs
 function isValidUrl(url: string): boolean {
@@ -558,7 +585,16 @@ const recordHit = async function (e: any) {
 
     store.dispatch(saveUserSettings());
 
-    const deviceId = await getDeviceId();
+    let deviceId: string;
+
+    try {
+      deviceId = await getDeviceId();
+    } catch (error) {
+      console.warn("Visit not recorded, no device registered yet:", error);
+
+      return;
+    }
+
     // The browser's own visit instant, not "now": the History-file importer
     // and a Takeout export both carry Chrome's visitTime, and the server dedups
     // on it (see browserActivity.ts). onCompleted fires after the page loaded,
@@ -629,6 +665,14 @@ async function getDeviceId(): Promise<string> {
   const storage = await browser.storage.local.get("deviceId");
   if (storage.deviceId) {
     return storage.deviceId as string;
+  }
+
+  const registration = deviceSetup.pending();
+  if (registration) {
+    const deviceId = await registration.catch(() => null);
+    if (deviceId) {
+      return deviceId;
+    }
   }
 
   throw new Error(
@@ -829,19 +873,11 @@ async function createDeviceOnServer(): Promise<string> {
   }
 }
 
-async function setupDevice(): Promise<string> {
-  if (deviceSetupInProgress) {
-    throw new Error("Device setup already in progress");
-  }
+async function registerDevice(): Promise<string> {
+  let token: string | null = null;
 
-  deviceSetupInProgress = true;
-
-  // The latch MUST clear on every exit. When it only cleared on the create and
-  // error paths, finding an existing device left it stuck true for the life of
-  // the service worker, and every later setupDevice() — the SETUP_DEVICE
-  // message, the auth-check provisioning — threw "already in progress".
   try {
-    const token = await resolveServerToken();
+    token = await resolveServerToken();
 
     if (!token) {
       throw new Error("No access token available. Please log in first.");
@@ -850,17 +886,30 @@ async function setupDevice(): Promise<string> {
     const existingDeviceId = await fetchDeviceFromServer();
 
     if (existingDeviceId) {
+      await clearRegistrationRefusal();
+
       return existingDeviceId;
     }
 
-    return await createDeviceOnServer();
+    const deviceId = await createDeviceOnServer();
+    await clearRegistrationRefusal();
+
+    return deviceId;
   } catch (error: any) {
     const errorMessage =
       error?.message || error?.toString() || "Unknown error occurred";
+    const { serverURL } = store.getState().ciState;
+
+    if (token && serverURL && isRegistrationRefusal(errorMessage)) {
+      await recordRegistrationRefusal(serverURL, token);
+    }
+
     throw new Error(errorMessage);
-  } finally {
-    deviceSetupInProgress = false;
   }
+}
+
+function setupDevice(options?: { force?: boolean }): Promise<string> {
+  return deviceSetup.run(options);
 }
 
 function getDeviceInfo() {
@@ -2341,8 +2390,16 @@ export default defineBackground({
         let { deviceId } = store.getState().ciState;
 
         // Provision the device once we have a valid session and know where
-        // the server is (setupDevice posts to `${serverURL}/api/devices`)
-        if (token && serverURL && !deviceId) {
+        // the server is (setupDevice posts to `${serverURL}/api/devices`). A
+        // Memory that refused this token is not asked again until the session
+        // changes, or the user retries from the popup.
+        if (
+          token &&
+          serverURL &&
+          !deviceId &&
+          !deviceSetup.deferred() &&
+          !(await isRegistrationRefused(serverURL, token))
+        ) {
           console.log("Authenticated but no device ID, setting up device...");
           try {
             await setupDevice();
@@ -2581,6 +2638,19 @@ export default defineBackground({
 
     setTimeout(async () => {
       try {
+        const { serverURL } = store.getState().ciState;
+        const token = await resolveServerToken();
+
+        // Same rule as the auth check: the worker restarts about every minute,
+        // so without this a Memory that refuses the token is asked each time.
+        if (
+          token &&
+          serverURL &&
+          (await isRegistrationRefused(serverURL, token))
+        ) {
+          return;
+        }
+
         await setupDevice();
       } catch (error: any) {
         if (error?.message?.includes("Network Error")) {
@@ -2624,7 +2694,7 @@ export default defineBackground({
           // reaches the surrounding synchronous handler — the popup was left
           // waiting on a sendResponse that never came, plus an unhandled
           // rejection.
-          setupDevice()
+          setupDevice({ force: true })
             .then(() => {
               store.dispatch(setState({ deviceSetupError: null }));
               sendResponse({ success: true });
