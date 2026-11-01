@@ -13,6 +13,25 @@
  * where it cannot drift.
  */
 
+/**
+ * Kinds of personal data a profile can declare it reads. Each one is consent-
+ * gated: a profile that declares it does not run until the user grants it.
+ *
+ * `purchases`, `reading` and `media` have no Firefox disclosure category yet
+ * (see `./disclosure`), so a profile declaring one fails the Firefox build until
+ * that classification is made.
+ */
+export const DATA_CATEGORIES = [
+  "financial",
+  "health",
+  "location",
+  "purchases",
+  "reading",
+  "media",
+] as const;
+
+export type DataCategory = (typeof DATA_CATEGORIES)[number];
+
 export interface ScrapeFieldConfig {
   selector: string;
   type: "text" | "attribute" | "html";
@@ -45,11 +64,13 @@ export interface ScrapeProfile {
   /** URL glob(s) within the domain where the selectors actually apply. */
   targetUrl: string | string[];
   /**
-   * Data a user would not expect to be captured by default (brokerage
-   * holdings, trade history). Gated behind an explicit opt-in — see
-   * `sensitiveScrapingEnabled`.
+   * Categories of personal data this profile reads that the user has to consent
+   * to. Declared per profile, so a profile with one gated selector is gated as a
+   * whole. Absent or empty: the profile runs as it always has. Otherwise it runs
+   * only once every listed category is granted (default off). See
+   * `@/lib/scrapeSettings`.
    */
-  sensitive?: boolean;
+  dataCategories?: DataCategory[];
   dataSelectors: Record<string, ScrapeSelectorConfig>;
 }
 

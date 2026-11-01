@@ -4,6 +4,9 @@ import { defineConfig } from "wxt";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 
+import { firefoxOptionalDisclosures } from "./src/scrape/disclosure";
+import { SCRAPE_PROFILES } from "./src/scrape/profiles";
+
 /**
  * The extension icon, at every size the manifest advertises. Referenced from
  * three places, which must agree:
@@ -80,12 +83,15 @@ export default defineConfig({
                   "websiteContent",
                   "browsingActivity",
                 ],
-                // Declared OPTIONAL, not required: the Robinhood profile is the
-                // only source of financial data and it does not run until the
-                // user turns on "Include financial accounts". Firefox surfaces
-                // optional categories as a separate consent, which is exactly
-                // the shape of this setting. Omitting it entirely would
+                // Declared OPTIONAL, not required: a consent-gated profile does not
+                // run until the user grants its category (src/lib/scrapeSettings.ts).
+                // Firefox surfaces optional categories as a separate consent, which
+                // is exactly the shape of this setting. Omitting it entirely would
                 // under-declare what the extension can collect.
+                //
+                // The scrape part is derived from the registry, the way `matches` is,
+                // so it cannot drift from the profiles that ship. See
+                // src/scrape/disclosure.ts.
                 //
                 // `technicalAndInteraction` covers Sentry crash reports. Also
                 // optional, and for the same reason: reporting is opt-OUT, so
@@ -95,7 +101,7 @@ export default defineConfig({
                 // declaration is written for the published build that does.
                 // See docs/operations/error-reporting.md.
                 optional: [
-                  "financialAndPaymentInfo",
+                  ...firefoxOptionalDisclosures(SCRAPE_PROFILES),
                   "technicalAndInteraction",
                 ],
               },

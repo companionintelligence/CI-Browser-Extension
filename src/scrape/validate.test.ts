@@ -91,7 +91,34 @@ describe("validateProfile", () => {
     expect(validateProfile(null)).not.toEqual([]);
     expect(validateProfile({ ...valid(), matchPatterns: [] })).not.toEqual([]);
     expect(validateProfile({ ...valid(), dataSelectors: {} })).not.toEqual([]);
-    expect(validateProfile({ ...valid(), sensitive: "yes" })).not.toEqual([]);
+  });
+
+  // The retired key is rejected whatever its value: the engine ignores it, so a
+  // profile that still carries it would silently run without consent.
+  it("rejects the retired sensitive key, whatever its value", () => {
+    for (const sensitive of [true, false, "yes"]) {
+      expect(validateProfile({ ...valid(), sensitive })).toEqual([
+        expect.objectContaining({ path: "sensitive" }),
+      ]);
+    }
+  });
+
+  it("accepts known data categories", () => {
+    expect(
+      validateProfile({
+        ...valid(),
+        dataCategories: ["financial", "location"],
+      }),
+    ).toEqual([]);
+  });
+
+  it("rejects an unknown or malformed data category", () => {
+    expect(
+      validateProfile({ ...valid(), dataCategories: ["finance"] }),
+    ).toEqual([expect.objectContaining({ path: "dataCategories" })]);
+    expect(
+      validateProfile({ ...valid(), dataCategories: "financial" }),
+    ).toEqual([expect.objectContaining({ path: "dataCategories" })]);
   });
 });
 

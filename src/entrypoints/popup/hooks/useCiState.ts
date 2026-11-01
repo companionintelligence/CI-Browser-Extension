@@ -1,5 +1,7 @@
 import { useSelector } from "react-redux";
 
+import type { ScrapeConsent } from "@/lib/scrapeSettings";
+
 export interface SyncHistoryLog {
   id: string;
   status: string;
@@ -53,7 +55,7 @@ export interface CiStateView {
   deviceSetupError: string | null;
   bookmarkSyncEnabled: boolean;
   downloadSyncEnabled: boolean;
-  sensitiveScrapingEnabled: boolean;
+  scrapeConsent: ScrapeConsent;
   historySyncEnabled: boolean;
   syncHistoryLogs: SyncHistoryLog[];
 }

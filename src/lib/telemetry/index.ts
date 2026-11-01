@@ -26,9 +26,8 @@
  *   - `breadcrumbsIntegration`'s `dom` crumbs record the target of every click
  *     and keypress on the page, including element text.
  *   - `content.ts` reads `<meta name="description">` and
- *     `domainScraper.content.ts` reads viewing history, GitHub activity and —
- *     behind the financial opt-in — Robinhood holdings and order history. Any
- *     throw while handling those values can quote them.
+ *     `domainScraper.content.ts` reads viewing history, GitHub activity and
+ *     Airbnb trips. Any throw while handling those values can quote them.
  *
  * Some of that is scrubbable and some of it is not, and the part that is not
  * (the page's own identity) is the part that matters. So content scripts do not

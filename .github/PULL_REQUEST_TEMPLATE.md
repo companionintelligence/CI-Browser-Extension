@@ -35,7 +35,7 @@ whole time.
 If the profile reads anything a user would not expect an extension to touch
 (balances, holdings, health, location, private messages):
 
-- [ ] Marked `sensitive: true`, and the opt-in gate verified to run **before**
+- [ ] Declared `dataCategories`, and the consent gate verified to run **before**
       the page is read
 - [ ] Disclosed in `CAPTURE.md`, `PRIVACY.md`, and `store-assets/STORE-LISTING.md`
       — under-disclosing a data category is a store-review takedown risk, not a
