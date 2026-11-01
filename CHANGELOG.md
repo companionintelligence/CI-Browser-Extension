@@ -8,11 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.6.2] — 2026-10-31
 
+### Changed
+- **Release reporting** — a green release now means every non-waived store has
+  accepted the build for review (#122).
+- **Firefox release retry workflow**, and the store-credential check now confirms
+  the AMO credentials belong to the add-on's author (`57f722c`, `04d4c54`).
+
 ### Fixed
 - **Safari iOS startup** — register only the `webNavigation` events supported by
   the current browser. Safari omits `onHistoryStateUpdated`; registering it
   unconditionally caused the background extension to fail during startup and
   left the popup loading indefinitely.
+- **Store publish steps were always skipped** — the credential gate in
+  `release.yml` read a value a step's own `if:` cannot see, so no store step ran
+  while the release still reported success. A missing credential now fails the
+  release (#100).
+- **Edge publishing** uses the supported Add-ons API v1.1 (#123).
+- **Sync log rows** are legible in the default dark theme (#121).
 
 ## [1.6.1] — 2026-10-29
 
@@ -60,6 +72,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Companion Intelligence" branding set in `wxt.config.ts` on every browser.
 - `package.json`'s `description` (baked into every manifest) still said
   "Chrome and Firefox"; now mentions Safari too.
+
+## [1.6.0] — 2026-10-29
+
+Everything shipped since 1.4.0. No 1.5.0 release was published.
+
+### Added
+- **Sign in through Companion Portal** — OpenID Connect Authorization Code +
+  PKCE in a browser-managed window, using the `identity` permission. The
+  extension stores tokens, never a password, and the cookie/CSRF login is gone
+  (#49, #50, #63).
+- **Automatic Memory discovery** — after sign-in the extension asks the Portal
+  where your Companion Memory server runs. If Memory runs on more than one
+  machine, the popup asks which one (#63).
+- **Five more site profiles** — CNN, WSJ, Quora, Airbnb and Robinhood, 13 in
+  total. They had been registered but could not run until the content-script
+  match list was fixed (#71).
+- **Durable capture queue** — captures that fail to upload are kept locally (up
+  to 500, five delivery attempts each) and retried at the start of the next sync
+  (#71).
+- **Search indexing** — after an upload the extension asks CI-Server to index
+  the new items for search (`ingest/finish`) (#71).
+
+### Changed
+- **`cookies` permission removed** — the extension no longer requests it, so it
+  cannot read any site's cookies.
+- **Records carry their source** — `source_system` and a per-record source id,
+  so re-syncing the same page, bookmark or download updates one row (9ff547e).
+- **Financial profile is gated** — the Robinhood profile is marked sensitive and
+  runs only when the sensitive-scraping setting is on. The check runs in the
+  content script before any element is read, and the setting is off by default.
+  The popup control for it is hidden in this release (eac19cf).
+- **Popup redesigned** as a guided flow on the CI design system (#97).
+- **Safari** — sign-in uses the Portal HTTPS callback, bookmark and download sync
+  is hidden there (#87, #88), and the popup loads from relative chunk URLs (#105).
+- **License** — PolyForm Noncommercial 1.0.0 (#106).
+
+### Fixed
+- **Ignore lists cover every capture path** — they previously applied only to
+  live page visits and history backfill. Site profiles, bookmarks, downloads and
+  saved highlights now honor them (#72).
+- **Chrome visit times kept** — history backfill files each visit under its real
+  timestamp instead of the sync day (#65).
+- **No invented durations** — the most recent visit no longer gets a fabricated
+  30-second duration (#104).
+- **Stable scrape ids** — scrape `source_id` comes from item content rather than
+  array position (#82).
 
 ## [1.4.0] — 2026-06-10
 

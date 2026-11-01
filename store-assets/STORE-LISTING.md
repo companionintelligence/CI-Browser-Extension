@@ -1,4 +1,4 @@
-# Store Listing Kit — Companion Intelligence v1.4.0
+# Store Listing Kit — Companion Intelligence v1.6.2
 
 > Private & Confidential — Property of Lifescope Inc.
 > Copy-paste source for Chrome Web Store, Firefox AMO, and Apple App Store
@@ -20,7 +20,7 @@
 | **Privacy policy URL** | https://ci.computer/privacy-policy (publish `PRIVACY.md` here before submitting) |
 | **Support email** | support@ci.computer _(confirm a monitored inbox)_ |
 | **Homepage** | https://ci.computer |
-| **Version** | 1.4.0 |
+| **Version** | 1.6.2 |
 
 ### Short summary (≤132 chars — Chrome & AMO)
 
@@ -178,12 +178,11 @@ WHAT YOU NEED
 • Chrome, Firefox and Safari, plus Edge, Brave, Opera and DuckDuckGo.
 ```
 
-### What's new (1.4.0)
+### What's new since 1.4.0
 
 ```
-NEW SITES — eight profiles went live this cycle, bringing the total to 13.
-Five were registered in earlier builds but unreachable until now.
-• Max, Paramount+ and Prime Video (also amazon.com/gp/video).
+NEW SITES — five profiles went live this cycle, bringing the total to 13.
+They were registered in earlier builds but unreachable until now.
 • CNN and WSJ — headlines, summaries, authors, sections. WSJ also reads the
   market quotes shown on those pages.
 • Quora — questions, answers, follows.
