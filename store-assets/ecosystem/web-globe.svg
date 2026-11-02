@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="globe" x1="0.15" y1="0.1" x2="0.85" y2="0.95">
+      <stop offset="0" stop-color="#22c7b9"/>
+      <stop offset="1" stop-color="#0b5d69"/>
+    </linearGradient>
+    <clipPath id="disc"><circle cx="256" cy="256" r="222"/></clipPath>
+  </defs>
+  <circle cx="256" cy="256" r="222" fill="url(#globe)"/>
+  <g clip-path="url(#disc)" fill="none" stroke="#effffc" stroke-width="16" stroke-linecap="round">
+    <line x1="34" y1="256" x2="478" y2="256"/>
+    <line x1="34" y1="150" x2="478" y2="150"/>
+    <line x1="34" y1="362" x2="478" y2="362"/>
+    <line x1="256" y1="34" x2="256" y2="478"/>
+    <ellipse cx="256" cy="256" rx="110" ry="222"/>
+  </g>
+  <g fill="#effffc">
+    <circle cx="256" cy="256" r="13"/>
+    <circle cx="146" cy="256" r="13"/>
+    <circle cx="366" cy="256" r="13"/>
+    <circle cx="256" cy="150" r="13"/>
+    <circle cx="256" cy="362" r="13"/>
+    <circle cx="159" cy="150" r="13"/>
+    <circle cx="353" cy="150" r="13"/>
+    <circle cx="159" cy="362" r="13"/>
+    <circle cx="353" cy="362" r="13"/>
+  </g>
+</svg>
