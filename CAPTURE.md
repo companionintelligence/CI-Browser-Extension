@@ -62,13 +62,14 @@ A profile only runs when **all** of these hold:
   activity* page, not every Netflix page)
 - You are signed in to Companion Intelligence
 - The site is not on your ignore list
-- For sensitive profiles, you have opted in (see below)
+- For a profile that reads a consent category, you have granted that category
+  (see below)
 
 Each profile classifies what it finds, so a watched title arrives in Memory as
 `entertainment_preferences` rather than as an anonymous page view — which is
 what makes it searchable and useful to your assistant later.
 
-### Shipping today (13 profiles)
+### Shipping today (12 profiles)
 
 | Category | Sites | Captured as |
 |---|---|---|
@@ -78,25 +79,25 @@ what makes it searchable and useful to your assistant later.
 | **Work** | GitHub | `professional_activity` — repos, issues, pull requests, commits |
 | **Social** | Quora | `social_activity`, `social_connections` — questions, answers, follows |
 | **Travel** | Airbnb | `travel_history`, `travel_preferences`, `business_activity` — trips, wishlist, hosting |
-| **Finance** ⚠️ | Robinhood | `financial_data`, `financial_interests` — portfolio, orders, watchlist |
 
-### Sensitive profiles are opt-in
+### Consent-gated profiles
 
-Profiles marked ⚠️ read data most people would not expect an extension to touch.
-They are **off by default** and do nothing until you tick **Include financial
-accounts** in the popup. The check happens *before* reading the page — the
-extension does not read your brokerage data and then discard it, it does not read
-it at all.
+A profile that reads data most people would not expect an extension to touch
+declares the categories it reads: `financial`, `health`, `location`, `purchases`,
+`reading`, or `media`. It does **not** run until you have granted **each**
+category it declares. Consent is per category and off by default, so granting one
+never grants another. The check happens *before* reading the page: the extension
+does not read the data and then discard it, it does not read it at all.
 
-**The gate is about *account* data, not the word "financial".** Robinhood is the
-only gated profile: it reads your holdings and order history. WSJ's markets
-section also produces `financial_interests`, but that is the publicly-listed
-market data on a news page — the same class of thing as any other article you
-read — so it is not gated. Nothing reads a financial *account* of yours without
-the opt-in.
+The gate is about *account* data, not the word "financial". WSJ's markets section
+produces `financial_interests`, but that is publicly-listed market data on a news
+page, the same class of thing as any other article you read, so WSJ declares no
+category. A profile that touches balances, holdings, health records or similar
+private data declares the matching category.
 
-Any future profile touching balances, holdings,
-health records, or private messages will be gated the same way.
+No shipped profile declares a category today, and the popup has no screen for
+granting one yet. That screen ships with the first consent-gated profile, and its
+wording needs owner review before release.
 
 ### What we plan to add, and why
 
@@ -155,6 +156,11 @@ Some data is valuable and still not ours to take:
   consented. This is the firmest line here.
 - **Employer-owned systems** (corporate Jira, Linear, Slack, Notion) — copying
   work data into a personal server can breach an employment agreement.
+- **Brokerage accounts** (Robinhood) — a brokerage has the same anti-automation
+  posture as a bank: an account can be restricted over behaviour the extension
+  caused. Brokerages also offer their own statement and trade-confirmation
+  downloads, which the importer covers better. The profile was removed rather than
+  gated.
 
 ### Known weak spots in what we already ship
 
@@ -164,10 +170,9 @@ Some data is valuable and still not ours to take:
   than extended.
 - **Six streaming profiles** yield mostly undated title lists. Letterboxd
   (dated, rated, reviewed) is worth more than a seventh streaming service.
-- **The binary `sensitive` flag will not scale.** Past ~20 profiles this needs
-  per-category consent (`financial`, `health`, `location`, `purchases`), which
-  is also what Chrome's Limited Use policy and Firefox's install-time data
-  disclosure expect.
+- **No consent screen yet.** Consent is enforced per category in the content
+  script, but nothing in the popup can grant it. The screen ships with the first
+  consent-gated profile, with wording reviewed by the owner.
 
 ### Adding a profile
 
@@ -178,7 +183,8 @@ registered in [`src/scrape/profiles.ts`](src/scrape/profiles.ts). Start from
 - `matchPatterns` — where the content script may run (this drives the manifest)
 - `targetUrl` — the specific pages the selectors were written for
 - `dataSelectors` — what to read, and a `personalDataType` saying what it *is*
-- `sensitive` — whether it requires the opt-in above
+- `dataCategories` — the consent categories it reads, if any. Omit it for an
+  ordinary profile; a profile that declares one runs only once each is granted
 
 Because `matchPatterns` lives in the profile, the manifest and the registry
 cannot drift apart. (They previously did: five profiles were registered but

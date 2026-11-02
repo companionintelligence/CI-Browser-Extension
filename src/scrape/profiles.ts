@@ -12,19 +12,20 @@
 import type { ScrapeProfile } from "./types";
 import { assertValidProfile } from "./validate";
 
-import airbnb from "@/scrapeProfiles/airbnb.json";
-import cnn from "@/scrapeProfiles/cnn.json";
-import disney from "@/scrapeProfiles/disney.json";
-import github from "@/scrapeProfiles/github.json";
-import hulu from "@/scrapeProfiles/hulu.json";
-import max from "@/scrapeProfiles/max.json";
-import netflix from "@/scrapeProfiles/netflix.json";
-import paramount from "@/scrapeProfiles/paramount.json";
-import primevideo from "@/scrapeProfiles/primevideo.json";
-import quora from "@/scrapeProfiles/quora.json";
-import robinhood from "@/scrapeProfiles/robinhood.json";
-import slashdot from "@/scrapeProfiles/slashdot.json";
-import wsj from "@/scrapeProfiles/wsj.json";
+// Relative, not `@/`: wxt.config.ts loads this module through jiti, which does
+// not apply the Vite alias, and the Firefox manifest is derived from it.
+import airbnb from "../scrapeProfiles/airbnb.json";
+import cnn from "../scrapeProfiles/cnn.json";
+import disney from "../scrapeProfiles/disney.json";
+import github from "../scrapeProfiles/github.json";
+import hulu from "../scrapeProfiles/hulu.json";
+import max from "../scrapeProfiles/max.json";
+import netflix from "../scrapeProfiles/netflix.json";
+import paramount from "../scrapeProfiles/paramount.json";
+import primevideo from "../scrapeProfiles/primevideo.json";
+import quora from "../scrapeProfiles/quora.json";
+import slashdot from "../scrapeProfiles/slashdot.json";
+import wsj from "../scrapeProfiles/wsj.json";
 
 // `template.json` is documentation, not a profile, and is deliberately absent.
 //
@@ -41,7 +42,6 @@ const PROFILE_MODULES: [string, unknown][] = [
   ["paramount", paramount],
   ["primevideo", primevideo],
   ["quora", quora],
-  ["robinhood", robinhood],
   ["slashdot", slashdot],
   ["wsj", wsj],
 ];

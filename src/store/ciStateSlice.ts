@@ -1,5 +1,11 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import {
+  createSlice,
+  createAsyncThunk,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 import { hasBookmarksApi, hasDownloadsApi } from "@/lib/browserCapabilities";
+import type { ScrapeConsent } from "@/lib/scrapeSettings";
+import type { DataCategory } from "@/scrape/types";
 import { parseUrl, normalizeServerUrl } from "@/utils";
 import { DEFAULT_PORTAL_URL } from "@/services/portalConfig";
 
@@ -20,7 +26,7 @@ export const loadUserSettings = createAsyncThunk(
       "bookmarkSyncEnabled",
       "downloadSyncEnabled",
       "historySyncEnabled",
-      "sensitiveScrapingEnabled",
+      "scrapeConsent",
       "serverURL",
       "serverURLSource",
       "serverDomain",
@@ -177,10 +183,10 @@ interface CiState {
   downloadSyncEnabled: boolean;
   historySyncEnabled: boolean;
   /**
-   * Opt-in for scrape profiles marked `sensitive` (brokerage holdings and
-   * order history). Off unless the user turns it on — see @/lib/scrapeSettings.
+   * Per-category grants for consent-gated scrape profiles. Empty until the user
+   * grants a category — see @/lib/scrapeSettings.
    */
-  sensitiveScrapingEnabled: boolean;
+  scrapeConsent: ScrapeConsent;
 }
 
 export const ciStateSlice = createSlice({
@@ -214,7 +220,7 @@ export const ciStateSlice = createSlice({
     bookmarkSyncEnabled: false,
     downloadSyncEnabled: false,
     historySyncEnabled: true, // Default to enabled since history is the main feature
-    sensitiveScrapingEnabled: false, // Financial data is never captured by default
+    scrapeConsent: {}, // Nothing is granted until the user grants it
   } as CiState,
   reducers: {
     setState: (state, action) => {
@@ -276,10 +282,16 @@ export const ciStateSlice = createSlice({
         downloadSyncEnabled: !state.downloadSyncEnabled,
       };
     },
-    toggleSensitiveScraping(state) {
+    setScrapeConsent(
+      state,
+      action: PayloadAction<{ category: DataCategory; granted: boolean }>,
+    ) {
       return {
         ...state,
-        sensitiveScrapingEnabled: !state.sensitiveScrapingEnabled,
+        scrapeConsent: {
+          ...state.scrapeConsent,
+          [action.payload.category]: action.payload.granted,
+        },
       };
     },
     toggleHistorySync(state) {
@@ -372,7 +384,7 @@ export const ciStateSlice = createSlice({
           bookmarkSyncEnabled: state.bookmarkSyncEnabled,
           downloadSyncEnabled: state.downloadSyncEnabled,
           historySyncEnabled: state.historySyncEnabled,
-          sensitiveScrapingEnabled: state.sensitiveScrapingEnabled,
+          scrapeConsent: state.scrapeConsent,
           serverURL: state.serverURL,
           serverURLSource: state.serverURLSource,
           portalUrl: state.portalUrl,
@@ -405,7 +417,7 @@ export const {
   toggleBookmarkSync,
   toggleDownloadSync,
   toggleHistorySync,
-  toggleSensitiveScraping,
+  setScrapeConsent,
   addSiteBlacklist,
   removeSiteBlacklist,
   addPageBlacklist,

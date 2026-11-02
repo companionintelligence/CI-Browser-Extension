@@ -17,10 +17,10 @@ describe("profileForUrl", () => {
   });
 
   it("reaches a profile that used to be unreachable", () => {
-    // robinhood/cnn/wsj/quora/airbnb were registered but absent from the
-    // content script's matches, so they never ran.
-    expect(profileForUrl("https://www.robinhood.com/portfolio/x")?.domain).toBe(
-      "robinhood.com",
+    // cnn/wsj/quora/airbnb were registered but absent from the content script's
+    // matches, so they never ran.
+    expect(profileForUrl("https://www.airbnb.com/trips/x")?.domain).toBe(
+      "airbnb.com",
     );
   });
 

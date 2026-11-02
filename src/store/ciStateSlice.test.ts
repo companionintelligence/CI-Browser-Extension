@@ -1,6 +1,9 @@
 import { configureStore } from "@reduxjs/toolkit";
+import { SCRAPE_CONSENT_KEY } from "@/lib/scrapeSettings";
+
 import ciStateReducer, {
   setState,
+  setScrapeConsent,
   saveUserSettings,
   loadUserSettings,
 } from "./ciStateSlice";
@@ -62,8 +65,8 @@ describe("ciStateSlice", () => {
         bookmarkSyncEnabled: false,
         downloadSyncEnabled: false,
         historySyncEnabled: true,
-        // Financial scrape profiles are never captured without an explicit opt-in
-        sensitiveScrapingEnabled: false,
+        // Nothing is granted until the user grants a consent category
+        scrapeConsent: {},
       });
     });
   });
@@ -105,6 +108,30 @@ describe("ciStateSlice", () => {
       };
       expect(state.domain).toBe("updated.com");
       expect(state.accessToken).toBe("token1"); // Should be preserved
+    });
+  });
+
+  describe("setScrapeConsent", () => {
+    const dispatch = (action: unknown) =>
+      (store.dispatch as (action: unknown) => unknown)(action);
+    const consent = () =>
+      (store.getState() as { ciState: { scrapeConsent: unknown } }).ciState
+        .scrapeConsent;
+
+    it("grants one category without granting any other", () => {
+      dispatch(setScrapeConsent({ category: "location", granted: true }));
+      expect(consent()).toEqual({ location: true });
+
+      dispatch(setScrapeConsent({ category: "location", granted: false }));
+      expect(consent()).toEqual({ location: false });
+    });
+
+    it("persists grants under the key the content script reads", () => {
+      dispatch(setScrapeConsent({ category: "financial", granted: true }));
+      dispatch(saveUserSettings());
+
+      const persisted = mockBrowserStorage.local.set.mock.calls[0][0];
+      expect(persisted[SCRAPE_CONSENT_KEY]).toEqual({ financial: true });
     });
   });
 
@@ -202,7 +229,7 @@ describe("ciStateSlice", () => {
         "bookmarkSyncEnabled",
         "downloadSyncEnabled",
         "historySyncEnabled",
-        "sensitiveScrapingEnabled",
+        "scrapeConsent",
         "serverURL",
         "serverURLSource",
         "serverDomain",

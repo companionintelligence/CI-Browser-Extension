@@ -55,8 +55,7 @@ the Sentry SDK performs there describes the page rather than the extension:
   script. That is not diagnostics, it is surveillance.
 - **The scripts handle page content.** `content.ts` reads
   `<meta name="description">`; `domainScraper.content.ts` reads viewing history,
-  GitHub activity, Airbnb trips and — behind the financial opt-in — Robinhood
-  holdings and order history. Any throw while handling those values can quote
+  GitHub activity and Airbnb trips. Any throw while handling those values can quote
   them, and Firefox in particular quotes offending values in error messages
   (`URL constructor: <the url> is not a valid URL.`).
 

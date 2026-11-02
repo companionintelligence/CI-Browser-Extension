@@ -1,6 +1,6 @@
 import { SCRAPE_MATCH_PATTERNS } from "@/scrape/profiles";
 import { profileForUrl, scrape } from "@/scrape/scraper";
-import { isSensitiveScrapingEnabled } from "@/lib/scrapeSettings";
+import { mayRunProfile, readScrapeConsent } from "@/lib/scrapeSettings";
 
 export default defineContentScript({
   // Derived from the profile registry rather than hand-maintained. The two used
@@ -16,9 +16,13 @@ export default defineContentScript({
         return;
       }
 
-      // Check BEFORE scraping: the point of the gate is not to read sensitive
-      // data, not to read it and drop it afterwards.
-      if (profile.sensitive && !(await isSensitiveScrapingEnabled())) {
+      // Check BEFORE scraping: the point of the gate is not to read consent-gated
+      // data, not to read it and drop it afterwards. A profile that declares no
+      // categories skips the storage read entirely, so it runs as it always has.
+      if (
+        profile.dataCategories?.length &&
+        !mayRunProfile(profile, await readScrapeConsent())
+      ) {
         return;
       }
 

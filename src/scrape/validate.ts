@@ -11,7 +11,11 @@
  * extension ships every dependency to the user's browser.
  */
 
-import type { ScrapeProfile } from "./types";
+import {
+  DATA_CATEGORIES,
+  type DataCategory,
+  type ScrapeProfile,
+} from "./types";
 
 export const FIELD_TYPES = ["text", "attribute", "html"] as const;
 export const TRANSFORMS = ["trim", "absoluteUrl", "parseDate"] as const;
@@ -116,11 +120,27 @@ export function validateProfile(raw: unknown): ValidationIssue[] {
     });
   }
 
-  if (raw.sensitive !== undefined && typeof raw.sensitive !== "boolean") {
+  // Retired in favour of `dataCategories`. The engine no longer reads this key,
+  // so a profile that still sets it would run ungated: reject it instead.
+  if ("sensitive" in raw) {
     issues.push({
       path: "sensitive",
-      message: "must be a boolean when present",
+      message:
+        "retired: declare what the profile reads in dataCategories instead",
     });
+  }
+
+  if (raw.dataCategories !== undefined) {
+    const categories = raw.dataCategories;
+    const known =
+      Array.isArray(categories) &&
+      categories.every((c) => DATA_CATEGORIES.includes(c as DataCategory));
+    if (!known) {
+      issues.push({
+        path: "dataCategories",
+        message: `must be an array of ${DATA_CATEGORIES.join(" | ")}, got ${JSON.stringify(categories)}`,
+      });
+    }
   }
 
   if (

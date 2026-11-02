@@ -43,7 +43,7 @@ You can point the extension at your own Portal under **Advanced**.)
 | Feature | What it provides |
 |---|---|
 | **History and archive** | Sync browsing history, bookmarks, downloads and page highlights. |
-| **Site-specific capture** | Use explicit profiles and per-source toggles, including opt-in financial-site capture. |
+| **Site-specific capture** | Use explicit profiles and per-source toggles. |
 | **Private delivery** | Send data to the user's configured server over an authenticated background queue. |
 | **Permission controls** | Use ignored pages/sites and local settings to limit capture. |
 
@@ -56,11 +56,10 @@ You can point the extension at your own Portal under **Advanced**.)
   menu.
 - **Ignored Pages and Sites** — exclude any site or page from capture in one
   click. Nothing on your ignore list is ever uploaded.
-- **Supported-site profiles** — structured capture from 13 sites: Netflix, Hulu,
+- **Supported-site profiles** — structured capture from 12 sites: Netflix, Hulu,
   Disney+, Max, Paramount+, Prime Video (incl. `amazon.com/gp/video`), CNN, WSJ,
-  Slashdot, GitHub, Quora, Airbnb, and Robinhood — each only on the specific
-  pages it was written for. Robinhood is **off unless you opt in**. See
-  [`CAPTURE.md`](CAPTURE.md).
+  Slashdot, GitHub, Quora, and Airbnb — each only on the specific pages it was
+  written for. See [`CAPTURE.md`](CAPTURE.md).
 - **Reliable background sync** — uses the `chrome.alarms` lifecycle so scheduled
   work survives MV3 service-worker suspension.
 - **Self-hosted & token-secured** — point it at any CI Server domain; auth is a
@@ -255,7 +254,6 @@ and the browser console for diagnostics.
 | Browsing history and page metadata | Captured and synced to the Memory server you configure | History toggle |
 | Bookmarks and downloads | Optional capture types | Separate toggles; off by default |
 | Selected text | Saved only when you invoke the context-menu action | Explicit user action |
-| Financial-account capture | Supported-site extraction | Off by default |
 | Crash diagnostics | Extension error and stack details; no captured URLs or page contents | Disable in the extension popup |
 
 Captured browsing data is sent to the Memory server you control; Lifescope's identity service handles sign-in, and the extension's optional crash reporting is a separate channel. Read the full [Privacy Policy](PRIVACY.md) before enabling capture, especially for shared or managed browsers. See [Development](DEVELOPMENT.md) for build details.

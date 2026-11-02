@@ -317,7 +317,7 @@ export function sourceIdFor(a: BrowserActivity): string {
  * `web.${action_type ?? 'page_view'}`, so scrape captures log as
  * `web.page_view`. Scrapes do not belong on this lane at all — each scrape
  * profile's `data_type` implies a different destination (Netflix
- * `viewingHistory` → media.watch, Robinhood holdings → inventory, …) — so this
+ * `viewingHistory` → media.watch, …) — so this
  * is a holding position until that fan-out is specified, not the end state.
  */
 const SERVER_ACTION_TYPES = new Set([

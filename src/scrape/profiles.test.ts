@@ -76,7 +76,7 @@ describe("profile registry invariants", () => {
   it("registers every profile that ships", () => {
     // Guards against the JSON file existing but never being added to the
     // registry — half of the original bug.
-    expect(SCRAPE_PROFILES.length).toBe(13);
+    expect(SCRAPE_PROFILES.length).toBe(12);
   });
 
   it("gives every profile at least one match pattern and one selector", () => {
@@ -132,15 +132,19 @@ describe("profile registry invariants", () => {
     expect(new Set(SCRAPE_MATCH_PATTERNS).size).toBe(
       SCRAPE_MATCH_PATTERNS.length,
     );
-    expect(SCRAPE_MATCH_PATTERNS).toContain("*://*.robinhood.com/*");
+    expect(SCRAPE_MATCH_PATTERNS).toContain("*://*.airbnb.com/*");
     expect(SCRAPE_MATCH_PATTERNS).toContain("*://*.cnn.com/*");
   });
 
-  it("marks the brokerage profile sensitive and nothing else", () => {
-    const sensitive = SCRAPE_PROFILES.filter((p) => p.sensitive).map(
+  // No shipped profile declares a consent category yet, and the popup has no
+  // screen for granting one. Remove this test in the change that adds the first
+  // consent-gated profile, which must add that screen (with owner-reviewed copy)
+  // in the same change.
+  it("ships no consent-gated profile", () => {
+    const gated = SCRAPE_PROFILES.filter((p) => p.dataCategories?.length).map(
       (p) => p.domain,
     );
-    expect(sensitive).toEqual(["robinhood.com"]);
+    expect(gated).toEqual([]);
   });
 
   /**

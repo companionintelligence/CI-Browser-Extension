@@ -199,8 +199,8 @@ These are described here for context; remediation lives in [planning.MD](plannin
 
 - **Monolithic background**: ~2.3k lines and ~14 responsibilities, hard to navigate and — because `defineBackground` cannot be imported under Jest — not directly unit-testable. The lever is moving logic out into `src/lib` and `src/services`, which are well covered.
 - **Server URL is per-user free text**: normalized but not validated against a reachable server.
-- **Scrapes ride the page-view lane**: each profile's `data_type` implies a different destination (Netflix `viewingHistory` → media.watch, Robinhood holdings → inventory), but no server-side fan-out contract exists, so they all land as `web.page_view`.
-- **Five scrape profiles are unreachable**: `cnn`, `wsj`, `quora`, `robinhood`, and `airbnb` are registered in `domainScraper.ts` but absent from the content script's `matches`, so they never run. Wiring them is a privacy decision (notably Robinhood), not just a code change.
+- **Scrapes ride the page-view lane**: each profile's `data_type` implies a different destination (Netflix `viewingHistory` → media.watch), but no server-side fan-out contract exists, so they all land as `web.page_view`.
+- **Four scrape profiles are unreachable**: `cnn`, `wsj`, `quora`, and `airbnb` are registered in `domainScraper.ts` but absent from the content script's `matches`, so they never run. Wiring any that read consent-gated data is a privacy decision, not just a code change.
 - **Scrape profiles are statically imported** in `domainScraper.ts`; adding sites requires code changes and a manifest update.
 - **Re-sends never repair**: CI-Server's `INGEST_REFRESH_COLUMNS` for both destinations are empty, so a corrected title or duration on a re-uploaded record is silently discarded.
 - **Provenance vocabulary split**: the extension sends `source_system: "browser-extension"` while the platform's event-ingest spec says `"ci-browser-extension"`. Content→event auto-linking joins on the exact triple, so importer and extension records for the same item will not link until this is reconciled.
