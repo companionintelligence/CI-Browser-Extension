@@ -12,6 +12,13 @@ const MAPPINGS: { pattern: RegExp; friendly: string }[] = [
     pattern: /failed to fetch|networkerror|network request|ssl|certificate/i,
     friendly: "Couldn't reach the server. Check your connection.",
   },
+  // A gateway or origin outage (502 to 504, or Cloudflare's 520 to 539): the
+  // Memory is up but can't reach its origin, and automatic setup retries.
+  {
+    pattern: /\bHTTP (?:50[234]|5[23]\d)\b/i,
+    friendly:
+      "Your Memory is unreachable right now. It will be retried automatically.",
+  },
   // Registration is checked before the generic 401 rule: a rejected token on
   // /api/devices means the Memory won't accept this account's sign-in, which
   // is a different fix (update/configure the server) from re-authenticating.

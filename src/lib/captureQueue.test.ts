@@ -1,7 +1,8 @@
 import {
   CAPTURE_QUEUE_KEY,
   MAX_CAPTURE_ATTEMPTS,
-  MAX_QUEUED_CAPTURES,
+  QUEUE_LIMITS,
+  boundQueue,
   drainCaptureQueue,
   enqueueCaptures,
   getQueuedCaptures,
@@ -52,12 +53,14 @@ describe("captureQueue", () => {
     expect(memory.has(CAPTURE_QUEUE_KEY)).toBe(false);
   });
 
-  it("queues captures with a zero attempt count", async () => {
+  it("queues captures with a zero attempt count and a queue time", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(7_000);
     await enqueueCaptures([activity("https://a.test")]);
 
     const queued = await getQueuedCaptures();
     expect(queued).toHaveLength(1);
     expect(queued[0].attempts).toBe(0);
+    expect(queued[0].queuedAt).toBe(7_000);
     expect(queued[0].activity.url).toBe("https://a.test");
   });
 
@@ -67,17 +70,49 @@ describe("captureQueue", () => {
     expect(await getQueuedCaptures()).toEqual([]);
   });
 
-  it("drops the oldest entries past the cap", async () => {
+  it("gives an entry queued before queuedAt existed an age from its first read", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(5_000);
+    memory.set(CAPTURE_QUEUE_KEY, [
+      { activity: activity("https://old.test"), attempts: 0 },
+    ]);
+
+    const queued = await getQueuedCaptures();
+    expect(queued[0].queuedAt).toBe(5_000);
+  });
+
+  it("drops the oldest entries past the count cap, with one warning and no URLs", async () => {
     await enqueueCaptures(
-      Array.from({ length: MAX_QUEUED_CAPTURES + 5 }, (_, i) =>
+      Array.from({ length: QUEUE_LIMITS.maxEntries + 5 }, (_, i) =>
         activity(`https://a.test/${i}`),
       ),
     );
 
     const queued = await getQueuedCaptures();
-    expect(queued).toHaveLength(MAX_QUEUED_CAPTURES);
+    expect(queued).toHaveLength(QUEUE_LIMITS.maxEntries);
     // Newest survive: entry 0..4 are the ones dropped
     expect(queued[0].activity.url).toBe("https://a.test/5");
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining("trimmed 5 entries"),
+    );
+    expect(console.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("https://a.test/"),
+    );
+  });
+
+  it("drops captures older than the age limit on the next write", async () => {
+    const start = 1_700_000_000_000;
+    const clock = jest.spyOn(Date, "now").mockReturnValue(start);
+    await enqueueCaptures([activity("https://old.test")]);
+
+    clock.mockReturnValue(start + QUEUE_LIMITS.maxAgeMs + 1);
+    await enqueueCaptures([activity("https://new.test")]);
+
+    const urls = (await getQueuedCaptures()).map((e) => e.activity.url);
+    expect(urls).toEqual(["https://new.test"]);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining("1 past the age limit"),
+    );
   });
 
   it("drains to the sender and empties on success", async () => {
@@ -113,11 +148,11 @@ describe("captureQueue", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("re-queues with an incremented attempt count when the send fails", async () => {
+  it("counts a server rejection of the record as an attempt", async () => {
     await enqueueCaptures([activity("https://a.test")]);
 
     const result = await drainCaptureQueue(async () => {
-      throw new Error("offline");
+      throw new Error("CI-Server https://ci.test failed: HTTP 422");
     });
 
     expect(result).toEqual({ sent: 0, requeued: 1, dropped: 0 });
@@ -126,14 +161,36 @@ describe("captureQueue", () => {
     expect(queued[0].attempts).toBe(1);
   });
 
-  it("drops an entry once it exhausts its attempts", async () => {
+  it("does not count an outage or an expired session against the attempt limit", async () => {
+    await enqueueCaptures([activity("https://a.test")]);
+    const failures = [
+      "CI-Server https://ci.test failed: HTTP 530",
+      "TypeError: Failed to fetch",
+      "CI-Server https://ci.test failed: HTTP 401",
+      "CI-Server https://ci.test failed: HTTP 429",
+    ];
+
+    for (let i = 0; i < MAX_CAPTURE_ATTEMPTS + 2; i++) {
+      const message = failures[i % failures.length];
+      const result = await drainCaptureQueue(async () => {
+        throw new Error(message);
+      });
+      expect(result).toEqual({ sent: 0, requeued: 1, dropped: 0 });
+    }
+
+    const queued = await getQueuedCaptures();
+    expect(queued).toHaveLength(1);
+    expect(queued[0].attempts).toBe(0);
+  });
+
+  it("drops an entry once the server has rejected it past the limit", async () => {
     await enqueueCaptures(
       [activity("https://a.test")],
       MAX_CAPTURE_ATTEMPTS - 1,
     );
 
     const result = await drainCaptureQueue(async () => {
-      throw new Error("still offline");
+      throw new Error("CI-Server https://ci.test failed: HTTP 422");
     });
 
     expect(result).toEqual({ sent: 0, requeued: 0, dropped: 1 });
@@ -153,5 +210,64 @@ describe("captureQueue", () => {
     const urls = (await getQueuedCaptures()).map((e) => e.activity.url);
     expect(urls).toContain("https://new.test");
     expect(urls).toContain("https://old.test");
+  });
+});
+
+describe("boundQueue", () => {
+  const limits = { maxAgeMs: 10_000, maxEntries: 10, maxBytes: 1_000_000 };
+
+  function entry(url: string, queuedAt: number) {
+    return { activity: activity(url), attempts: 0, queuedAt };
+  }
+
+  it("drops entries past the age limit before the count cap", () => {
+    const entries = [
+      entry("https://a.test/1", 1),
+      entry("https://a.test/6", 6),
+      entry("https://a.test/9", 9),
+    ];
+
+    const result = boundQueue(entries, 10, {
+      ...limits,
+      maxAgeMs: 5,
+      maxEntries: 1,
+    });
+
+    expect(result.entries.map((e) => e.queuedAt)).toEqual([9]);
+    expect(result.droppedByAge).toBe(1);
+    expect(result.droppedByCount).toBe(1);
+    expect(result.droppedByBytes).toBe(0);
+  });
+
+  it("orders by queuedAt, so an older capture requeued after a newer one is trimmed first", () => {
+    const entries = [
+      entry("https://new.test", 2_000),
+      entry("https://old.test", 1_000),
+    ];
+
+    const result = boundQueue(entries, 2_000, { ...limits, maxEntries: 1 });
+
+    expect(result.entries.map((e) => e.activity.url)).toEqual([
+      "https://new.test",
+    ]);
+    expect(result.droppedByCount).toBe(1);
+  });
+
+  it("keeps the newest entries that fit under the byte cap", () => {
+    const entries = [0, 1, 2, 3].map((i) =>
+      entry(`https://a.test/${i}`, 1_000 + i),
+    );
+    const oneEntry = new Blob([JSON.stringify(entries[0])]).size;
+
+    const result = boundQueue(entries, 1_003, {
+      ...limits,
+      maxBytes: oneEntry * 2 + Math.floor(oneEntry / 2),
+    });
+
+    expect(result.entries.map((e) => e.activity.url)).toEqual([
+      "https://a.test/2",
+      "https://a.test/3",
+    ]);
+    expect(result.droppedByBytes).toBe(2);
   });
 });
