@@ -167,7 +167,6 @@ function appIcon() {
   s += dotGrid(S, S, 64, 0.05);
   s += `<ellipse cx="512" cy="470" rx="430" ry="430" fill="url(#glow)"/>`;
   s += `<image href="${LOGO_B64}" x="212" y="180" width="600" height="600" filter="url(#softShadow)"/>`;
-  s += tx(512, 900, "Companion Intelligence", { size: 56, weight: 800, fill: T.text, anchor: "middle" });
   s += `</svg>`;
   return s;
 }
