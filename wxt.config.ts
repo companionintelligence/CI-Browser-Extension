@@ -63,6 +63,8 @@ export default defineConfig({
       // "cookies" permission is no longer needed.
       "identity",
       "storage",
+      // The capture queue holds up to 50 MB; Chrome's default storage.local quota is 10 MB.
+      "unlimitedStorage",
       "tabs",
       "webNavigation",
     ],
