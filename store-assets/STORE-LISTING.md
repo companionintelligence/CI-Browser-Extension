@@ -1,7 +1,7 @@
 # Store Listing Kit — Companion Intelligence v1.6.2
 
 > Private & Confidential — Property of Lifescope Inc.
-> Copy-paste source for Chrome Web Store, Firefox AMO, and Apple App Store
+> Copy-paste source for Chrome Web Store, Firefox AMO, Microsoft Edge Add-ons, and Apple App Store
 > submissions. Assets live alongside this file in `chrome/`, `safari/`, and
 > `shared/`.
 >
@@ -9,6 +9,11 @@
 > three stores diff the listing against the uploaded manifest, so do not add a
 > capability here that the build does not have — and do not drop a disclosure
 > because it is unflattering.
+>
+> **Brand:** every listing and every in-browser surface shows the company logo
+> (`public/logo.png`, and the store icon with its caption). The web globe is not
+> used in any listing. It appears only in views of the app ecosystem, such as the
+> org profile's app table.
 
 ## Shared metadata
 
@@ -291,6 +296,21 @@ intentionally **not minified** (`wxt.config.ts` → `vite.build.minify: false`).
 
 ---
 
+## Microsoft Edge Add-ons
+
+**Assets**: the Chrome (MV3) package, unchanged. Its icons are the company logo
+(`public/icon/*`).
+
+**Store logo**: `store-assets/edge/store-logo-300.png` (300×300, company logo).
+Partner Center asks for this separately from the package. Check its current size
+there before uploading. Regenerate with
+`magick public/logo.png -filter Lanczos -resize 300x300 store-assets/edge/store-logo-300.png`.
+
+**Listing images**: `shared/screenshot-1..5.png` and `chrome/promo-*` (same as
+Chrome).
+
+---
+
 ## Apple App Store (Safari)
 
 Safari ships as a macOS/iOS app that wraps the extension — this requires an
@@ -325,6 +345,7 @@ tracking; **not** used for tracking. Privacy policy URL required.
 | `chrome/promo-tile-440x280.png` | 440×280 | Chrome small promo tile |
 | `chrome/promo-marquee-1400x560.png` | 1400×560 | Chrome marquee |
 | `safari/app-icon-1024.png` | 1024×1024 | App Store icon |
+| `edge/store-logo-300.png` | 300×300 | Microsoft Edge Add-ons store logo |
 
 All raster assets are regenerated from vector source with
 `store-assets/render.sh`, which now also copies the results into the committed
