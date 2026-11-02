@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/companionintelligence/.github/main/profile/assets/icons/browser-extension.png" width="96" height="96" alt="Browser Extension icon">
+  <img src="public/logo.png" width="96" height="96" alt="Companion Intelligence logo">
 </p>
 
 <div align="center">
