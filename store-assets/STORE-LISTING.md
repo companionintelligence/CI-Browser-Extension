@@ -1,6 +1,5 @@
 # Store Listing Kit — Companion Intelligence v1.6.2
 
-> Private & Confidential — Property of Lifescope Inc.
 > Copy-paste source for Chrome Web Store, Firefox AMO, Microsoft Edge Add-ons, and Apple App Store
 > submissions. Assets live alongside this file in `chrome/`, `safari/`, and
 > `shared/`.

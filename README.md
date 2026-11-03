@@ -40,7 +40,8 @@ activity and sends it to your private CI Server, building a searchable digital
 memory of your online life. Lifescope never receives your captured data, and
 there are no third-party trackers. (Signing in uses Lifescope's identity service,
 CI-Portal, which necessarily learns who you are — but never what you capture.
-You can point the extension at your own Portal under **Advanced**.)
+You can point the extension at your own Portal from the hidden developer panel:
+press Alt+Shift+Period in the popup, or click its title seven times.)
 
 ## ✨ Features
 
@@ -126,10 +127,11 @@ yarn build:firefox       # Firefox MV2 → .output/firefox-mv2
 
 ## 📖 Usage
 
-1. Open the popup and click **Sign in with Companion account** — this opens the
+1. Open the popup and click **Sign in with CI-Portal** — this opens the
    CI-Portal OIDC login (PKCE) against the production Portal (`hub.ci.computer`).
-   For dev work, the small **Advanced** link on the logged-out view switches the
-   Portal (staging / dev / local presets, or a custom URL).
+   For dev work, the hidden developer panel switches the Portal (staging / dev /
+   local presets, or a custom URL). Open it with Alt+Shift+Period or seven clicks
+   on the popup title; it works signed out too.
 2. After sign-in the extension asks the Portal where your **Memory** app runs
    and configures the server URL automatically. If Memory is installed on more
    than one of your devices, the popup asks which device's Memory to use. If

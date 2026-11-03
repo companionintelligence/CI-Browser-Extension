@@ -102,9 +102,20 @@ export function applyTransform(
         fullYear = `${century + Number.parseInt(year, 10)}`;
       }
 
-      const parsed = new Date(`${month}/${day}/${fullYear}`);
+      // A M/D/YYYY value names a calendar day and no time zone, so keep that
+      // day in UTC. Local midnight would move it to the previous day for
+      // everyone east of UTC, and give the same row a different value per zone.
+      const monthIndex = Number(month) - 1;
+      const dayOfMonth = Number(day);
+      const parsed = new Date(
+        Date.UTC(Number(fullYear), monthIndex, dayOfMonth),
+      );
 
-      return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
+      // Date.UTC rolls 2/30 over into March, so anything that moved was invalid.
+      return parsed.getUTCMonth() === monthIndex &&
+        parsed.getUTCDate() === dayOfMonth
+        ? parsed.toISOString()
+        : value;
     }
 
     default:

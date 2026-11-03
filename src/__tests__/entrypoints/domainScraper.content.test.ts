@@ -44,7 +44,7 @@ beforeAll(async () => {
   ) => definition;
   (browser.runtime as unknown as { sendMessage: unknown }).sendMessage =
     sendMessage;
-  script = (await import("./domainScraper.content"))
+  script = (await import("@/entrypoints/domainScraper.content"))
     .default as unknown as ContentScriptDefinition;
 });
 

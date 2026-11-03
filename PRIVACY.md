@@ -15,7 +15,8 @@ what you do, builds a profile of you, or is sold or shared with anyone.
 (CI-Portal, by default `hub.ci.computer`). Signing in therefore tells that
 service who you are — your account identifier, name, and email — exactly as any
 login would. It never receives your captured browsing data. If you run your own
-Portal, you can point the extension at it instead under **Advanced**.
+Portal, you can point the extension at it instead from the developer panel
+(Alt+Shift+Period in the popup).
 
 The second: the extension reports **its own crashes** to Lifescope so they can be
 fixed. Crash reports contain no web addresses, no page contents, and nothing you
@@ -114,7 +115,7 @@ without error reporting compiled in do not show the switch and never report.
 
 All captured data is transmitted over HTTPS to the Companion Memory server
 associated with your account, or to a server URL you set manually under
-**Advanced**. You — or your organization — own and operate that server.
+**Settings**. You — or your organization — own and operate that server.
 Retention, deletion, and access controls are governed by that server, not by
 the extension or by Lifescope.
 

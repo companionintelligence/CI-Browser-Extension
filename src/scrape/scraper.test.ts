@@ -46,8 +46,17 @@ describe("applyTransform", () => {
   });
 
   it("parses a M/D/YYYY date to an instant", () => {
-    expect(applyTransform("3/4/2026", "parseDate", "https://a.test")).toMatch(
-      /^2026-03-04T/,
+    expect(applyTransform("3/4/2026", "parseDate", "https://a.test")).toBe(
+      "2026-03-04T00:00:00.000Z",
+    );
+  });
+
+  it("expands a two-digit year on a M/D/YY date", () => {
+    expect(applyTransform("3/4/26", "parseDate", "https://a.test")).toBe(
+      "2026-03-04T00:00:00.000Z",
+    );
+    expect(applyTransform("3/4/99", "parseDate", "https://a.test")).toBe(
+      "1999-03-04T00:00:00.000Z",
     );
   });
 
@@ -57,6 +66,12 @@ describe("applyTransform", () => {
     );
     expect(applyTransform("13/45/9999", "parseDate", "https://a.test")).toBe(
       "13/45/9999",
+    );
+    expect(applyTransform("2/30/2026", "parseDate", "https://a.test")).toBe(
+      "2/30/2026",
+    );
+    expect(applyTransform("a/b/c", "parseDate", "https://a.test")).toBe(
+      "a/b/c",
     );
   });
 

@@ -1,7 +1,5 @@
 # CLAUDE.md — CI-Browser-Extension
 
-> **Private & Confidential — Property of Lifescope Inc. Do not distribute.**
-
 ## Platform role
 
 **CI-Browser-Extension** sits in the **Capture** layer of the Companion Intelligence platform.
@@ -77,7 +75,3 @@ install. Do not mix with npm/pnpm/bun.
 ## Multi-agent safety
 
 Multiple AI agents work these repos in parallel. Never use `git reset --hard`, `git clean -f`, or any destructive git command without explicit confirmation from the user.
-
-## Confidentiality
-
-Private & Confidential — Property of Lifescope Inc. Do not distribute.
