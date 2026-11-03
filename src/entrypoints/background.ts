@@ -2463,8 +2463,8 @@ export default defineBackground({
       }
     }
 
-    // Interactive sign-in, triggered by the popup's "Sign in with Companion
-    // account" action. The OIDC Auth-Code + PKCE flow runs here in the
+    // Interactive sign-in, triggered by the popup's "Sign in with CI-Portal"
+    // action. The OIDC Auth-Code + PKCE flow runs here in the
     // background rather than the popup, which is torn down when
     // launchWebAuthFlow takes focus. signIn persists the tokens; the Portal is
     // then asked where the user's Memory app runs (auto-setting serverURL);

@@ -115,7 +115,7 @@ without error reporting compiled in do not show the switch and never report.
 
 All captured data is transmitted over HTTPS to the Companion Memory server
 associated with your account, or to a server URL you set manually under
-**Settings**. You — or your organization — own and operate that server.
+**Settings**. You or your organization own and operate that server.
 Retention, deletion, and access controls are governed by that server, not by
 the extension or by Lifescope.
 

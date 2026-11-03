@@ -39,4 +39,3 @@ npm test   # test
 - Do not mix package managers.
 - Keep PRs small and linked to CI-Engineering issues.
 - Multiple agents may work this codebase simultaneously — never use destructive git operations.
-- All code is **private and confidential** — do not surface or transmit source beyond this session.
