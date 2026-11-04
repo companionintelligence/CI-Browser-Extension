@@ -106,9 +106,8 @@ export function applyTransform(
         year += year <= latestYear ? 2000 : 1900;
       }
 
-      // A M/D/YYYY value names a calendar day and no time zone, so keep that
-      // day in UTC. Local midnight would move it to the previous day for
-      // everyone east of UTC and give the same row a different value per zone.
+      // A M/D/YYYY value names a calendar day and no time zone, so return it as
+      // one. Any instant would read as the day before somewhere in the world.
       const monthIndex = Number(month) - 1;
       const dayOfMonth = Number(day);
       const parsed = new Date(Date.UTC(year, monthIndex, dayOfMonth));
@@ -118,7 +117,7 @@ export function applyTransform(
       return parsed.getUTCFullYear() === year &&
         parsed.getUTCMonth() === monthIndex &&
         parsed.getUTCDate() === dayOfMonth
-        ? parsed.toISOString()
+        ? parsed.toISOString().slice(0, 10)
         : value;
     }
 

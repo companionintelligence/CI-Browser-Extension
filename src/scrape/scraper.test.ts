@@ -45,33 +45,33 @@ describe("applyTransform", () => {
     expect(applyTransform("::::", "absoluteUrl", "not a base")).toBe("::::");
   });
 
-  it("parses a M/D/YYYY date to an instant", () => {
+  it("parses a M/D/YYYY date to a plain date", () => {
     expect(applyTransform("3/4/2026", "parseDate", "https://a.test")).toBe(
-      "2026-03-04T00:00:00.000Z",
+      "2026-03-04",
     );
   });
 
   it("expands a two-digit year on a M/D/YY date", () => {
     expect(applyTransform("3/4/26", "parseDate", "https://a.test")).toBe(
-      "2026-03-04T00:00:00.000Z",
+      "2026-03-04",
     );
     expect(applyTransform("3/4/99", "parseDate", "https://a.test")).toBe(
-      "1999-03-04T00:00:00.000Z",
+      "1999-03-04",
     );
   });
 
   it("reads the zero-padded form Netflix shows and spaces around slashes", () => {
     expect(applyTransform("03/04/26", "parseDate", "https://a.test")).toBe(
-      "2026-03-04T00:00:00.000Z",
+      "2026-03-04",
     );
     expect(applyTransform("3 / 4 / 26", "parseDate", "https://a.test")).toBe(
-      "2026-03-04T00:00:00.000Z",
+      "2026-03-04",
     );
   });
 
   it("keeps a real leap day", () => {
     expect(applyTransform("2/29/2024", "parseDate", "https://a.test")).toBe(
-      "2024-02-29T00:00:00.000Z",
+      "2024-02-29",
     );
   });
 
@@ -79,7 +79,7 @@ describe("applyTransform", () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-12-31T23:30:00.000Z"));
     try {
       expect(applyTransform("1/1/27", "parseDate", "https://a.test")).toBe(
-        "2027-01-01T00:00:00.000Z",
+        "2027-01-01",
       );
     } finally {
       jest.useRealTimers();
@@ -183,7 +183,7 @@ describe("scrape", () => {
     // trim on title, absoluteUrl on titleUrl, parseDate on watchedDateTime
     expect(first.fields.title).toBe("Stranger Things");
     expect(first.fields.titleUrl).toBe("https://www.netflix.com/title/1");
-    expect(first.fields.watchedDateTime).toBe("2026-03-04T00:00:00.000Z");
+    expect(first.fields.watchedDateTime).toBe("2026-03-04");
   });
 
   it("skips containers that matched but yielded no fields", () => {

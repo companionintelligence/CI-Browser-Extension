@@ -6,9 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.6.2] — 2026-10-31
+## [1.6.2] — 2026-11-04
+
+### Added
+- **Per-category scrape consent** replaces the single sensitive flag: a profile
+  that declares a data category doesn't read its page until you grant that
+  category (#125).
 
 ### Changed
+- **Scraped dates are plain dates.** A `M/D/YYYY` value such as Netflix's
+  `watchedDateTime` is now stored as `YYYY-MM-DD` instead of an instant, so it
+  can't read as the day before in another time zone. Rows already in Memory keep
+  their old form.
 - **Release reporting** — a green release now means every non-waived store has
   accepted the build for review (#122).
 - **Firefox release retry workflow**, and the store-credential check now confirms
@@ -25,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   release (#100).
 - **Edge publishing** uses the supported Add-ons API v1.1 (#123).
 - **Sync log rows** are legible in the default dark theme (#121).
+- **Queued captures** survive an outage of up to a day (#126).
+- **Company logo** stays in the browser toolbar and the stores (#127).
+- **A clean checkout installs and builds** again, after a test file in
+  `src/entrypoints/` was taken for an entrypoint (#131).
+- **Bad dates stay as written.** `parseDate` no longer turns values such as
+  `2/30/2026` or `3/4/0026` into a confident wrong date (#131).
 
 ## [1.6.1] — 2026-10-29
 
