@@ -1,7 +1,5 @@
 # What the extension captures
 
-> **Private & Confidential — Property of Lifescope Inc. Do not distribute.**
-
 This is the honest, complete list of what Companion Intelligence reads from your
 browser and sends to **your own** Memory server. Nothing here goes to Lifescope,
 to an analytics service, or to any third party. See [PRIVACY.md](PRIVACY.md) for

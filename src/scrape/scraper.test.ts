@@ -46,9 +46,44 @@ describe("applyTransform", () => {
   });
 
   it("parses a M/D/YYYY date to an instant", () => {
-    expect(applyTransform("3/4/2026", "parseDate", "https://a.test")).toMatch(
-      /^2026-03-04T/,
+    expect(applyTransform("3/4/2026", "parseDate", "https://a.test")).toBe(
+      "2026-03-04T00:00:00.000Z",
     );
+  });
+
+  it("expands a two-digit year on a M/D/YY date", () => {
+    expect(applyTransform("3/4/26", "parseDate", "https://a.test")).toBe(
+      "2026-03-04T00:00:00.000Z",
+    );
+    expect(applyTransform("3/4/99", "parseDate", "https://a.test")).toBe(
+      "1999-03-04T00:00:00.000Z",
+    );
+  });
+
+  it("reads the zero-padded form Netflix shows and spaces around slashes", () => {
+    expect(applyTransform("03/04/26", "parseDate", "https://a.test")).toBe(
+      "2026-03-04T00:00:00.000Z",
+    );
+    expect(applyTransform("3 / 4 / 26", "parseDate", "https://a.test")).toBe(
+      "2026-03-04T00:00:00.000Z",
+    );
+  });
+
+  it("keeps a real leap day", () => {
+    expect(applyTransform("2/29/2024", "parseDate", "https://a.test")).toBe(
+      "2024-02-29T00:00:00.000Z",
+    );
+  });
+
+  it("keeps a date in the coming year in this century around New Year", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-12-31T23:30:00.000Z"));
+    try {
+      expect(applyTransform("1/1/27", "parseDate", "https://a.test")).toBe(
+        "2027-01-01T00:00:00.000Z",
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("returns the original when the date can't be parsed", () => {
@@ -58,6 +93,30 @@ describe("applyTransform", () => {
     expect(applyTransform("13/45/9999", "parseDate", "https://a.test")).toBe(
       "13/45/9999",
     );
+    expect(applyTransform("2/30/2026", "parseDate", "https://a.test")).toBe(
+      "2/30/2026",
+    );
+    expect(applyTransform("a/b/c", "parseDate", "https://a.test")).toBe(
+      "a/b/c",
+    );
+  });
+
+  it.each([
+    // No year, or one Date.UTC would quietly move to 19xx
+    "3/4/",
+    "3/4/5",
+    "3/4/026",
+    "3/4/0026",
+    // Text that only Number() or parseInt reads as a number
+    "3/4/2a",
+    "3/4/-1",
+    "3/4/1e3",
+    "3/4/0x7EA",
+    "3/4/2026.7",
+    "0x3/4/2026",
+    "1e0/4/2026",
+  ])("returns %s as it is rather than guess a date", (value) => {
+    expect(applyTransform(value, "parseDate", "https://a.test")).toBe(value);
   });
 
   it("passes an unknown transform through", () => {
@@ -121,9 +180,10 @@ describe("scrape", () => {
     const result = scrape(viewingHistoryDoc(), URL_VIEWED);
     const first = result!.items.find((i) => i.selector === "viewingHistory")!;
 
-    // trim on title, absoluteUrl on titleUrl
+    // trim on title, absoluteUrl on titleUrl, parseDate on watchedDateTime
     expect(first.fields.title).toBe("Stranger Things");
     expect(first.fields.titleUrl).toBe("https://www.netflix.com/title/1");
+    expect(first.fields.watchedDateTime).toBe("2026-03-04T00:00:00.000Z");
   });
 
   it("skips containers that matched but yielded no fields", () => {

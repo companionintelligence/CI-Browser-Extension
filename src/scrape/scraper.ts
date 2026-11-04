@@ -89,22 +89,37 @@ export function applyTransform(
       }
 
     case "parseDate": {
-      const parts = value.trim().split("/");
-      if (parts.length !== 3) {
+      // Digits only: Number() would also read "", "1e3" and "0x3" as numbers.
+      const match = /^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2}|\d{4})$/.exec(
+        value.trim(),
+      );
+      if (!match) {
         return value;
       }
 
-      const [month, day, year] = parts;
-      let fullYear = year;
-      if (year.length === 2) {
-        const currentYear = new Date().getFullYear() % 100;
-        const century = Number.parseInt(year, 10) <= currentYear ? 2000 : 1900;
-        fullYear = `${century + Number.parseInt(year, 10)}`;
+      const [, month, day, rawYear] = match;
+      let year = Number(rawYear);
+      if (rawYear.length === 2) {
+        // UTC so the century can't depend on the browser's zone. One year ahead
+        // because a row dated 1/1 can appear before New Year reaches UTC.
+        const latestYear = (new Date().getUTCFullYear() % 100) + 1;
+        year += year <= latestYear ? 2000 : 1900;
       }
 
-      const parsed = new Date(`${month}/${day}/${fullYear}`);
+      // A M/D/YYYY value names a calendar day and no time zone, so keep that
+      // day in UTC. Local midnight would move it to the previous day for
+      // everyone east of UTC and give the same row a different value per zone.
+      const monthIndex = Number(month) - 1;
+      const dayOfMonth = Number(day);
+      const parsed = new Date(Date.UTC(year, monthIndex, dayOfMonth));
 
-      return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
+      // Date.UTC rolls 2/30 over into March and reads year 0026 as 1926, so
+      // anything that moved was invalid.
+      return parsed.getUTCFullYear() === year &&
+        parsed.getUTCMonth() === monthIndex &&
+        parsed.getUTCDate() === dayOfMonth
+        ? parsed.toISOString()
+        : value;
     }
 
     default:
