@@ -10,7 +10,7 @@
 
 2. **Verify Packages**
    - Chrome: `.output/ci-browser-extension-*-chrome.zip`
-   - Edge: `.output/ci-browser-extension-*-edge.zip`
+   - Edge: `.output/ci-browser-extension-*-edge.zip` (built, but not attached to releases while Edge is on hold)
    - Firefox: `.output/ci-browser-extension-*-firefox.zip`
    - Firefox Sources: `.output/ci-browser-extension-*-sources.zip`
    - Safari (desktop): `.output/ci-browser-extension-*-safari.zip`
@@ -231,12 +231,13 @@ The repository includes manually dispatched GitHub Actions workflows:
 - **Release** (`release.yml`): after pushing a `v*` tag, dispatch the workflow
   on `master` with `release_tag` set to that tag. It verifies the tag matches
   the `package.json` version, runs `yarn prepare:store`,
-  attaches the Chrome, Edge, Firefox (+ sources), and Safari (desktop +
-  mobile) zips to the GitHub Release, then submits to Chrome Web Store,
-  Firefox AMO, and Microsoft Edge Add-ons if their credentials are configured
-  as repository secrets. Store review and public availability can happen after
-  the workflow completes, so verify each public listing before calling a build
-  live. See "CI/CD Auto-Publish Setup" below.
+  attaches the Chrome, Firefox (+ sources), and Safari (desktop +
+  mobile) zips to the GitHub Release, then submits to Chrome Web Store and
+  Firefox AMO. A store with missing credentials fails the run unless it is
+  waived (see "CI/CD Auto-Publish Setup" below). Microsoft Edge Add-ons is on
+  hold, so its zip is not attached and nothing is submitted there. Store review
+  and public availability can happen after the workflow completes, so verify
+  each public listing before calling a build live.
 - For example, push `v1.6.2`, then run the **Release** workflow on `master`
   with `release_tag=v1.6.2` to build and submit that version.
 
@@ -258,11 +259,11 @@ to automate updates.
 
 To release before a store is automatable, waive it explicitly: add its key to
 the `STORE_PUBLISH_OPTIONAL` repository variable (comma-separated, from
-`firefox`, `chrome`, `edge`).
+`firefox`, `chrome`).
 
 ```bash
-# Ship now, upload to Chrome and Edge by hand this time.
-gh variable set STORE_PUBLISH_OPTIONAL --repo companionintelligence/CI-Browser-Extension --body 'chrome,edge'
+# Ship now, upload to Chrome by hand this time.
+gh variable set STORE_PUBLISH_OPTIONAL --repo companionintelligence/CI-Browser-Extension --body 'chrome'
 ```
 
 A waived store still gets its zip attached to the release for manual upload,
@@ -312,13 +313,19 @@ Publish step uploads the zip then calls `publish`, matching the two-call
 [`chrome-webstore-upload`](https://github.com/fregante/chrome-webstore-upload)
 API.
 
-### Microsoft Edge Add-ons
+### Microsoft Edge Add-ons (on hold)
+
+Edge publishing is on hold: its steps in `release.yml` and
+`verify-store-credentials.yml` are commented out, so no release reads these
+secrets, attaches the Edge zip, or submits to Edge. The setup below is kept for
+when Edge is approved and those steps are restored.
+
 | Secret | Where to get it |
 |---|---|
 | `EDGE_PRODUCT_ID` | The product GUID on the extension's Partner Center listing page or in its URL |
 | `EDGE_CLIENT_ID`, `EDGE_API_KEY` | Partner Center → Microsoft Edge → **Publish API** → enable the new experience (v1.1) → **Create API credentials** |
 
-The release workflow uses Microsoft's v1.1 Add-ons Update API, which sends the
+When re-enabled, the release workflow uses Microsoft's v1.1 Add-ons Update API, which sends the
 API key in `Authorization: ApiKey` and the client ID in `X-ClientID`. Microsoft
 ended support for the older v1 bearer-token flow in 2024. API keys can expire;
 keep the current key in GitHub Secrets and rotate it there when Partner Center
