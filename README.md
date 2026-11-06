@@ -95,11 +95,10 @@ Install **Companion Intelligence** from your browser's extension store:
 |---|---|
 | Firefox | [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/companion-intelligence/) (desktop Firefox) |
 | Chrome | [Chrome Web Store](https://chromewebstore.google.com/detail/companion-intelligence/bcocflgkdeimninckpmdifcniajoneih) |
-| Edge | Not yet listed on Microsoft Edge Add-ons |
 | Safari | Not yet available |
 
 The [latest GitHub release](https://github.com/companionintelligence/CI-Browser-Extension/releases/latest)
-also attaches the per-browser build packages (Chrome, Edge, Firefox and Safari).
+also attaches the per-browser build packages (Chrome, Firefox and Safari).
 For the store listing copy and the submission steps, see
 [`store-assets/STORE-LISTING.md`](store-assets/STORE-LISTING.md) and
 [`PUBLISHING.md`](PUBLISHING.md).
