@@ -49,7 +49,15 @@ export default defineConfig({
       "*://*.companionintel.com/*",
       "*://*.ci.computer/*",
       ...(env.mode === "development"
-        ? ["*://*.ci.localhost/*", "*://ci-server.localhost/*"]
+        ? [
+            "*://*.ci.localhost/*",
+            "*://ci-server.localhost/*",
+            // Per-worktree dev stacks route at ci-server-<worktree-name>.localhost
+            // (scripts/dev-stack/index.ts in CI-Server) — without this, only the
+            // primary checkout's stack is reachable and every worktree stack's
+            // background fetch silently hits normal CORS.
+            "*://ci-server-*.localhost/*",
+          ]
         : []),
     ],
     permissions: [
