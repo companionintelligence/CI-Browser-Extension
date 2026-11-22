@@ -1,4 +1,4 @@
-# Store Listing Kit — Companion Intelligence v1.6.2
+# Store Listing Kit — Companion Intelligence v1.6.3
 
 > Copy-paste source for Chrome Web Store, Firefox AMO, Microsoft Edge Add-ons, and Apple App Store
 > submissions. Assets live alongside this file in `chrome/`, `safari/`, and
@@ -24,7 +24,7 @@
 | **Privacy policy URL** | https://ci.computer/privacy-policy (publish `PRIVACY.md` here before submitting) |
 | **Support email** | support@ci.computer _(confirm a monitored inbox)_ |
 | **Homepage** | https://ci.computer |
-| **Version** | 1.6.2 |
+| **Version** | 1.6.3 |
 
 ### Short summary (≤132 chars — Chrome & AMO)
 

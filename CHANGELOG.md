@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] — 2026-11-22
+
+### Changed
+- **Microsoft Edge Add-ons publishing is on hold.** `release.yml` leaves Edge
+  out of the release body, and its publish steps are commented out until a
+  release is approved for Edge (#136). The store listing kit says so too (#137).
+
+### Security
+- **axios 1.13.4 → 1.21.1.** The background worker's HTTP client is past the
+  high-severity advisories that `yarn npm audit` reported against axios below
+  1.20.0.
+
 ## [1.6.2] — 2026-11-04
 
 ### Added
@@ -192,7 +204,8 @@ capture-expansion work.
 - Initial release: browsing-history capture to a private CI Server with
   token-based authentication.
 
-[Unreleased]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.6.2...HEAD
+[Unreleased]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.6.3...HEAD
+[1.6.3]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/companionintelligence/CI-Browser-Extension/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/companionintelligence/CI-Browser-Extension/releases/tag/v1.6.0
