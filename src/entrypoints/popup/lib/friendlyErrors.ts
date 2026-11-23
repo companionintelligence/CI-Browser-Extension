@@ -1,7 +1,7 @@
 /**
- * Raw error → one plain-language line. The raw string is ALWAYS rendered
- * alongside the mapping wherever a persisted error is shown — friendliness
- * must never cost diagnosability.
+ * Raw error → one plain-language line. The raw string stays one tap away
+ * ("Show details") wherever a persisted error is shown — friendliness must
+ * never cost diagnosability.
  */
 const MAPPINGS: { pattern: RegExp; friendly: string }[] = [
   {

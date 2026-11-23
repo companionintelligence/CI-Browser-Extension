@@ -58,6 +58,7 @@ export interface CiStateView {
   scrapeConsent: ScrapeConsent;
   historySyncEnabled: boolean;
   syncHistoryLogs: SyncHistoryLog[];
+  firstRunPending: boolean;
 }
 
 export function useCiState(): CiStateView {

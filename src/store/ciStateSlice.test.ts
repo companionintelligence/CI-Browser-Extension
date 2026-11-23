@@ -67,6 +67,7 @@ describe("ciStateSlice", () => {
         historySyncEnabled: true,
         // Nothing is granted until the user grants a consent category
         scrapeConsent: {},
+        firstRunPending: false,
       });
     });
   });
@@ -182,6 +183,16 @@ describe("ciStateSlice", () => {
       expect(persisted).not.toHaveProperty("discoveryHint");
       expect(persisted).not.toHaveProperty("memoryAppChoices");
     });
+
+    it("persists the first-run flag so the connected card survives a reopen", () => {
+      (store.dispatch as (action: unknown) => unknown)(
+        setState({ firstRunPending: true }),
+      );
+      (store.dispatch as (action: unknown) => unknown)(saveUserSettings());
+
+      const persisted = mockBrowserStorage.local.set.mock.calls[0][0];
+      expect(persisted.firstRunPending).toBe(true);
+    });
   });
 
   describe("loadUserSettings", () => {
@@ -206,6 +217,41 @@ describe("ciStateSlice", () => {
       expect(state.accessToken).toBe("stored-token");
       expect(state.siteBlacklist).toEqual(["stored-domain.com"]);
       expect(state.pageBlacklist).toEqual(["https://stored-page.com"]);
+    });
+
+    it("restores a pending first-run card from storage", async () => {
+      mockBrowserStorage.local.get.mockResolvedValue({
+        accessToken: "stored-token",
+        serverURL: "https://memory.example.com",
+        serverURLSource: "manual",
+        firstRunPending: true,
+      });
+
+      await (store.dispatch as (action: unknown) => unknown)(
+        loadUserSettings(),
+      );
+
+      const state = (store.getState() as { ciState: unknown }).ciState as {
+        firstRunPending: boolean;
+      };
+      expect(state.firstRunPending).toBe(true);
+    });
+
+    it("leaves installs that predate the flag without a pending card", async () => {
+      mockBrowserStorage.local.get.mockResolvedValue({
+        accessToken: "stored-token",
+        serverURL: "https://memory.example.com",
+        serverURLSource: "manual",
+      });
+
+      await (store.dispatch as (action: unknown) => unknown)(
+        loadUserSettings(),
+      );
+
+      const state = (store.getState() as { ciState: unknown }).ciState as {
+        firstRunPending: boolean;
+      };
+      expect(state.firstRunPending).toBe(false);
     });
 
     it("should call browser.storage.local.get with correct keys", async () => {
@@ -236,6 +282,7 @@ describe("ciStateSlice", () => {
         "portalUrl",
         "portalIssuer",
         "oidcTokens",
+        "firstRunPending",
       ]);
     });
 

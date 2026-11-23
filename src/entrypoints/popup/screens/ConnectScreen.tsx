@@ -1,9 +1,6 @@
-import { useEffect, useState } from "react";
-import { useDispatch } from "react-redux";
-import { Button, Field, Input, Spinner, Tooltip, useToast } from "@ci/shadcn";
+import { useEffect, useRef, useState } from "react";
+import { Button, Spinner, Tooltip } from "@ci/shadcn";
 import { CloudUpload, ExternalLink, SearchX, Settings } from "@ci/shadcn/icons";
-import { setState, saveUserSettings } from "@/store/ciStateSlice";
-import { normalizeServerUrl, parseUrl } from "@/utils";
 import { copy } from "../copy";
 import { useRouter } from "../routes";
 import { useCiState } from "../hooks/useCiState";
@@ -13,6 +10,9 @@ import { BrandButton } from "../components/BrandButton";
 import { Banner } from "../components/Banner";
 import { StepDots } from "../components/StepDots";
 
+/** Quiet re-checks closer together than this count as one, so open + focus is one call. */
+const QUIET_RECHECK_GAP_MS = 3_000;
+
 export function ConnectScreen({
   variant,
   queued,
@@ -20,15 +20,11 @@ export function ConnectScreen({
   variant: "searching" | "none" | "error";
   queued: number;
 }) {
-  const dispatch = useDispatch();
-  const { toast } = useToast();
   const { push } = useRouter();
   const { portalUrl, discoveryHint } = useCiState();
   const { discovering, recheck } = useDiscovery();
-  const [manualOpen, setManualOpen] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [invalid, setInvalid] = useState(false);
   const [searchTimedOut, setSearchTimedOut] = useState(false);
+  const lastQuietCheck = useRef(0);
 
   // Discovery can return silently with no hint (e.g. a dead refresh token) —
   // never leave the user on an actionless spinner forever.
@@ -44,29 +40,28 @@ export function ConnectScreen({
     return () => clearTimeout(timer);
   }, [variant]);
 
-  const connectManual = () => {
-    const normalized = normalizeServerUrl(draft);
-    if (!normalized || !parseUrl(normalized)) {
-      setInvalid(true);
-
+  // A Memory installed in another tab appears here without a button press:
+  // re-check quietly when the popup opens and whenever it regains focus.
+  useEffect(() => {
+    if (variant !== "none") {
       return;
     }
 
-    setInvalid(false);
-    dispatch(
-      setState({
-        serverURL: normalized,
-        serverURLSource: "manual",
-        discoveryHint: null,
-        memoryAppChoices: null,
-      }),
-    );
-    dispatch(saveUserSettings());
-    browser.runtime
-      .sendMessage({ action: "CHECK_AUTH_STATUS" })
-      .catch(console.error);
-    toast(copy.pick.connected(parseUrl(normalized)?.host ?? normalized));
-  };
+    const checkQuietly = () => {
+      const now = Date.now();
+      if (now - lastQuietCheck.current < QUIET_RECHECK_GAP_MS) {
+        return;
+      }
+
+      lastQuietCheck.current = now;
+      void recheck({ quiet: true });
+    };
+
+    checkQuietly();
+    window.addEventListener("focus", checkQuietly);
+
+    return () => window.removeEventListener("focus", checkQuietly);
+  }, [variant, recheck]);
 
   const busy = (variant === "searching" && !searchTimedOut) || discovering;
   // A timed-out search renders the actions block with an explanatory banner,
@@ -74,6 +69,37 @@ export function ConnectScreen({
   const showErrorBanner =
     (variant === "error" && !!discoveryHint) ||
     (variant === "searching" && searchTimedOut);
+
+  // "none" leads with the next step, which is in CI-Portal; "error" leads with
+  // a retry, because the Portal could not be reached at all.
+  const portalFirst = variant === "none";
+  const openPortalButton = portalFirst ? (
+    <BrandButton
+      className="w-full"
+      onClick={() => window.open(portalUrl, "_blank")}
+    >
+      {copy.connect.openPortal}
+      <ExternalLink className="size-4" strokeWidth={1.75} />
+    </BrandButton>
+  ) : (
+    <Button
+      variant="outline"
+      className="w-full"
+      onClick={() => window.open(portalUrl, "_blank")}
+    >
+      {copy.connect.openPortal}
+      <ExternalLink className="size-4" strokeWidth={1.75} />
+    </Button>
+  );
+  const checkButton = portalFirst ? (
+    <Button variant="outline" className="w-full" onClick={() => void recheck()}>
+      {copy.connect.check}
+    </Button>
+  ) : (
+    <BrandButton className="w-full" onClick={() => void recheck()}>
+      {copy.connect.check}
+    </BrandButton>
+  );
 
   return (
     <PopupShell
@@ -120,10 +146,22 @@ export function ConnectScreen({
               strokeWidth={1.75}
             />
           </span>
-          <p className="text-sm font-semibold">{copy.connect.noneTitle}</p>
-          <p className="max-w-[240px] text-xs text-muted-foreground">
-            {copy.connect.noneBody}
+          <p className="text-sm font-semibold">
+            {portalFirst ? copy.connect.noneTitle : copy.connect.errorHeading}
           </p>
+
+          {portalFirst && (
+            <>
+              <p className="max-w-[260px] text-xs text-muted-foreground">
+                {copy.connect.noneBody}
+              </p>
+              <ol className="w-full max-w-[260px] list-decimal space-y-1.5 pl-4 text-left text-xs text-muted-foreground">
+                {copy.connect.noneSteps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            </>
+          )}
 
           {showErrorBanner && (
             <Banner tone="warning" className="w-full">
@@ -136,59 +174,19 @@ export function ConnectScreen({
             </Banner>
           )}
 
-          <BrandButton className="w-full" onClick={recheck}>
-            {copy.connect.check}
-          </BrandButton>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => window.open(portalUrl, "_blank")}
-          >
-            {copy.connect.openPortal}
-            <ExternalLink className="size-4" strokeWidth={1.75} />
-          </Button>
+          <div className="flex w-full flex-col gap-2">
+            {portalFirst ? openPortalButton : checkButton}
+            {portalFirst ? checkButton : openPortalButton}
+          </div>
 
-          {manualOpen ? (
-            <Field className="w-full text-left">
-              <Field.Label htmlFor="memory-address" className="text-sm">
-                {copy.manual.label}
-              </Field.Label>
-              <Input
-                id="memory-address"
-                inputMode="url"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    connectManual();
-                  }
-                }}
-                placeholder={copy.manual.placeholder}
-                aria-invalid={invalid || undefined}
-              />
-              {invalid ? (
-                <Field.Error className="text-xs">
-                  {copy.manual.invalid}
-                </Field.Error>
-              ) : (
-                <Field.Description className="text-xs">
-                  {copy.manual.helper}
-                </Field.Description>
-              )}
-              <Button className="w-full" onClick={connectManual}>
-                {copy.manual.cta}
-              </Button>
-            </Field>
-          ) : (
-            <Button
-              variant="link"
-              size="sm"
-              className="text-muted-foreground"
-              onClick={() => setManualOpen(true)}
-            >
-              {copy.connect.manualLink}
-            </Button>
-          )}
+          <Button
+            variant="link"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={() => push("memory")}
+          >
+            {copy.memoryAddress.ownMemory}
+          </Button>
         </>
       )}
 

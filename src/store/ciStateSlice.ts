@@ -33,6 +33,7 @@ export const loadUserSettings = createAsyncThunk(
       "portalUrl",
       "portalIssuer",
       "oidcTokens",
+      "firstRunPending",
     ]);
 
     // One-time migration: the pre-rename `serverDomain` key held a bare host;
@@ -187,6 +188,11 @@ interface CiState {
    * grants a category — see @/lib/scrapeSettings.
    */
   scrapeConsent: ScrapeConsent;
+  /**
+   * Set when a sign-in starts and cleared when the user dismisses the one-time
+   * "connected" card. Absent on installs that predate it, so they never see it.
+   */
+  firstRunPending: boolean;
 }
 
 export const ciStateSlice = createSlice({
@@ -221,6 +227,7 @@ export const ciStateSlice = createSlice({
     downloadSyncEnabled: false,
     historySyncEnabled: true, // Default to enabled since history is the main feature
     scrapeConsent: {}, // Nothing is granted until the user grants it
+    firstRunPending: false,
   } as CiState,
   reducers: {
     setState: (state, action) => {
@@ -388,6 +395,7 @@ export const ciStateSlice = createSlice({
           serverURL: state.serverURL,
           serverURLSource: state.serverURLSource,
           portalUrl: state.portalUrl,
+          firstRunPending: state.firstRunPending,
         }),
       );
       browser.storage.local.set(parsed);

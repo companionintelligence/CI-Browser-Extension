@@ -16,11 +16,14 @@ import { SettingsScreen } from "./screens/SettingsScreen";
 import { IgnoredSitesScreen } from "./screens/IgnoredSitesScreen";
 import { ActivityScreen } from "./screens/ActivityScreen";
 import { DevPanelScreen } from "./screens/DevPanelScreen";
+import { ConnectedScreen } from "./screens/ConnectedScreen";
+import { MemoryAddressScreen } from "./screens/MemoryAddressScreen";
 
 /**
- * Screen resolver: root screens (Welcome → Connect/Pick → Home) are DERIVED
- * from state and auto-advance; pushed screens (Settings, Activity, Ignored,
- * Dev) sit on an explicit stack. Priority order matters — first match wins:
+ * Screen resolver: root screens (Welcome → Connect/Pick → Connected → Home)
+ * are DERIVED from state and auto-advance; pushed screens (Settings, Memory,
+ * Activity, Ignored, Dev) sit on an explicit stack. Priority order matters —
+ * first match wins:
  *
  * - Settings resolves before the token check so its signed-out variant keeps
  *   the telemetry kill switch reachable pre-onboarding (a consent requirement).
@@ -30,6 +33,8 @@ import { DevPanelScreen } from "./screens/DevPanelScreen";
  *   picker and the dashboard can never render together.
  * - A user with no serverURL can never land on Home; connected users with a
  *   non-sentinel discovery hint stay on Home (the hint shows in Settings).
+ * - The one-time Connected card (`firstRunPending`) sits between a Memory
+ *   connecting and Home, and stays until the user dismisses it.
  */
 function AppInner() {
   const { toast } = useToast();
@@ -44,6 +49,7 @@ function AppInner() {
     discoveryHint,
     memoryAppChoices,
     settingsLoaded,
+    firstRunPending,
   } = ciState;
 
   useEffect(() => {
@@ -83,10 +89,16 @@ function AppInner() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [pop, push, toast, top]);
 
-  // Signing out clears stale pushed screens — except Settings and Dev, which
-  // have signed-out variants and must survive in place.
+  // Signing out clears stale pushed screens — except Settings, Memory and Dev,
+  // which have signed-out variants and must survive in place.
   useEffect(() => {
-    if (!accessToken && top !== null && top !== "settings" && top !== "dev") {
+    if (
+      !accessToken &&
+      top !== null &&
+      top !== "settings" &&
+      top !== "memory" &&
+      top !== "dev"
+    ) {
       reset();
     }
   }, [accessToken, top, reset]);
@@ -101,6 +113,11 @@ function AppInner() {
 
   if (top === "dev") {
     return <DevPanelScreen queued={queued} />;
+  }
+
+  // Ahead of the token check: "I run my own Memory" is reachable from Welcome.
+  if (top === "memory") {
+    return <MemoryAddressScreen />;
   }
 
   if (!accessToken) {
@@ -140,6 +157,10 @@ function AppInner() {
     }
 
     return <ConnectScreen variant="searching" queued={queued} />;
+  }
+
+  if (firstRunPending) {
+    return <ConnectedScreen />;
   }
 
   return <HomeScreen queued={queued} authError={auth.authError} />;
