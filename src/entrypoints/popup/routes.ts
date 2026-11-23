@@ -13,7 +13,7 @@ import {
  * DERIVED from state by the resolver in App.tsx, not routed — they auto-advance
  * and have no back button.
  */
-export type Route = "settings" | "ignored" | "activity" | "dev";
+export type Route = "settings" | "ignored" | "activity" | "dev" | "memory";
 
 interface RouterValue {
   stack: Route[];

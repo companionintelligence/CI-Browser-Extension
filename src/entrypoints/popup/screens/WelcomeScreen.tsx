@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Button, Tooltip } from "@ci/shadcn";
 import {
   Bookmark,
@@ -9,9 +10,12 @@ import {
 import logo from "@/assets/logo.png";
 import { shouldUseTabAuthFlow } from "@/services/oidcAuth";
 import { hasBookmarksApi, hasDownloadsApi } from "@/lib/browserCapabilities";
+import { isErrorReportingEnabled } from "@/lib/telemetry/userSetting";
 import { copy } from "../copy";
 import { useRouter } from "../routes";
+import { useCiState } from "../hooks/useCiState";
 import { friendlyError } from "../lib/friendlyErrors";
+import { ERROR_REPORTING_COMPILED_IN } from "../lib/errorReporting";
 import { PopupShell } from "../components/PopupShell";
 import { BrandButton } from "../components/BrandButton";
 import { Banner } from "../components/Banner";
@@ -33,6 +37,30 @@ export function WelcomeScreen({
   onDismissError: () => void;
 }) {
   const { push } = useRouter();
+  const { portalUrl } = useCiState();
+  // The raw error sits behind "Show details". Keying the open state to the
+  // error text means every new error starts collapsed.
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
+  const detailsOpen = authError !== null && detailsFor === authError;
+  // Stays null in builds without error reporting, and until the switch is read.
+  const [reportsOn, setReportsOn] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!ERROR_REPORTING_COMPILED_IN) {
+      return;
+    }
+
+    let active = true;
+    void isErrorReportingEnabled().then((value) => {
+      if (active) {
+        setReportsOn(value);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <PopupShell
@@ -122,6 +150,10 @@ export function WelcomeScreen({
             </li>
           </ul>
 
+          <p className="max-w-[280px] text-xs text-muted-foreground">
+            {copy.welcome.needs}
+          </p>
+
           {authError && (
             <Banner
               tone="destructive"
@@ -132,12 +164,22 @@ export function WelcomeScreen({
               <p className="text-muted-foreground">
                 {friendlyError(authError)}
               </p>
-              <p
-                className="mt-0.5 line-clamp-3 font-mono text-xxs break-all text-muted-foreground"
-                title={authError}
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs text-destructive"
+                aria-expanded={detailsOpen}
+                onClick={() => setDetailsFor(detailsOpen ? null : authError)}
               >
-                {authError}
-              </p>
+                {detailsOpen
+                  ? copy.welcome.hideDetails
+                  : copy.welcome.showDetails}
+              </Button>
+              {detailsOpen && (
+                <p className="mt-0.5 font-mono text-xxs break-all text-muted-foreground">
+                  {authError}
+                </p>
+              )}
             </Banner>
           )}
 
@@ -146,6 +188,39 @@ export function WelcomeScreen({
             {authError ? copy.welcome.ctaRetry : copy.welcome.cta}
           </BrandButton>
           <p className="text-xs text-muted-foreground">{copy.welcome.helper}</p>
+
+          <div className="flex flex-wrap items-center justify-center gap-x-1">
+            <Button
+              variant="link"
+              size="sm"
+              className="px-2 text-xs text-muted-foreground"
+              onClick={() => window.open(portalUrl, "_blank")}
+            >
+              {copy.welcome.createAccount}
+            </Button>
+            <Button
+              variant="link"
+              size="sm"
+              className="px-2 text-xs text-muted-foreground"
+              onClick={() => push("memory")}
+            >
+              {copy.memoryAddress.ownMemory}
+            </Button>
+          </div>
+
+          {reportsOn !== null && (
+            <p className="max-w-[280px] text-xs text-muted-foreground">
+              {reportsOn ? copy.welcome.reportsOn : copy.welcome.reportsOff}{" "}
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 align-baseline text-xs text-muted-foreground"
+                onClick={() => push("settings")}
+              >
+                {copy.welcome.privacyLink}
+              </Button>
+            </p>
+          )}
         </>
       )}
 

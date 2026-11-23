@@ -5,7 +5,8 @@ type ButtonProps = React.ComponentProps<typeof Button>;
 
 /**
  * The gradient CTA (`.btn-brand`, tokens-only). Rule: at most ONE per screen —
- * Welcome "Sign in", Connect "Check again", Home "Sync now".
+ * Welcome "Sign in", Connect "Open CI-Portal" (or "Check again" after an
+ * error), Connected "Got it", Home "Sync now".
  */
 export function BrandButton({
   className,

@@ -34,8 +34,6 @@ import {
   hasHistoryApi,
 } from "@/lib/browserCapabilities";
 import { NO_MEMORY_HINT } from "@/services/portalApps";
-import { BUILD_TELEMETRY_ENV } from "@/lib/telemetry/buildEnv";
-import { resolveTelemetrySettings } from "@/lib/telemetry/settings";
 import {
   isErrorReportingEnabled,
   setErrorReportingEnabled,
@@ -44,6 +42,7 @@ import {
 import { copy } from "../copy";
 import { useRouter } from "../routes";
 import { hostFromUrl, relativeTime } from "../lib/formatters";
+import { ERROR_REPORTING_COMPILED_IN } from "../lib/errorReporting";
 import { useCiState } from "../hooks/useCiState";
 import { useDiscovery } from "../hooks/useDiscovery";
 import type { useAuth } from "../hooks/useAuth";
@@ -56,14 +55,6 @@ import { Banner } from "../components/Banner";
 const HISTORY_API = hasHistoryApi();
 const BOOKMARKS_API = hasBookmarksApi();
 const DOWNLOADS_API = hasDownloadsApi();
-
-// Whether this build ships error reporting at all (independent of the user's
-// toggle) — a DSN-less build renders no telemetry switch and, signed out, no
-// PRIVACY section around it.
-const TELEMETRY_COMPILED_IN = resolveTelemetrySettings(BUILD_TELEMETRY_ENV, {
-  component: "popup",
-  userEnabled: true,
-}).enabled;
 
 function syncedDescription(base: string, rel: string | null): string {
   return `${base} · ${rel ? copy.settings.lastSynced(rel) : copy.settings.neverSynced}`;
@@ -101,7 +92,7 @@ function TelemetryRow() {
     };
   }, []);
 
-  if (!TELEMETRY_COMPILED_IN) {
+  if (!ERROR_REPORTING_COMPILED_IN) {
     return null;
   }
 
@@ -475,7 +466,7 @@ export function SettingsScreen({
     // address, and appearance only — no capture/sync/account jargon.
     body = (
       <>
-        {TELEMETRY_COMPILED_IN && (
+        {ERROR_REPORTING_COMPILED_IN && (
           <>
             <SectionRule label={copy.settings.kickerPrivacy} />
             <TelemetryRow />

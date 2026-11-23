@@ -121,6 +121,9 @@ export function useAuth() {
   const authorize = useCallback(async () => {
     setAuthorizing(true);
     setAuthError(null);
+    // A sign-in that starts here ends on the one-time "connected" card.
+    dispatch(setState({ firstRunPending: true }));
+    dispatch(saveUserSettings());
     void browser.storage.local.remove("oidcLastAuthError");
     try {
       if (shouldUseTabAuthFlow()) {
@@ -160,7 +163,7 @@ export function useAuth() {
       setAuthError(error instanceof Error ? error.message : String(error));
       setAuthorizing(false);
     }
-  }, [portalUrl]);
+  }, [dispatch, portalUrl]);
 
   /**
    * Back out of a stuck tab-auth without waiting out the 10-minute window.

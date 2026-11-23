@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A connected step.** The first sign-in now ends on a one-time "You're
+  connected" card: what gets saved, a pause control, and ignored sites. "Got
+  it" dismisses it for good.
+- **"I run my own Memory" on Welcome.** A screen takes a Memory address before
+  sign-in. CI-Portal sign-in still applies.
+
+### Changed
+- **Clearer first run.** Welcome says what you need and defines Memory, and it
+  links to create a CI-Portal account. Error reports are disclosed there, with a
+  link to Privacy & settings.
+- **No Memory found** lists the steps and opens CI-Portal first. It checks again
+  by itself when the popup opens or regains focus.
+- **Sign-in errors** show a plain-language line. The raw message is behind
+  "Show details".
+
 ## [1.6.3] — 2026-11-22
 
 ### Changed
