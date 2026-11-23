@@ -45,3 +45,21 @@ export async function readScrapeConsent(): Promise<ScrapeConsent> {
     return {};
   }
 }
+
+/**
+ * The key the retired binary opt-in wrote. Nothing reads it now, so an existing
+ * install keeps it indefinitely unless something removes it.
+ */
+export const LEGACY_SENSITIVE_KEY = "sensitiveScrapingEnabled";
+
+/**
+ * Remove the retired opt-in key. Best effort: a key left behind is only clutter,
+ * because nothing reads it.
+ */
+export async function removeLegacyScrapeSettings(): Promise<void> {
+  try {
+    await browser.storage.local.remove(LEGACY_SENSITIVE_KEY);
+  } catch {
+    // Best effort, as above.
+  }
+}

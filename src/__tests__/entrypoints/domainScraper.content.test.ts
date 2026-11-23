@@ -4,12 +4,12 @@
  * a profile that declares none must run as it did before consent existed.
  */
 
-import { profileForUrl, scrape } from "@/scrape/scraper";
+import { extract, profileForUrl } from "@/scrape/scraper";
 import type { ScrapeProfile } from "@/scrape/types";
 
 jest.mock("@/scrape/scraper", () => ({
   profileForUrl: jest.fn(),
-  scrape: jest.fn(),
+  extract: jest.fn(),
 }));
 
 interface ContentScriptDefinition {
@@ -54,10 +54,15 @@ async function runScript(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+const capturedReport = {
+  result: { profileName: "Bank", items: [{ selector: "x" }] },
+  diagnostics: [],
+};
+
 describe("consent gate in the content script", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mocked(scrape).mockReturnValue({ items: [] });
+    mocked(extract).mockReturnValue(capturedReport);
   });
 
   it("does not read a gated page when nothing is granted", async () => {
@@ -66,7 +71,7 @@ describe("consent gate in the content script", () => {
 
     await runScript();
 
-    expect(scrape).not.toHaveBeenCalled();
+    expect(extract).not.toHaveBeenCalled();
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
@@ -78,7 +83,7 @@ describe("consent gate in the content script", () => {
 
     await runScript();
 
-    expect(scrape).not.toHaveBeenCalled();
+    expect(extract).not.toHaveBeenCalled();
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
@@ -88,7 +93,7 @@ describe("consent gate in the content script", () => {
 
     await runScript();
 
-    expect(scrape).toHaveBeenCalledTimes(1);
+    expect(extract).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({ action: "DOMAIN_SCRAPE_DATA" }),
     );
@@ -100,7 +105,32 @@ describe("consent gate in the content script", () => {
     await runScript();
 
     expect(storageGet).not.toHaveBeenCalled();
-    expect(scrape).toHaveBeenCalledTimes(1);
+    expect(extract).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs selector counts, not page data, when nothing is captured", async () => {
+    mocked(profileForUrl).mockReturnValue(newsProfile);
+    mocked(extract).mockReturnValue({
+      result: null,
+      diagnostics: [
+        {
+          selector: "orders",
+          personalDataType: "commerce_orders",
+          containersMatched: 0,
+          itemsProduced: 0,
+          perFieldHitRate: {},
+        },
+      ],
+    });
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    await runScript();
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("orders: 0 matched, 0 usable"),
+    );
+    warn.mockRestore();
   });
 });

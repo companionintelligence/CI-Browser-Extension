@@ -508,9 +508,11 @@ describe("toScrapeContentRecord", () => {
   });
 
   // source_data is not search-indexed; text (weight 5) and title (10) are.
-  it("joins the item's own values into searchable text, minus url fields", () => {
+  // Each value is labelled with its field name, so a search for "date" finds the
+  // row and the value does not read as a bare token.
+  it("labels the item's values in searchable text, minus url fields", () => {
     const r = toScrapeContentRecord(scraped());
-    expect(r?.text).toBe("Stranger Things · 2026-03-04");
+    expect(r?.text).toBe("title: Stranger Things · date: 2026-03-04");
     expect(r?.text).not.toContain("netflix.com/title/1");
   });
 

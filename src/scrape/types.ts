@@ -39,15 +39,53 @@ export interface ScrapeFieldConfig {
   transform?: string;
 }
 
-export interface ScrapeSelectorConfig {
+/** A structured amount, from the `money` transform. */
+export interface Money {
+  amount: number;
+  /** ISO 4217 code, or null when the page does not say which currency it is. */
+  currency: string | null;
+}
+
+/** Declared on every selector, whichever kind of source it reads from. */
+interface ScrapeSelectorBase {
   /**
    * What this data *is* — becomes the `type` of the CI-Server content record,
    * e.g. `entertainment_preferences`, `professional_activity`, `financial_data`.
    */
   personalDataType: string;
+  /**
+   * Schema name for the item's normalized envelope, e.g. `media.watch` or
+   * `commerce.order`. Distinct from the consent category (`dataCategories`).
+   */
+  contentType?: string;
+  /** Name of the field whose value is the event time, e.g. `watchedDate`. */
+  occurredAtField?: string;
+}
+
+/** Items are rendered DOM elements: one container per item. */
+export interface ScrapeDomSelectorConfig extends ScrapeSelectorBase {
   container: string;
   fields: Record<string, ScrapeFieldConfig>;
 }
+
+/**
+ * Items are JSON embedded in the page, such as `__NEXT_DATA__` or `ld+json`.
+ * Most modern sites ship their data this way, with stable key names that
+ * survive a redesign of the markup.
+ */
+export interface ScrapeJsonSelectorConfig extends ScrapeSelectorBase {
+  from: "json";
+  /** CSS selector for the `<script>` elements that hold the JSON. */
+  script: string;
+  /** Path to the array of items inside each parsed document, e.g. `props.pageProps.orders`. */
+  rootPath: string;
+  /** Path per field, relative to each item, e.g. `payment.grandTotal`. */
+  fields: Record<string, string>;
+}
+
+export type ScrapeSelectorConfig =
+  | ScrapeDomSelectorConfig
+  | ScrapeJsonSelectorConfig;
 
 export interface ScrapeProfile {
   /** Registrable domain, e.g. `netflix.com`. Subdomains match automatically. */
@@ -71,6 +109,15 @@ export interface ScrapeProfile {
    * `@/lib/scrapeSettings`.
    */
   dataCategories?: DataCategory[];
+  /**
+   * CSS selector that must match before the page is read. For a site that
+   * fetches its data and then draws it, reading earlier sees an empty shell and
+   * records nothing, with no error. When this is set, the content script waits
+   * for the selector and for its match count to settle.
+   */
+  readySelector?: string;
+  /** How long to wait for `readySelector` before giving up. Default 8000 ms. */
+  readyTimeoutMs?: number;
   dataSelectors: Record<string, ScrapeSelectorConfig>;
 }
 
@@ -79,6 +126,13 @@ export interface ScrapedItem {
   /** The `dataSelectors` key this came from, e.g. `viewingHistory`. */
   selector: string;
   personalDataType: string;
+  /** From the selector's `contentType`, when it declares one. */
+  contentType?: string;
+  /**
+   * The item's event time as a calendar date (YYYY-MM-DD), when the selector's
+   * `occurredAtField` parsed. Absent otherwise, never defaulted to scrape time.
+   */
+  occurredAt?: string;
   fields: Record<string, unknown>;
 }
 

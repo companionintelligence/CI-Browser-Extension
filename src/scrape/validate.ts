@@ -18,7 +18,45 @@ import {
 } from "./types";
 
 export const FIELD_TYPES = ["text", "attribute", "html"] as const;
-export const TRANSFORMS = ["trim", "absoluteUrl", "parseDate"] as const;
+export const TRANSFORMS = [
+  "trim",
+  "absoluteUrl",
+  "parseDate",
+  "money",
+] as const;
+
+/** Keys a DOM selector may carry. Anything else is a typo, or a retired key. */
+const DOM_SELECTOR_KEYS = [
+  "personalDataType",
+  "contentType",
+  "occurredAtField",
+  "container",
+  "fields",
+];
+
+/** Keys a JSON selector may carry. */
+const JSON_SELECTOR_KEYS = [
+  "personalDataType",
+  "contentType",
+  "occurredAtField",
+  "from",
+  "script",
+  "rootPath",
+  "fields",
+];
+
+/** Longest `readyTimeoutMs` a profile may set: a page that takes longer is not ready. */
+const MAX_READY_TIMEOUT_MS = 60_000;
+
+/** `schema` names such as `media.watch`: lowercase segments joined by dots. */
+const CONTENT_TYPE_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/;
+
+/**
+ * One path segment: a key, optionally followed by `[*]` to fan out over an
+ * array. Nothing else, so `items[0]` or `a..b` is rejected rather than read as
+ * a key that never matches.
+ */
+const PATH_SEGMENT_RE = /^[A-Za-z0-9_$-]+(\[\*\])?$/;
 
 export interface ValidationIssue {
   /** Dotted path to the offending value, e.g. `dataSelectors.trips.fields.city.type`. */
@@ -32,6 +70,11 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 function nonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
+}
+
+/** A JSON path such as `payment.grandTotal` or `sections[*].items`. */
+export function isValidPath(path: string): boolean {
+  return path.split(".").every((segment) => PATH_SEGMENT_RE.test(segment));
 }
 
 function validateField(
@@ -83,6 +126,147 @@ function validateField(
       });
     }
   }
+}
+
+/**
+ * The selector-level keys shared by both source kinds: the classification, the
+ * optional envelope declarations, and the unknown-key check.
+ */
+function validateSelectorCommon(
+  at: string,
+  selector: Record<string, unknown>,
+  allowedKeys: string[],
+  issues: ValidationIssue[],
+): void {
+  // The whole point of the schema: an unclassified selector produces rows the
+  // server cannot type.
+  if (!nonEmptyString(selector.personalDataType)) {
+    issues.push({
+      path: `${at}.personalDataType`,
+      message: "missing personalDataType — scraped rows would be untyped",
+    });
+  }
+
+  if (
+    selector.contentType !== undefined &&
+    !(
+      typeof selector.contentType === "string" &&
+      CONTENT_TYPE_RE.test(selector.contentType)
+    )
+  ) {
+    issues.push({
+      path: `${at}.contentType`,
+      message: `must be a dotted lowercase name such as "media.watch", got ${JSON.stringify(selector.contentType)}`,
+    });
+  }
+
+  for (const key of Object.keys(selector)) {
+    if (!allowedKeys.includes(key)) {
+      issues.push({
+        path: `${at}.${key}`,
+        message: "unknown key (typo?) — the engine ignores it",
+      });
+    }
+  }
+}
+
+/** `occurredAtField` must name one of this selector's own fields. */
+function validateOccurredAtField(
+  at: string,
+  selector: Record<string, unknown>,
+  fieldNames: string[],
+  issues: ValidationIssue[],
+): void {
+  if (selector.occurredAtField === undefined) {
+    return;
+  }
+
+  if (
+    !nonEmptyString(selector.occurredAtField) ||
+    !fieldNames.includes(selector.occurredAtField)
+  ) {
+    issues.push({
+      path: `${at}.occurredAtField`,
+      message: `must name one of this selector's fields (${fieldNames.join(", ") || "none"}), got ${JSON.stringify(selector.occurredAtField)}`,
+    });
+  }
+}
+
+function validateDomSelector(
+  at: string,
+  selector: Record<string, unknown>,
+  issues: ValidationIssue[],
+): void {
+  validateSelectorCommon(at, selector, DOM_SELECTOR_KEYS, issues);
+
+  if (!nonEmptyString(selector.container)) {
+    issues.push({ path: `${at}.container`, message: "missing container" });
+  }
+
+  if (
+    !isPlainObject(selector.fields) ||
+    Object.keys(selector.fields).length === 0
+  ) {
+    issues.push({
+      path: `${at}.fields`,
+      message: "must be a non-empty object",
+    });
+
+    return;
+  }
+
+  for (const [fieldName, field] of Object.entries(selector.fields)) {
+    validateField(`${at}.fields.${fieldName}`, field, issues);
+  }
+
+  validateOccurredAtField(at, selector, Object.keys(selector.fields), issues);
+}
+
+function validateJsonSelector(
+  at: string,
+  selector: Record<string, unknown>,
+  issues: ValidationIssue[],
+): void {
+  validateSelectorCommon(at, selector, JSON_SELECTOR_KEYS, issues);
+
+  // Both are required: a `script` with no `rootPath` names no items, and a
+  // `rootPath` with no `script` reads nothing.
+  if (!nonEmptyString(selector.script)) {
+    issues.push({
+      path: `${at}.script`,
+      message: "from: json requires a non-empty `script` selector",
+    });
+  }
+
+  if (!nonEmptyString(selector.rootPath) || !isValidPath(selector.rootPath)) {
+    issues.push({
+      path: `${at}.rootPath`,
+      message: `from: json requires a \`rootPath\` such as "props.pageProps.orders" (keys joined by dots; \`[*]\` fans out over an array), got ${JSON.stringify(selector.rootPath)}`,
+    });
+  }
+
+  if (
+    !isPlainObject(selector.fields) ||
+    Object.keys(selector.fields).length === 0
+  ) {
+    issues.push({
+      path: `${at}.fields`,
+      message: "must be a non-empty object of paths",
+    });
+
+    return;
+  }
+
+  for (const [fieldName, fieldPath] of Object.entries(selector.fields)) {
+    if (!nonEmptyString(fieldPath) || !isValidPath(fieldPath)) {
+      issues.push({
+        path: `${at}.fields.${fieldName}`,
+        message: `must be a path such as "payment.grandTotal", got ${JSON.stringify(fieldPath)}`,
+      });
+    }
+  }
+
+  validateOccurredAtField(at, selector, Object.keys(selector.fields), issues);
 }
 
 /** Every problem with a profile, or [] when it is well-formed. */
@@ -143,6 +327,27 @@ export function validateProfile(raw: unknown): ValidationIssue[] {
     }
   }
 
+  if (raw.readySelector !== undefined && !nonEmptyString(raw.readySelector)) {
+    issues.push({
+      path: "readySelector",
+      message: "must be a non-empty CSS selector",
+    });
+  }
+
+  if (
+    raw.readyTimeoutMs !== undefined &&
+    !(
+      Number.isInteger(raw.readyTimeoutMs) &&
+      (raw.readyTimeoutMs as number) > 0 &&
+      (raw.readyTimeoutMs as number) <= MAX_READY_TIMEOUT_MS
+    )
+  ) {
+    issues.push({
+      path: "readyTimeoutMs",
+      message: `must be a whole number of milliseconds from 1 to ${MAX_READY_TIMEOUT_MS}`,
+    });
+  }
+
   if (
     !isPlainObject(raw.dataSelectors) ||
     Object.keys(raw.dataSelectors).length === 0
@@ -163,32 +368,15 @@ export function validateProfile(raw: unknown): ValidationIssue[] {
       continue;
     }
 
-    // The whole point of the schema: an unclassified selector produces rows the
-    // server cannot type.
-    if (!nonEmptyString(selector.personalDataType)) {
+    if (selector.from === undefined) {
+      validateDomSelector(at, selector, issues);
+    } else if (selector.from === "json") {
+      validateJsonSelector(at, selector, issues);
+    } else {
       issues.push({
-        path: `${at}.personalDataType`,
-        message: "missing personalDataType — scraped rows would be untyped",
+        path: `${at}.from`,
+        message: `unknown source ${JSON.stringify(selector.from)} — use "json", or omit it for DOM containers`,
       });
-    }
-
-    if (!nonEmptyString(selector.container)) {
-      issues.push({ path: `${at}.container`, message: "missing container" });
-    }
-
-    if (
-      !isPlainObject(selector.fields) ||
-      Object.keys(selector.fields).length === 0
-    ) {
-      issues.push({
-        path: `${at}.fields`,
-        message: "must be a non-empty object",
-      });
-      continue;
-    }
-
-    for (const [fieldName, field] of Object.entries(selector.fields)) {
-      validateField(`${at}.fields.${fieldName}`, field, issues);
     }
   }
 

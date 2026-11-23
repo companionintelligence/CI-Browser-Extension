@@ -10,6 +10,7 @@ import {
 } from "@/store/ciStateSlice";
 import { isUrlBlacklisted, parseUrl } from "@/utils";
 import { profileForDomain } from "@/scrape/profiles";
+import { mayRunProfile } from "@/lib/scrapeSettings";
 import { copy } from "../copy";
 import { useRouter } from "../routes";
 import {
@@ -31,7 +32,8 @@ export function CurrentTabCard() {
   const dispatch = useDispatch();
   const { toast } = useToast();
   const { push } = useRouter();
-  const { siteBlacklist, pageBlacklist, historySyncEnabled } = useCiState();
+  const { siteBlacklist, pageBlacklist, historySyncEnabled, scrapeConsent } =
+    useCiState();
   const [tabUrl, setTabUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,7 +47,10 @@ export function CurrentTabCard() {
   const hostname = capturable ? (parseUrl(tabUrl!)?.hostname ?? null) : null;
   const ignored =
     capturable && isUrlBlacklisted(tabUrl!, siteBlacklist, pageBlacklist);
-  const enhanced = capturable && !!profileForDomain(tabUrl!);
+  // "Enhanced" promises that a site profile runs here. A profile that reads data
+  // the user has not granted will not run, so the badge must not claim it.
+  const profile = capturable ? profileForDomain(tabUrl!) : undefined;
+  const enhanced = !!profile && mayRunProfile(profile, scrapeConsent);
 
   let tone: DotTone;
   let sub: string;

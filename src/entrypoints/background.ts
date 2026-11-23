@@ -27,6 +27,7 @@ import {
   registerWebNavigationListeners,
 } from "@/lib/browserCapabilities";
 import { scrapeSourceId } from "@/lib/scrapeIdentity";
+import { removeLegacyScrapeSettings } from "@/lib/scrapeSettings";
 import { isValidBookmarkEvent } from "@/lib/captureValidation";
 import { buildHighlightActivity } from "@/lib/highlight";
 import { createRetryGate, isTransientFailure } from "@/lib/retryGate";
@@ -1323,7 +1324,15 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     return;
   }
 
+  // Declared out here so the finally below can see it on every path.
+  let historySyncReEnabledAt: unknown;
+
   try {
+    // Read before the first return, so a run that returns early still clears it.
+    historySyncReEnabledAt = (
+      await browser.storage.local.get("historySyncReEnabledAt")
+    ).historySyncReEnabledAt;
+
     // Check if history sync is enabled
     if (!state.historySyncEnabled) {
       store.dispatch(
@@ -1523,12 +1532,6 @@ async function syncHistory(options: { timeRange?: number } = {}) {
 
       return;
     }
-
-    // Check if history sync was recently re-enabled
-    const syncReEnabledData = await browser.storage.local.get(
-      "historySyncReEnabledAt",
-    );
-    const historySyncReEnabledAt = syncReEnabledData.historySyncReEnabledAt;
 
     // Filter out already synced history entries and invalid URLs.
     // The synced-ID set is read ONCE here: it holds up to 20k ids, and the
@@ -1734,12 +1737,6 @@ async function syncHistory(options: { timeRange?: number } = {}) {
     }
 
     store.dispatch(saveUserSettings());
-
-    // Clear the re-enabled flag after sync (successful or not)
-    if (historySyncReEnabledAt) {
-      await browser.storage.local.remove("historySyncReEnabledAt");
-      console.log("Cleared historySyncReEnabledAt flag");
-    }
   } catch (error) {
     console.error("Manual history sync error:", error);
     const duration = Date.now() - startTime;
@@ -1769,6 +1766,14 @@ async function syncHistory(options: { timeRange?: number } = {}) {
 
     // Last, deliberately — see the note in triggerManualSync.
     await reportError(error, "history-sync");
+  } finally {
+    // The re-enable flag is one-shot, and it is cleared however this run ends. A
+    // run that returns early (no visits, nothing new) must not leave it set: the
+    // next run would ignore the synced-ID cache and re-upload the whole window.
+    if (historySyncReEnabledAt) {
+      await browser.storage.local.remove("historySyncReEnabledAt");
+      console.log("Cleared historySyncReEnabledAt flag");
+    }
   }
 }
 
@@ -1992,6 +1997,10 @@ async function handleScrapedData(scrapeResult: ScrapeResult) {
         item.fields,
       ),
       personal_data_type: item.personalDataType,
+      // The envelope's declarations. Moved into `source_data.envelope` on the way
+      // to the server; see toScrapeContentRecord.
+      content_type: item.contentType,
+      occurred_at: item.occurredAt,
       scrape_profile: scrapeResult.profileName,
       domain: scrapeResult.domain,
       data_type: item.selector,
@@ -2619,6 +2628,9 @@ export default defineBackground({
     // same value. The result was that after every MV3 service-worker
     // suspension, live bookmark and download capture stayed off until the user
     // manually toggled the setting off and on again.
+    // The retired opt-in key is unread; clear it from installs that still hold it.
+    void removeLegacyScrapeSettings();
+
     store.dispatch(loadUserSettings()).then(() => {
       checkAuthenticationState();
       setupBookmarkListeners();

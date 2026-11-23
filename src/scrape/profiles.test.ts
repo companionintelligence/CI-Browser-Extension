@@ -166,12 +166,17 @@ describe("profile registry invariants", () => {
     const overlaps: string[] = [];
 
     for (const profile of SCRAPE_PROFILES) {
-      const entries = Object.entries(profile.dataSelectors).map(
+      // JSON selectors have no container, so they cannot overlap one.
+      const entries = Object.entries(profile.dataSelectors).flatMap(
         ([name, config]) =>
-          [
-            name,
-            new Set(config.container.split(",").map((s) => s.trim())),
-          ] as const,
+          "container" in config
+            ? [
+                [
+                  name,
+                  new Set(config.container.split(",").map((s) => s.trim())),
+                ] as const,
+              ]
+            : [],
       );
 
       for (let i = 0; i < entries.length; i++) {
