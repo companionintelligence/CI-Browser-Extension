@@ -5,12 +5,12 @@ Every direct dependency declared in this repository's manifests — both
 each group. Transitive dependencies are not listed; resolve them with your
 package manager's own `licenses` command.
 
-**82 direct dependencies** across 4 licence groups.
+**83 direct dependencies** across 4 licence groups.
 
 | Licence    | Count |
 | ---------- | ----: |
 | MIT        |    77 |
-| Apache-2.0 |     2 |
+| Apache-2.0 |     3 |
 | ISC        |     2 |
 | OFL-1.1    |     1 |
 
@@ -97,7 +97,8 @@ package manager's own `licenses` command.
 ## Apache-2.0
 
 1. [`class-variance-authority`](https://github.com/joe-bell/cva) `0.7.1` — runtime
-2. [`typescript`](https://github.com/microsoft/TypeScript) `7.0.2` — dev
+2. [`playwright`](https://github.com/microsoft/playwright) `1.65.1` — dev
+3. [`typescript`](https://github.com/microsoft/TypeScript) `7.0.2` — dev
 
 ## ISC
 
