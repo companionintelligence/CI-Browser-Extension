@@ -30,6 +30,8 @@ export default {
   setupFilesAfterEnv: ["<rootDir>/src/setupTests.ts"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
+    // Mirrors the WXT `shadcn` alias: @ci/shadcn's index re-exports from it.
+    "^shadcn/(.*)$": "<rootDir>/packages/shadcn/src/$1",
     "\\.(css|less|scss|sass)$": "identity-obj-proxy",
   },
   collectCoverageFrom: [
