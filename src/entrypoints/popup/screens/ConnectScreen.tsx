@@ -84,7 +84,7 @@ export function ConnectScreen({
   ) : (
     <Button
       variant="outline"
-      className="w-full"
+      className="w-full popup-hit"
       onClick={() => window.open(portalUrl, "_blank")}
     >
       {copy.connect.openPortal}
@@ -92,7 +92,11 @@ export function ConnectScreen({
     </Button>
   );
   const checkButton = portalFirst ? (
-    <Button variant="outline" className="w-full" onClick={() => void recheck()}>
+    <Button
+      variant="outline"
+      className="w-full popup-hit"
+      onClick={() => void recheck()}
+    >
       {copy.connect.check}
     </Button>
   ) : (
@@ -152,10 +156,10 @@ export function ConnectScreen({
 
           {portalFirst && (
             <>
-              <p className="max-w-[260px] text-xs text-muted-foreground">
+              <p className="popup-copy text-xs text-muted-foreground">
                 {copy.connect.noneBody}
               </p>
-              <ol className="w-full max-w-[260px] list-decimal space-y-1.5 pl-4 text-left text-xs text-muted-foreground">
+              <ol className="w-full popup-copy list-decimal space-y-1.5 pl-4 text-left text-xs text-muted-foreground">
                 {copy.connect.noneSteps.map((step) => (
                   <li key={step}>{step}</li>
                 ))}
@@ -182,7 +186,7 @@ export function ConnectScreen({
           <Button
             variant="link"
             size="sm"
-            className="text-muted-foreground"
+            className="popup-hit text-muted-foreground"
             onClick={() => push("memory")}
           >
             {copy.memoryAddress.ownMemory}

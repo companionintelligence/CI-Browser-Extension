@@ -26,7 +26,7 @@ export function RowLink({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "popup-hit flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50",
         className,
       )}
     >

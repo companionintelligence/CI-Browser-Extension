@@ -47,7 +47,7 @@ export function Banner({
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss"
-          className="shrink-0 cursor-pointer rounded-sm opacity-70 hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="popup-hit-area shrink-0 cursor-pointer rounded-sm opacity-70 hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <X className="size-3.5" strokeWidth={1.75} />
         </button>

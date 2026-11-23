@@ -135,7 +135,7 @@ export function SyncNowCard({ queued }: { queued: number }) {
           <button
             type="button"
             onClick={() => push("settings")}
-            className="flex min-w-0 cursor-pointer items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="popup-hit-area flex min-w-0 cursor-pointer items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             {autoSyncEnabled ? (
               <>
@@ -161,7 +161,7 @@ export function SyncNowCard({ queued }: { queued: number }) {
                 variant={paused ? "outline" : "ghost"}
                 size="sm"
                 className={cn(
-                  "h-7 gap-1.5 px-2.5 text-xs",
+                  "popup-hit h-7 gap-1.5 px-2.5 text-xs",
                   !paused && "text-muted-foreground",
                 )}
                 onClick={togglePause}

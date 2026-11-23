@@ -127,15 +127,24 @@ function ThemeSection() {
         }}
         className="w-full"
       >
-        <ToggleGroup.Item value="light" className="h-8 flex-1 gap-1.5 text-xs">
+        <ToggleGroup.Item
+          value="light"
+          className="h-8 flex-1 gap-1.5 text-xs popup-hit"
+        >
           <Sun className="size-4" strokeWidth={1.75} />
           {copy.settings.themeLight}
         </ToggleGroup.Item>
-        <ToggleGroup.Item value="dark" className="h-8 flex-1 gap-1.5 text-xs">
+        <ToggleGroup.Item
+          value="dark"
+          className="h-8 flex-1 gap-1.5 text-xs popup-hit"
+        >
           <Moon className="size-4" strokeWidth={1.75} />
           {copy.settings.themeDark}
         </ToggleGroup.Item>
-        <ToggleGroup.Item value="system" className="h-8 flex-1 gap-1.5 text-xs">
+        <ToggleGroup.Item
+          value="system"
+          className="h-8 flex-1 gap-1.5 text-xs popup-hit"
+        >
           <Monitor className="size-4" strokeWidth={1.75} />
           {copy.settings.themeSystem}
         </ToggleGroup.Item>
@@ -248,9 +257,9 @@ function MemorySection({ signedIn }: { signedIn: boolean }) {
                 }}
                 placeholder={copy.manual.placeholder}
                 aria-invalid={invalid || undefined}
-                className="flex-1"
+                className="flex-1 popup-hit"
               />
-              <Button size="sm" className="h-9" onClick={save}>
+              <Button size="sm" className="h-9 popup-hit" onClick={save}>
                 {copy.settings.saveAddress}
               </Button>
             </div>
@@ -268,7 +277,7 @@ function MemorySection({ signedIn }: { signedIn: boolean }) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-full text-muted-foreground"
+                className="w-full text-muted-foreground popup-hit"
                 onClick={clearManual}
               >
                 {copy.settings.clearManual}
@@ -279,7 +288,7 @@ function MemorySection({ signedIn }: { signedIn: boolean }) {
             <LoadingButton
               variant="outline"
               size="sm"
-              className="w-full"
+              className="w-full popup-hit"
               loading={discovering}
               onClick={find}
             >
@@ -438,7 +447,7 @@ export function SettingsScreen({
           <LoadingButton
             variant="outline"
             size="sm"
-            className="flex-1"
+            className="flex-1 popup-hit"
             loading={switching}
             onClick={switchAccount}
           >
@@ -450,7 +459,7 @@ export function SettingsScreen({
           <Button
             variant="outline"
             size="sm"
-            className="flex-1 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className="flex-1 popup-hit border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={signOut}
           >
             <LogOut className="size-4" strokeWidth={1.75} />

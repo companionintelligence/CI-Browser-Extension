@@ -57,7 +57,7 @@ export function ConnectedScreen() {
         <h2 className="text-lg leading-tight font-semibold">
           {copy.connected.title}
         </h2>
-        <p className="max-w-[260px] text-sm text-muted-foreground">
+        <p className="popup-copy text-sm text-muted-foreground">
           {copy.connected.body}
         </p>
       </div>
@@ -70,7 +70,12 @@ export function ConnectedScreen() {
               {paused ? copy.connected.pauseOff : copy.connected.pauseOn}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={togglePause}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="popup-hit"
+            onClick={togglePause}
+          >
             {paused ? copy.sync.resume : copy.sync.pause}
           </Button>
         </div>
@@ -82,7 +87,12 @@ export function ConnectedScreen() {
               {copy.connected.ignoreSub}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => push("ignored")}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="popup-hit"
+            onClick={() => push("ignored")}
+          >
             {copy.connected.ignoreCta}
           </Button>
         </div>
