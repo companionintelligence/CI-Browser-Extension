@@ -1,6 +1,13 @@
 import { SCRAPE_MATCH_PATTERNS } from "@/scrape/profiles";
-import { profileForUrl, scrape } from "@/scrape/scraper";
+import { extract, profileForUrl } from "@/scrape/scraper";
+import { waitForSettled } from "@/scrape/readiness";
 import { mayRunProfile, readScrapeConsent } from "@/lib/scrapeSettings";
+
+/** How long a profile's `readySelector` may take to appear, unless it sets its own. */
+const DEFAULT_READY_TIMEOUT_MS = 8_000;
+
+/** The match count must hold still this long before the page counts as drawn. */
+const READY_SETTLE_MS = 500;
 
 export default defineContentScript({
   // Derived from the profile registry rather than hand-maintained. The two used
@@ -16,18 +23,46 @@ export default defineContentScript({
         return;
       }
 
-      // Check BEFORE scraping: the point of the gate is not to read consent-gated
-      // data, not to read it and drop it afterwards. A profile that declares no
-      // categories skips the storage read entirely, so it runs as it always has.
-      if (
-        profile.dataCategories?.length &&
-        !mayRunProfile(profile, await readScrapeConsent())
-      ) {
+      // Check BEFORE the page is read: the point of the gate is not to read
+      // consent-gated data, not to read it and drop it afterwards. A profile that
+      // declares no categories skips the storage read entirely, so it runs as it
+      // always has.
+      const consent = profile.dataCategories?.length
+        ? await readScrapeConsent()
+        : {};
+      if (!mayRunProfile(profile, consent)) {
         return;
       }
 
-      const result = scrape(document, currentUrl);
+      // A single-page app draws its content after load. Reading earlier sees an
+      // empty shell and records nothing, so wait for the content first.
+      if (profile.readySelector) {
+        const ready = await waitForSettled(document, profile.readySelector, {
+          timeoutMs: profile.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS,
+          settleMs: READY_SETTLE_MS,
+        });
+        if (!ready) {
+          console.warn(
+            `[CI] ${profile.name}: ${profile.readySelector} never appeared, so nothing was captured.`,
+          );
+
+          return;
+        }
+      }
+
+      const { result, diagnostics } = extract(document, currentUrl, consent);
       if (!result) {
+        // Counts and selector names only, never page content, so this is safe to
+        // log. A silent empty result is indistinguishable from a site redesign.
+        const detail =
+          diagnostics
+            .map(
+              (d) =>
+                `${d.selector}: ${d.containersMatched} matched, ${d.itemsProduced} usable`,
+            )
+            .join("; ") || "no selectors ran";
+        console.warn(`[CI] ${profile.name}: nothing captured (${detail}).`);
+
         return;
       }
 

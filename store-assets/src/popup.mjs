@@ -94,14 +94,8 @@ function loginBar(y, loggedIn) {
     return { svg: s, y: y + 52 };
   }
   // Primary CTA — the OIDC sign-in button (--gradient-brand).
-  const s = button(16, y, W - 32, 40, "Sign in with Companion account", { gradient: true, size: 13.5 });
+  const s = button(16, y, W - 32, 40, "Sign in with CI-Portal", { gradient: true, size: 13.5 });
   return { svg: s, y: y + 52 };
-}
-
-// The unobtrusive Advanced disclosure at the foot of the popup — where the
-// Portal and Memory server URLs live now that neither is part of the main flow.
-function advancedRow(y) {
-  return { svg: txt(W / 2, y + 14, "Advanced", { size: 12.5, fill: T.muted, anchor: "middle" }), y: y + 26 };
 }
 
 function autoSyncCard(y, checked) {
@@ -222,7 +216,6 @@ export function renderPopup(state) {
   if (state === "loggedOut") {
     const i = signedOutIntro(y); s += i.svg; y = i.y;
     const b = loginBar(y, false); s += b.svg; y = b.y;
-    const ad = advancedRow(y); s += ad.svg; y = ad.y + 8;
     return wrap(y, s);
   }
   // logged-in family
@@ -245,7 +238,6 @@ export function renderPopup(state) {
   const tg = togglesRow(y); s += tg.svg; y = tg.y;
   const sr = sensitiveRow(y); s += sr.svg; y = sr.y;
   const ib = ignoredButton(y, 3, 5); s += ib.svg; y = ib.y + 4;
-  const ad = advancedRow(y); s += ad.svg; y = ad.y + 8;
   return wrap(y, s);
 }
 

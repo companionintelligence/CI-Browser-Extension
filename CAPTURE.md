@@ -183,6 +183,38 @@ registered in [`src/scrape/profiles.ts`](src/scrape/profiles.ts). Start from
 - `dataSelectors` — what to read, and a `personalDataType` saying what it *is*
 - `dataCategories` — the consent categories it reads, if any. Omit it for an
   ordinary profile; a profile that declares one runs only once each is granted
+- `readySelector` (optional) — for a page that draws its content after load,
+  the selector to wait for before reading, plus its match count holding still
+  for half a second. `readyTimeoutMs` (default 8000) bounds the wait. Without it
+  the page is read as soon as it loads, which for a single-page app can be an
+  empty shell
+
+Each selector may also declare:
+
+- `contentType` (optional) — a dotted schema name such as `media.watch`. The
+  row's envelope carries it as `schema: "media.watch/v1"`. It is separate from
+  both the consent category and `personalDataType`
+- `occurredAtField` (optional) — the field whose value is the item's event time.
+  It is written as `envelope.occurred_at` when it parses as a calendar day. When
+  it does not parse, `occurred_at` is absent. It is never set to the scrape time
+
+A selector reads its items from the page's markup by default. To read embedded
+JSON instead (`__NEXT_DATA__`, `application/ld+json`), set `from: "json"`, with:
+
+- `script` — a CSS selector for the `<script>` elements that hold the JSON
+- `rootPath` — the path to the array of items, e.g. `props.pageProps.orders`
+- `fields` — a path per field, relative to each item, e.g. `payment.grandTotal`
+
+Paths are keys joined by dots. `key[*]` fans out over an array, so
+`sections[*].items` reaches the items of every section. A path that reaches
+nothing yields no value. It never throws.
+
+Two transforms extend the field-level set. `parseDate` reads `M/D/Y`, ISO
+`2026-03-04`, `March 3, 2026` and `05 Mar 2026`, and leaves anything else as it
+was. `money` reads a price into `{ amount, currency }`. A currency code (`CHF`),
+an unambiguous symbol (`€`, `US$`) or nothing gives the currency. A bare `$`
+gives `currency: null`, because the symbol names several currencies. The engine
+does not guess one.
 
 Because `matchPatterns` lives in the profile, the manifest and the registry
 cannot drift apart. (They previously did: five profiles were registered but

@@ -630,10 +630,16 @@ function itemUrl(fields: Record<string, unknown>): string | undefined {
  * there, so this needs no CI-Server change — but unlike the browser-activity
  * lane it preserves the classification instead of flattening it to a page view.
  *
- * `text` is the item's own field values joined, because the content
- * search-index weights `text` (5) and `title` (10) and would otherwise have
- * nothing to match on — the raw fields live only in `source_data`, which is not
- * indexed.
+ * `text` is the item's field values, each labelled with its field name
+ * (`price: $42.19`), because the content search-index weights `text` (5) and
+ * `title` (10) and would otherwise have nothing to match on. The label means a
+ * search for "price" finds the row, and a bare value does not read as a price on
+ * its own. The raw fields live only in `source_data`, which is not indexed.
+ *
+ * `source_data.envelope` is the normalized envelope: `schema` (`media.watch/v1`)
+ * from the profile's `contentType`, and `occurred_at`, the item's event date. Both
+ * are absent when the profile does not declare them, and `occurred_at` is never
+ * defaulted to the scrape time: a row with no event date says so.
  */
 export function toScrapeContentRecord(
   a: BrowserActivity,
@@ -652,14 +658,27 @@ export function toScrapeContentRecord(
   const sourceData = extraProperties(a);
   sourceData[OBTAINED_AT_KEY] = toInstant(a.time);
 
-  const searchable = Object.entries(fields)
-    .filter(
-      ([key, value]) =>
-        typeof value === "string" &&
-        value.trim() &&
-        !ITEM_URL_FIELDS.includes(key),
-    )
-    .map(([, value]) => (value as string).trim());
+  // The scrape's own declarations travel as flat properties, then move into the
+  // envelope so they are stored once.
+  const contentType = nonBlank(props.content_type);
+  const occurredAt = nonBlank(props.occurred_at);
+  delete sourceData.content_type;
+  delete sourceData.occurred_at;
+  if (contentType || occurredAt) {
+    sourceData.envelope = {
+      ...(contentType ? { schema: `${contentType}/v1` } : {}),
+      ...(occurredAt ? { occurred_at: occurredAt } : {}),
+    };
+  }
+
+  const labelled = Object.entries(fields)
+    .filter(([key]) => !ITEM_URL_FIELDS.includes(key))
+    .map(([key, value]) => {
+      const rendered = renderFieldValue(value);
+
+      return rendered === null ? null : `${fieldLabel(key)}: ${rendered}`;
+    })
+    .filter((part): part is string => part !== null);
 
   const record: ContentRecord = {
     type,
@@ -675,11 +694,55 @@ export function toScrapeContentRecord(
     record.title = a.title;
   }
 
-  if (searchable.length > 0) {
-    record.text = searchable.join(" · ");
+  if (labelled.length > 0) {
+    record.text = labelled.join(" · ");
   }
 
   return record;
+}
+
+/** A trimmed, non-empty string, or undefined. */
+function nonBlank(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/** `watchedDate` → `watched date`, a label a search can match. */
+function fieldLabel(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/** A structured money value from the `money` transform. */
+function isMoney(
+  value: unknown,
+): value is { amount: number; currency: string | null } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { amount?: unknown }).amount === "number"
+  );
+}
+
+/** A field's value as text to index, or null when it has none. */
+function renderFieldValue(value: unknown): string | null {
+  if (typeof value === "string") {
+    return value.trim() || null;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  if (isMoney(value)) {
+    return value.currency
+      ? `${value.amount} ${value.currency}`
+      : String(value.amount);
+  }
+
+  return null;
 }
 
 /** Pick the content mapper for a capture already known to belong on that lane. */
