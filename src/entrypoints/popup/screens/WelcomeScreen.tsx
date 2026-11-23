@@ -98,7 +98,7 @@ export function WelcomeScreen({
           <h2 className="text-lg leading-tight font-semibold">
             {copy.auth.finishing}
           </h2>
-          <p className="max-w-[260px] text-sm text-muted-foreground">
+          <p className="popup-copy text-sm text-muted-foreground">
             {shouldUseTabAuthFlow()
               ? copy.auth.helperSafari
               : copy.auth.helperWindow}
@@ -109,7 +109,7 @@ export function WelcomeScreen({
           <Button
             variant="ghost"
             size="sm"
-            className="w-full"
+            className="w-full popup-hit"
             onClick={onCancel}
           >
             {copy.common.cancel}
@@ -120,11 +120,11 @@ export function WelcomeScreen({
           <h2 className="text-lg leading-tight font-semibold">
             {copy.welcome.headline}
           </h2>
-          <p className="max-w-[260px] text-sm text-muted-foreground">
+          <p className="popup-copy text-sm text-muted-foreground">
             {copy.welcome.body}
           </p>
 
-          <ul className="mt-1 w-full max-w-[260px] space-y-2 text-left">
+          <ul className="popup-copy mt-1 w-full space-y-2 text-left">
             <li className="flex items-start gap-2.5 text-xs text-muted-foreground">
               <Clock3
                 className="mt-px size-4 shrink-0 text-primary"
@@ -150,7 +150,7 @@ export function WelcomeScreen({
             </li>
           </ul>
 
-          <p className="max-w-[280px] text-xs text-muted-foreground">
+          <p className="popup-copy-wide text-xs text-muted-foreground">
             {copy.welcome.needs}
           </p>
 
@@ -167,7 +167,7 @@ export function WelcomeScreen({
               <Button
                 variant="link"
                 size="sm"
-                className="h-auto p-0 text-xs text-destructive"
+                className="h-auto p-0 text-xs text-destructive popup-hit-area"
                 aria-expanded={detailsOpen}
                 onClick={() => setDetailsFor(detailsOpen ? null : authError)}
               >
@@ -193,7 +193,7 @@ export function WelcomeScreen({
             <Button
               variant="link"
               size="sm"
-              className="px-2 text-xs text-muted-foreground"
+              className="popup-hit px-2 text-xs text-muted-foreground"
               onClick={() => window.open(portalUrl, "_blank")}
             >
               {copy.welcome.createAccount}
@@ -201,7 +201,7 @@ export function WelcomeScreen({
             <Button
               variant="link"
               size="sm"
-              className="px-2 text-xs text-muted-foreground"
+              className="popup-hit px-2 text-xs text-muted-foreground"
               onClick={() => push("memory")}
             >
               {copy.memoryAddress.ownMemory}
@@ -209,12 +209,12 @@ export function WelcomeScreen({
           </div>
 
           {reportsOn !== null && (
-            <p className="max-w-[280px] text-xs text-muted-foreground">
+            <p className="popup-copy-wide text-xs text-muted-foreground">
               {reportsOn ? copy.welcome.reportsOn : copy.welcome.reportsOff}{" "}
               <Button
                 variant="link"
                 size="sm"
-                className="h-auto p-0 align-baseline text-xs text-muted-foreground"
+                className="h-auto p-0 align-baseline text-xs text-muted-foreground popup-hit-area"
                 onClick={() => push("settings")}
               >
                 {copy.welcome.privacyLink}

@@ -61,3 +61,65 @@ html.popup-mobile #root {
   max-height: none;
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/*
+ * Full-width sheet: type floor and touch targets. Everything below is scoped to
+ * html.popup-mobile, so the 350px desktop popup keeps the metrics above.
+ *
+ * Type floor: secondary text rises from 11.3px to 13px, and kickers from 9.4px
+ * to 12px. Only size and leading change, so spacing and control heights stay
+ * as designed.
+ */
+html.popup-mobile .text-xs {
+  font-size: 0.8667rem;
+  line-height: 1.4;
+}
+
+html.popup-mobile .text-xxs {
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+/* First-run copy is capped at 260px on the 350px panel. On the full-width sheet
+   it can use the whole width. */
+.popup-copy {
+  max-width: 260px;
+}
+
+.popup-copy-wide {
+  max-width: 280px;
+}
+
+html.popup-mobile .popup-copy,
+html.popup-mobile .popup-copy-wide {
+  max-width: none;
+}
+
+/*
+ * Touch targets: 44px, the Apple HIG and WCAG 2.5.5 minimum.
+ * - Icon buttons (size-8, which includes the header buttons) reach 44px square.
+ *   Primary CTAs, selects, and anything marked popup-hit reach 44px in height.
+ *   A min-height is used, so a control that is already taller keeps its height.
+ * - popup-hit-area grows a small control's hit box with a pseudo-element, so a
+ *   switch or an inline link keeps its look and its layout.
+ */
+html.popup-mobile button.size-8 {
+  width: 44px;
+  height: 44px;
+}
+
+html.popup-mobile .btn-brand,
+html.popup-mobile [data-slot="select-trigger"],
+html.popup-mobile .popup-hit {
+  min-height: 44px;
+}
+
+html.popup-mobile .popup-hit-area {
+  position: relative;
+}
+
+html.popup-mobile .popup-hit-area::before {
+  content: "";
+  position: absolute;
+  inset: -14px -8px;
+}

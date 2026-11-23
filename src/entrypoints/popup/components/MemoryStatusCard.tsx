@@ -38,7 +38,7 @@ export function MemoryStatusCard({ authError }: { authError: string | null }) {
         onClick={() => window.open(serverURL, "_blank")}
         aria-label={copy.home.openMemory}
         title={serverURL}
-        className="flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-md text-left hover:opacity-80 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="popup-hit-area flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-md text-left hover:opacity-80 focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <StatusDot tone={tone} pulse={tone === "warn"} />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">

@@ -30,6 +30,7 @@ export function SettingRow({
       </div>
       <Switch
         id={id}
+        className="popup-hit-area"
         checked={checked}
         disabled={disabled}
         onCheckedChange={onCheckedChange}

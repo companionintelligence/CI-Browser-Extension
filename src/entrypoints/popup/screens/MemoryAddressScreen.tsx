@@ -78,6 +78,7 @@ export function MemoryAddressScreen() {
               save();
             }
           }}
+          className="popup-hit"
           placeholder={copy.manual.placeholder}
           aria-invalid={invalid || undefined}
         />
